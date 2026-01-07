@@ -99,6 +99,10 @@ public class MainController {
     }
 
     public Scene createScene() {
+        // Create full-width header at the top
+        HBox header = createHeaderPanel();
+
+        // Create split pane for left and right panels
         SplitPane splitPane = new SplitPane();
         splitPane.setDividerPositions(0.35);
 
@@ -114,7 +118,12 @@ public class MainController {
 
         splitPane.getItems().addAll(leftScroll, rightPanel);
 
-        scene = new Scene(splitPane, 1400, 800);
+        // Main layout with header at top and split pane below
+        BorderPane mainLayout = new BorderPane();
+        mainLayout.setTop(header);
+        mainLayout.setCenter(splitPane);
+
+        scene = new Scene(mainLayout, 1400, 800);
 
         // Load CSS with null check to prevent startup crashes
         try {
@@ -132,12 +141,8 @@ public class MainController {
         return scene;
     }
 
-    private VBox createLeftPanel() {
-        VBox vbox = new VBox(8);
-        vbox.setPadding(new Insets(10));
-        vbox.getStyleClass().add("left-panel");
-
-        // Header Panel - Full width with left/right alignment
+    private HBox createHeaderPanel() {
+        // Header Panel - Full width spanning entire application
         Label title = new Label("CCTV Discovery Tool");
         title.getStyleClass().add("header-title");
 
@@ -152,12 +157,20 @@ public class MainController {
         buttonBox.setAlignment(Pos.CENTER_RIGHT);
 
         // Main header container
-        HBox header = new HBox(8);
+        HBox header = new HBox(10);
         header.setAlignment(Pos.CENTER_LEFT);
-        header.setPadding(new Insets(8));
+        header.setPadding(new Insets(10, 15, 10, 15));
         header.setStyle("-fx-background-color: #f0f0f0; -fx-border-color: #cccccc; -fx-border-width: 0 0 1 0;");
         HBox.setHgrow(title, Priority.ALWAYS);
         header.getChildren().addAll(title, buttonBox);
+
+        return header;
+    }
+
+    private VBox createLeftPanel() {
+        VBox vbox = new VBox(8);
+        vbox.setPadding(new Insets(10));
+        vbox.getStyleClass().add("left-panel");
 
         // Network Section
         VBox networkSection = createNetworkSection();
@@ -174,17 +187,12 @@ public class MainController {
         // Export Section
         VBox exportSection = createExportSection();
 
+        // Add all sections without separators
         vbox.getChildren().addAll(
-                header,
-                new Separator(),
                 networkSection,
-                new Separator(),
                 credentialSection,
-                new Separator(),
                 actionSection,
-                new Separator(),
                 progressSection,
-                new Separator(),
                 exportSection
         );
 
@@ -230,9 +238,12 @@ public class MainController {
         tfCIDR.setPromptText("CIDR (e.g., 192.168.1.0/24)");
         tfCIDR.setDisable(true);
 
-        // IP count label
+        // IP count label - center aligned and italic
         lblIpCount = new Label("Possible IPs: 0");
         lblIpCount.getStyleClass().add("label-info");
+        lblIpCount.setAlignment(Pos.CENTER);
+        lblIpCount.setMaxWidth(Double.MAX_VALUE);
+        lblIpCount.setStyle("-fx-font-style: italic;");
 
         // Event handlers
         rbInterface.setOnAction(e -> updateNetworkMode());
@@ -313,8 +324,12 @@ public class MainController {
         progressBar.setMaxWidth(Double.MAX_VALUE);
         progressBar.setPrefHeight(18);
 
+        // Progress label - center aligned and italic
         lblProgress = new Label("Ready");
         lblProgress.getStyleClass().add("label-info");
+        lblProgress.setAlignment(Pos.CENTER);
+        lblProgress.setMaxWidth(Double.MAX_VALUE);
+        lblProgress.setStyle("-fx-font-style: italic;");
 
         vbox.getChildren().addAll(lblTitle, progressBar, lblProgress);
         return vbox;
