@@ -455,6 +455,11 @@ public class MainController {
     }
 
     private void updateStartButtonState() {
+        // Skip if button hasn't been created yet (during initialization)
+        if (btnStart == null) {
+            return;
+        }
+
         boolean validNetwork = (rbInterface.isSelected() && cbInterfaces.getValue() != null) ||
                 (rbManualRange.isSelected() && NetworkUtils.isValidIP(tfStartIP.getText()) &&
                         NetworkUtils.isValidIP(tfEndIP.getText())) ||
