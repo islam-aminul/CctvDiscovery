@@ -137,9 +137,8 @@
         <ol>
             <li>Click "Export to Excel"</li>
             <li>Enter a Site ID (required)</li>
-            <li><strong>Set a protection password (minimum 6 characters)</strong></li>
-            <li>Confirm the password</li>
             <li>Choose save location</li>
+            <li><strong>Password is AUTO-GENERATED</strong> and displayed in the success dialog</li>
         </ol>
         <p>The Excel report includes:</p>
         <ul>
@@ -150,9 +149,12 @@
             <li><strong>Password-protected worksheet to prevent tampering</strong></li>
         </ul>
         <div class="warning">
-            <strong>🔒 Password Protection:</strong> The exported Excel file is protected with the password you provide.
-            Users can view the data but cannot modify, delete, or insert rows/columns without the password.
-            <strong>Keep your password safe!</strong>
+            <strong>🔒 Auto-Generated Password:</strong> The application automatically generates a protection password
+            based on the report contents. The password will be shown in the export success dialog.
+            <strong>Write it down if you need to access the report later.</strong>
+            <br><br>
+            <strong>Note:</strong> Your authority/supervisor can derive the password from the report metadata.
+            You do not need to memorize or store it long-term.
         </div>
     </div>
 
@@ -279,7 +281,10 @@
         <li>Save a copy of the file</li>
     </ul>
     <div class="info">
-        <strong>Note:</strong> To unprotect the worksheet for editing, open Excel, go to Review → Unprotect Sheet, and enter the password you set during export.
+        <strong>Password Recovery:</strong> If you forget the auto-generated password, your authority/supervisor
+        can derive it from the report metadata (device count and date). Contact them for access.
+        <br><br>
+        To unprotect: Excel → Review → Unprotect Sheet → Enter the password shown during export.
     </div>
 
     <h2>7. Support</h2>

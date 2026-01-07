@@ -652,63 +652,15 @@ public class MainController {
             return;
         }
 
-        // Step 2: Get Protection Password
-        Dialog<String> passwordDialog = new Dialog<>();
-        passwordDialog.setTitle("Excel Protection");
-        passwordDialog.setHeaderText("Set Password Protection");
-        passwordDialog.setContentText("The Excel file will be protected to prevent tampering.\nEnter a strong password:");
+        // Step 2: Auto-generate protection password
+        // Format: {DeviceCount}{YYYYMMDD}{FixedCode}
+        // Example: 25 devices on 2026-01-07 → "252026010748275"
+        int deviceCount = devices.size();
+        String dateStr = new java.text.SimpleDateFormat("yyyyMMdd").format(new java.util.Date());
+        String fixedCode = "482753";
+        String generatedPassword = deviceCount + dateStr + fixedCode;
 
-        // Add password field
-        PasswordField passwordField = new PasswordField();
-        passwordField.setPromptText("Password");
-        PasswordField confirmPasswordField = new PasswordField();
-        confirmPasswordField.setPromptText("Confirm Password");
-
-        GridPane grid = new GridPane();
-        grid.setHgap(10);
-        grid.setVgap(10);
-        grid.setPadding(new Insets(20, 150, 10, 10));
-        grid.add(new Label("Password:"), 0, 0);
-        grid.add(passwordField, 1, 0);
-        grid.add(new Label("Confirm:"), 0, 1);
-        grid.add(confirmPasswordField, 1, 1);
-
-        passwordDialog.getDialogPane().setContent(grid);
-        passwordDialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
-
-        // Convert result to password string
-        passwordDialog.setResultConverter(dialogButton -> {
-            if (dialogButton == ButtonType.OK) {
-                String pwd = passwordField.getText();
-                String confirm = confirmPasswordField.getText();
-
-                if (pwd == null || pwd.trim().isEmpty()) {
-                    Platform.runLater(() -> showAlert("Invalid Password",
-                        "Password cannot be empty!", Alert.AlertType.WARNING));
-                    return null;
-                }
-
-                if (!pwd.equals(confirm)) {
-                    Platform.runLater(() -> showAlert("Password Mismatch",
-                        "Passwords do not match!", Alert.AlertType.WARNING));
-                    return null;
-                }
-
-                if (pwd.length() < 6) {
-                    Platform.runLater(() -> showAlert("Weak Password",
-                        "Password must be at least 6 characters long!", Alert.AlertType.WARNING));
-                    return null;
-                }
-
-                return pwd;
-            }
-            return null;
-        });
-
-        Optional<String> password = passwordDialog.showAndWait();
-        if (!password.isPresent() || password.get() == null) {
-            return;
-        }
+        logger.info("Auto-generated protection password for {} devices on {}", deviceCount, dateStr);
 
         // Step 3: Choose file location
         FileChooser fileChooser = new FileChooser();
@@ -720,12 +672,19 @@ public class MainController {
         File file = fileChooser.showSaveDialog(primaryStage);
         if (file != null) {
             try {
-                // Export with password protection
-                excelExporter.exportToExcel(new ArrayList<>(devices), siteId.get(), null, null, file, password.get());
+                // Export with auto-generated password protection
+                excelExporter.exportToExcel(new ArrayList<>(devices), siteId.get(), null, null, file, generatedPassword);
+
+                // Show success with password
                 showAlert("Export Complete",
                     "Report exported successfully to:\n" + file.getAbsolutePath() +
-                    "\n\nThe worksheet is PASSWORD PROTECTED.\nKeep your password safe!",
+                    "\n\n🔒 WORKSHEET PROTECTED" +
+                    "\nPassword: " + generatedPassword +
+                    "\n\nThis password has been auto-generated." +
+                    "\nWrite it down if you need to access the report later.",
                     Alert.AlertType.INFORMATION);
+
+                logger.info("Excel export completed with password protection");
             } catch (Exception e) {
                 logger.error("Export error", e);
                 showAlert("Export Error", "Failed to export: " + e.getMessage(), Alert.AlertType.ERROR);

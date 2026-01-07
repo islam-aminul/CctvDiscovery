@@ -142,11 +142,12 @@ Click "Start Discovery" to begin:
 
 - Click "Export to Excel" when complete
 - Enter Site ID (required)
-- **Set a protection password** (minimum 6 characters)
-- Confirm password
 - Choose save location
+- **Password is auto-generated** and displayed in success dialog
 - Report includes all device/stream metadata with compliance highlighting
 - **Worksheet is password-protected** to prevent tampering
+
+**Note**: The password is automatically generated based on report metadata. Write it down if needed. Authorities can derive the password from the report contents - see `AUTHORITY_MANUAL.md`.
 
 ## Technical Details
 
@@ -191,9 +192,9 @@ Non-compliant cells are highlighted in **red** in Excel.
 
 ⚠️ **IMPORTANT**:
 
-- **Excel Protection**: All exported files are password-protected to prevent unauthorized modifications
+- **Excel Protection**: All exported files are password-protected with auto-generated passwords
+- Passwords are derived from report metadata - authorities can recover them (see `AUTHORITY_MANUAL.md`)
 - Excel reports contain **plaintext passwords** - handle securely and limit access
-- **Password Management**: Use a strong password (minimum 6 characters) for Excel protection
 - Network scanning may trigger IDS/IPS alerts
 - **Only use on networks where you have explicit authorization**
 - Logs may contain sensitive information (stored in `logs/`)
@@ -211,6 +212,8 @@ Users can still:
 - Select and copy cells
 - Print the report
 - Save a copy of the file
+
+**Password Recovery**: If you forget the password, contact your supervisor. They can derive it from the report metadata (device count + date). See `AUTHORITY_MANUAL.md` for the derivation formula (authorized personnel only).
 
 To unprotect: Excel → Review → Unprotect Sheet → Enter password
 
@@ -278,6 +281,12 @@ target/
 ├── CctvDiscovery-1.0.0-SNAPSHOT.zip     # Complete distribution
 └── logs/                                # Application logs
 ```
+
+## Documentation
+
+- **README.md**: General usage and build instructions (this file)
+- **User Manual**: `src/main/resources/help/manual.html` - End-user guide embedded in application
+- **AUTHORITY_MANUAL.md**: Password derivation formula and security procedures (**CONFIDENTIAL - Supervisors only**)
 
 ## License
 
