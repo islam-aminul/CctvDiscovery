@@ -28,6 +28,7 @@
         <httpclient.version>4.5.14</httpclient.version>
         <commons-codec.version>1.15</commons-codec.version>
         <gson.version>2.8.9</gson.version>
+        <slf4j.version>1.7.36</slf4j.version>
         <logback.version>1.2.12</logback.version>
 
         <!-- Build Configuration Properties -->
@@ -81,11 +82,17 @@
             <classifier>${javafx.platform}</classifier>
         </dependency>
 
-        <!-- OSHI -->
+        <!-- OSHI (exclude slf4j to prevent version conflict) -->
         <dependency>
             <groupId>com.github.oshi</groupId>
             <artifactId>oshi-core</artifactId>
             <version>${oshi.version}</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.slf4j</groupId>
+                    <artifactId>slf4j-api</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
 
         <!-- Apache POI -->
@@ -124,6 +131,13 @@
             <artifactId>openblas</artifactId>
             <version>0.3.23-${javacv.version}</version>
             <classifier>${javacpp.platform}</classifier>
+        </dependency>
+
+        <!-- Logging - SLF4J API (explicit version to prevent conflicts) -->
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+            <version>${slf4j.version}</version>
         </dependency>
 
         <!-- Logging - Logback (replaces slf4j-simple) -->
