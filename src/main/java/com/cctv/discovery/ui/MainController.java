@@ -152,9 +152,9 @@ public class MainController {
 
         Button btnHelp = new Button("User Manual");
         btnHelp.setOnAction(e -> showHelpManual());
-        btnHelp.setStyle("-fx-background-color: #28a745; -fx-text-fill: white; -fx-font-weight: bold;");
+        btnHelp.setStyle("-fx-background-color: #17a2b8; -fx-text-fill: white; -fx-font-weight: bold;");
 
-        // Right side button container
+        // Right side button container - right aligned
         HBox buttonBox = new HBox(10, btnSettings, btnHelp);
         buttonBox.setAlignment(Pos.CENTER_RIGHT);
 

@@ -4,6 +4,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.*;
+import java.net.URISyntaxException;
 import java.util.Properties;
 
 /**
@@ -19,16 +20,51 @@ public class AppConfig {
 
     private final Properties defaultProps;
     private final Properties userProps;
+    private final File userSettingsFile;
 
     private AppConfig() {
         this.defaultProps = new Properties();
         this.userProps = new Properties();
+        this.userSettingsFile = getUserSettingsFile();
         loadDefaultProperties();
         loadUserSettings();
     }
 
     public static AppConfig getInstance() {
         return INSTANCE;
+    }
+
+    /**
+     * Get the user settings file path.
+     * The file is located in the same directory as the JAR/EXE file.
+     */
+    private File getUserSettingsFile() {
+        try {
+            // Get the directory where the JAR/EXE is located
+            String jarPath = AppConfig.class.getProtectionDomain().getCodeSource().getLocation().toURI().getPath();
+            File jarFile = new File(jarPath);
+
+            // If running from JAR, get parent directory
+            // If running from classes directory (IDE), use current directory
+            File directory;
+            if (jarFile.isFile()) {
+                // Running from JAR - use JAR's parent directory
+                directory = jarFile.getParentFile();
+                logger.info("Application running from JAR: {}", jarFile.getAbsolutePath());
+            } else {
+                // Running from IDE - use current directory
+                directory = new File(System.getProperty("user.dir"));
+                logger.info("Application running from IDE, using current directory: {}", directory.getAbsolutePath());
+            }
+
+            File settingsFile = new File(directory, USER_SETTINGS_FILE);
+            logger.info("User settings file location: {}", settingsFile.getAbsolutePath());
+            return settingsFile;
+
+        } catch (URISyntaxException e) {
+            logger.error("Error determining JAR location, falling back to current directory", e);
+            return new File(USER_SETTINGS_FILE);
+        }
     }
 
     private void loadDefaultProperties() {
@@ -45,25 +81,25 @@ public class AppConfig {
     }
 
     private void loadUserSettings() {
-        File userFile = new File(USER_SETTINGS_FILE);
-        if (userFile.exists()) {
-            try (FileInputStream fis = new FileInputStream(userFile)) {
+        if (userSettingsFile.exists()) {
+            try (FileInputStream fis = new FileInputStream(userSettingsFile)) {
                 userProps.load(fis);
-                logger.info("Loaded user settings from: {}", userFile.getAbsolutePath());
+                logger.info("Loaded user settings from: {}", userSettingsFile.getAbsolutePath());
             } catch (Exception e) {
                 logger.error("Error loading user settings", e);
             }
+        } else {
+            logger.info("No user settings file found, using defaults");
         }
     }
 
     /**
-     * Save user settings to file.
+     * Save user settings to file in the same directory as the JAR/EXE.
      */
     public void saveUserSettings() {
-        File userFile = new File(USER_SETTINGS_FILE);
-        try (FileOutputStream fos = new FileOutputStream(userFile)) {
+        try (FileOutputStream fos = new FileOutputStream(userSettingsFile)) {
             userProps.store(fos, "CCTV Discovery - User Settings (Auto-generated)");
-            logger.info("Saved user settings to: {}", userFile.getAbsolutePath());
+            logger.info("Saved user settings to: {}", userSettingsFile.getAbsolutePath());
         } catch (Exception e) {
             logger.error("Error saving user settings", e);
         }

@@ -172,7 +172,8 @@ public class SettingsDialog extends Stage {
 
         Button btnAdd = new Button("Add Path Pair");
         btnAdd.setStyle("-fx-background-color: #0078d4; -fx-text-fill: white; -fx-font-weight: bold;");
-        btnAdd.setPrefWidth(120);
+        btnAdd.setPrefWidth(350);
+        btnAdd.setMaxWidth(350);
         btnAdd.setOnAction(e -> addPathPair());
 
         inputGrid.add(lblMain, 0, 0);
@@ -189,13 +190,13 @@ public class SettingsDialog extends Stage {
         lvPathPairs.setPrefHeight(100);
         lvPathPairs.setPlaceholder(new Label("No custom paths configured\nClick 'Add Path Pair' to add"));
 
-        // Remove button
+        // Remove button - center aligned
         Button btnRemove = new Button("Remove Selected");
-        btnRemove.setPrefWidth(120);
+        btnRemove.setPrefWidth(150);
         btnRemove.setOnAction(e -> removeSelectedPair());
 
         HBox removeBox = new HBox(8);
-        removeBox.setAlignment(Pos.CENTER_LEFT);
+        removeBox.setAlignment(Pos.CENTER);
         removeBox.getChildren().add(btnRemove);
 
         Label lblNote = new Label("💡 Tip: Main stream is usually high quality, Sub stream is lower quality for bandwidth saving");
@@ -253,21 +254,23 @@ public class SettingsDialog extends Stage {
         hbox.setAlignment(Pos.CENTER_RIGHT);
         hbox.setPadding(new Insets(10, 0, 0, 0));
 
+        // All buttons same size (150px)
         Button btnSave = new Button("Save");
         btnSave.getStyleClass().add("button-success");
-        btnSave.setPrefWidth(100);
+        btnSave.setPrefWidth(150);
         btnSave.setOnAction(e -> saveSettings());
 
         Button btnReset = new Button("Reset to Defaults");
-        btnReset.setPrefWidth(130);
+        btnReset.setPrefWidth(150);
         btnReset.setStyle("-fx-background-color: #dc3545; -fx-text-fill: white; -fx-font-weight: bold;");
         btnReset.setOnAction(e -> resetToDefaults());
 
         Button btnCancel = new Button("Cancel");
-        btnCancel.setPrefWidth(100);
+        btnCancel.setPrefWidth(150);
         btnCancel.setOnAction(e -> close());
 
-        hbox.getChildren().addAll(btnReset, btnSave, btnCancel);
+        // Order: Reset to Defaults, Cancel, Save
+        hbox.getChildren().addAll(btnReset, btnCancel, btnSave);
 
         return hbox;
     }
