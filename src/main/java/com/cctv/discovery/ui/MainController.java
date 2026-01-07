@@ -652,20 +652,31 @@ public class MainController {
             return;
         }
 
-        // Step 2: Auto-generate protection password
+        // Step 2: Auto-generate protection password (numeric only, no delimiters)
         // Format: {DeviceCount}{YYYYMMDD}{FixedCode}
         // Example: 25 devices on 2026-01-07 → "252026010748275"
         int deviceCount = devices.size();
         String dateStr = new java.text.SimpleDateFormat("yyyyMMdd").format(new java.util.Date());
         String fixedCode = "482753";
-        String generatedPassword = deviceCount + dateStr + fixedCode;
+        String generatedPassword = "" + deviceCount + dateStr + fixedCode;
 
         logger.info("Auto-generated protection password for {} devices on {}", deviceCount, dateStr);
 
-        // Step 3: Choose file location
+        // Step 3: Choose file location with default to Documents folder
         FileChooser fileChooser = new FileChooser();
         fileChooser.setTitle("Save Excel Report");
         fileChooser.setInitialFileName("CCTV_Audit_" + siteId.get() + ".xlsx");
+
+        // Set initial directory to user's Documents folder
+        String userHome = System.getProperty("user.home");
+        File documentsDir = new File(userHome, "Documents");
+        if (documentsDir.exists() && documentsDir.isDirectory()) {
+            fileChooser.setInitialDirectory(documentsDir);
+        } else {
+            // Fallback to user home if Documents doesn't exist
+            fileChooser.setInitialDirectory(new File(userHome));
+        }
+
         fileChooser.getExtensionFilters().add(
                 new FileChooser.ExtensionFilter("Excel Files", "*.xlsx"));
 
