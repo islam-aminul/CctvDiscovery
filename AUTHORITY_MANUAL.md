@@ -10,6 +10,8 @@ This document contains the password derivation formula for Excel worksheet prote
 
 All exported Excel reports are automatically protected with a password to prevent field operators from tampering with audit results before submission.
 
+**CRITICAL**: The password is **NOT displayed** to field operators and is **NOT logged** by the application. Only authorities can derive the password using the formula below.
+
 ### Password Generation Formula
 
 **Format**: `{DeviceCount}{YYYYMMDD}{FixedCode}`
@@ -96,22 +98,28 @@ The password formula provides automatic tampering detection:
 ### Scenario 3: User Modifies Data (Without Changing Count)
 - Original: 30 devices → Password: `302026010748275`
 - User modifies IP addresses, credentials, or compliance flags
-- User cannot re-protect (doesn't know fixed code `482753`)
-- User sends unprotected file or with wrong password
-- **Detection**: Missing protection or wrong password indicates tampering
+- User cannot re-protect:
+  - Password was NOT shown to them
+  - They don't know the fixed code `482753`
+  - They cannot derive the password
+- User sends unprotected file or attempts to hide modifications
+- **Detection**: Missing protection indicates tampering attempt
 
 ---
 
 ## Password Recovery Process
 
-If a field operator claims to have "lost" the password:
+If a field operator requests the password or claims they "need access":
 
-1. **Do NOT provide the password**
-2. Request the Excel file for verification
-3. Derive the password using the formula
-4. If password works → File is authentic
-5. If password fails → File may be tampered or corrupted
-6. Compare device count in file with expected count from field report
+1. **IMPORTANT**: Field operators are NEVER given the password
+2. **Do NOT provide the password** under any circumstances
+3. Request the Excel file for verification
+4. Derive the password using the formula
+5. If password works → File is authentic
+6. If password fails → File may be tampered or corrupted
+7. Compare device count in file with expected count from field report
+
+**Note**: The password is intentionally NOT shown to field operators during export. This is a security feature, not a bug.
 
 ---
 

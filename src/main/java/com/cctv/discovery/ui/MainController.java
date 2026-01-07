@@ -660,7 +660,7 @@ public class MainController {
         String fixedCode = "482753";
         String generatedPassword = "" + deviceCount + dateStr + fixedCode;
 
-        logger.info("Auto-generated protection password for {} devices on {}", deviceCount, dateStr);
+        // Note: Password is NOT logged or displayed to prevent user tampering
 
         // Step 3: Choose file location with default to Documents folder
         FileChooser fileChooser = new FileChooser();
@@ -686,16 +686,16 @@ public class MainController {
                 // Export with auto-generated password protection
                 excelExporter.exportToExcel(new ArrayList<>(devices), siteId.get(), null, null, file, generatedPassword);
 
-                // Show success with password
+                // Show success WITHOUT password (authority will derive it)
                 showAlert("Export Complete",
                     "Report exported successfully to:\n" + file.getAbsolutePath() +
                     "\n\n🔒 WORKSHEET PROTECTED" +
-                    "\nPassword: " + generatedPassword +
-                    "\n\nThis password has been auto-generated." +
-                    "\nWrite it down if you need to access the report later.",
+                    "\n\nThe worksheet has been password-protected." +
+                    "\nYour supervisor can access the file using the standard procedure." +
+                    "\n\nSubmit this report to your authority.",
                     Alert.AlertType.INFORMATION);
 
-                logger.info("Excel export completed with password protection");
+                logger.info("Excel export completed successfully for site: {}", siteId.get());
             } catch (Exception e) {
                 logger.error("Export error", e);
                 showAlert("Export Error", "Failed to export: " + e.getMessage(), Alert.AlertType.ERROR);

@@ -137,8 +137,8 @@
         <ol>
             <li>Click "Export to Excel"</li>
             <li>Enter a Site ID (required)</li>
-            <li>Choose save location</li>
-            <li><strong>Password is AUTO-GENERATED</strong> and displayed in the success dialog</li>
+            <li>Choose save location (defaults to Documents folder)</li>
+            <li>File is saved and <strong>automatically password-protected</strong></li>
         </ol>
         <p>The Excel report includes:</p>
         <ul>
@@ -149,12 +149,12 @@
             <li><strong>Password-protected worksheet to prevent tampering</strong></li>
         </ul>
         <div class="warning">
-            <strong>🔒 Auto-Generated Password:</strong> The application automatically generates a protection password
-            based on the report contents. The password will be shown in the export success dialog.
-            <strong>Write it down if you need to access the report later.</strong>
+            <strong>🔒 Password Protection:</strong> The application automatically password-protects the Excel file
+            to maintain data integrity. The password is <strong>NOT shown to you</strong> as it is intended for
+            your supervisor/authority to access and verify the report.
             <br><br>
-            <strong>Note:</strong> Your authority/supervisor can derive the password from the report metadata.
-            You do not need to memorize or store it long-term.
+            <strong>Important:</strong> Do not attempt to modify the Excel file. Submit it as-is to your supervisor.
+            They have the means to access and verify the data.
         </div>
     </div>
 
@@ -281,10 +281,10 @@
         <li>Save a copy of the file</li>
     </ul>
     <div class="info">
-        <strong>Password Recovery:</strong> If you forget the auto-generated password, your authority/supervisor
-        can derive it from the report metadata (device count and date). Contact them for access.
+        <strong>For Field Operators:</strong> You do not need to know the password. Submit the protected
+        Excel file to your supervisor/authority as-is. They will handle the verification.
         <br><br>
-        To unprotect: Excel → Review → Unprotect Sheet → Enter the password shown during export.
+        <strong>For Supervisors:</strong> See AUTHORITY_MANUAL.md for password derivation instructions.
     </div>
 
     <h2>7. Support</h2>

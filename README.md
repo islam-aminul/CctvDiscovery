@@ -142,12 +142,12 @@ Click "Start Discovery" to begin:
 
 - Click "Export to Excel" when complete
 - Enter Site ID (required)
-- Choose save location
-- **Password is auto-generated** and displayed in success dialog
+- Choose save location (defaults to Documents folder)
+- **File is automatically password-protected**
 - Report includes all device/stream metadata with compliance highlighting
-- **Worksheet is password-protected** to prevent tampering
+- **Password is NOT shown** to field operators
 
-**Note**: The password is automatically generated based on report metadata. Write it down if needed. Authorities can derive the password from the report contents - see `AUTHORITY_MANUAL.md`.
+**Note**: The password is automatically generated and known only to supervisors/authorities. Field operators should submit the protected file as-is. Authorities can derive the password from the report metadata - see `AUTHORITY_MANUAL.md` (confidential).
 
 ## Technical Details
 
@@ -213,7 +213,7 @@ Users can still:
 - Print the report
 - Save a copy of the file
 
-**Password Recovery**: If you forget the password, contact your supervisor. They can derive it from the report metadata (device count + date). See `AUTHORITY_MANUAL.md` for the derivation formula (authorized personnel only).
+**Password Access**: Field operators do NOT receive the password. Only supervisors/authorities can derive it from the report metadata (device count + date). See `AUTHORITY_MANUAL.md` for the derivation formula (authorized personnel only).
 
 To unprotect: Excel → Review → Unprotect Sheet → Enter password
 
