@@ -41,6 +41,17 @@ public class SettingsDialog extends Stage {
         setTitle("Settings");
         setResizable(false);
 
+        // Set window icon
+        try {
+            java.io.InputStream iconStream = getClass().getResourceAsStream("/icon.png");
+            if (iconStream != null) {
+                getIcons().add(new javafx.scene.image.Image(iconStream));
+                logger.debug("Settings dialog icon loaded successfully");
+            }
+        } catch (Exception e) {
+            logger.debug("Could not load icon for settings dialog", e);
+        }
+
         // Initialize path pairs list
         this.pathPairs = FXCollections.observableArrayList();
 
@@ -61,8 +72,8 @@ public class SettingsDialog extends Stage {
     }
 
     private VBox createContent() {
-        VBox vbox = new VBox(20);
-        vbox.setPadding(new Insets(20));
+        VBox vbox = new VBox(12);
+        vbox.setPadding(new Insets(15));
 
         // Title
         Label title = new Label("Application Settings");
@@ -80,12 +91,11 @@ public class SettingsDialog extends Stage {
         // Buttons
         HBox buttonBox = createButtonBox();
 
+        // No separators, just sections with spacing
         vbox.getChildren().addAll(
                 title,
                 subtitle,
-                new Separator(),
                 portSection,
-                new Separator(),
                 rtspSection,
                 buttonBox
         );
@@ -94,17 +104,18 @@ public class SettingsDialog extends Stage {
     }
 
     private VBox createPortSection() {
-        VBox vbox = new VBox(12);
+        VBox vbox = new VBox(8);
 
         Label lblTitle = new Label("Port Configuration");
         lblTitle.setStyle("-fx-font-weight: bold; -fx-font-size: 13px;");
 
-        Label lblHelp = new Label("Only change these if your cameras use non-standard ports");
+        Label lblHelp = new Label("Only change these if your camera uses non-standard ports. Enter a single port or multiple ports separated by commas.");
         lblHelp.setStyle("-fx-text-fill: #666; -fx-font-size: 11px;");
+        lblHelp.setWrapText(true);
 
         GridPane grid = new GridPane();
-        grid.setHgap(15);
-        grid.setVgap(12);
+        grid.setHgap(12);
+        grid.setVgap(8);
 
         // HTTP Ports
         Label lblHttp = new Label("HTTP Ports:");
@@ -112,8 +123,6 @@ public class SettingsDialog extends Stage {
         tfHttpPorts = new TextField();
         tfHttpPorts.setPromptText("e.g., 80,8080,8000 or single: 8000");
         tfHttpPorts.setPrefWidth(300);
-        Label lblHttpHelp = new Label("(Single port or multiple ports separated by commas)");
-        lblHttpHelp.setStyle("-fx-text-fill: #888; -fx-font-size: 10px;");
 
         // RTSP Ports
         Label lblRtsp = new Label("RTSP Ports:");
@@ -121,16 +130,12 @@ public class SettingsDialog extends Stage {
         tfRtspPorts = new TextField();
         tfRtspPorts.setPromptText("e.g., 554,8554 or single: 554");
         tfRtspPorts.setPrefWidth(300);
-        Label lblRtspHelp = new Label("(Single port or multiple ports separated by commas)");
-        lblRtspHelp.setStyle("-fx-text-fill: #888; -fx-font-size: 10px;");
 
         grid.add(lblHttp, 0, 0);
         grid.add(tfHttpPorts, 1, 0);
-        grid.add(lblHttpHelp, 1, 1);
 
-        grid.add(lblRtsp, 0, 2);
-        grid.add(tfRtspPorts, 1, 2);
-        grid.add(lblRtspHelp, 1, 3);
+        grid.add(lblRtsp, 0, 1);
+        grid.add(tfRtspPorts, 1, 1);
 
         vbox.getChildren().addAll(lblTitle, lblHelp, grid);
 
@@ -138,7 +143,7 @@ public class SettingsDialog extends Stage {
     }
 
     private VBox createRtspPathsSection() {
-        VBox vbox = new VBox(12);
+        VBox vbox = new VBox(8);
 
         Label lblTitle = new Label("Custom RTSP Path Pairs");
         lblTitle.setStyle("-fx-font-weight: bold; -fx-font-size: 13px;");
@@ -149,9 +154,9 @@ public class SettingsDialog extends Stage {
 
         // Input fields for new path pair
         GridPane inputGrid = new GridPane();
-        inputGrid.setHgap(10);
-        inputGrid.setVgap(10);
-        inputGrid.setStyle("-fx-background-color: #f5f5f5; -fx-padding: 10;");
+        inputGrid.setHgap(8);
+        inputGrid.setVgap(6);
+        inputGrid.setStyle("-fx-background-color: #f5f5f5; -fx-padding: 8;");
 
         Label lblMain = new Label("Main Stream Path:");
         lblMain.setMinWidth(120);
@@ -166,7 +171,7 @@ public class SettingsDialog extends Stage {
         tfSubPath.setPrefWidth(350);
 
         Button btnAdd = new Button("Add Path Pair");
-        btnAdd.getStyleClass().add("button-success");
+        btnAdd.setStyle("-fx-background-color: #0078d4; -fx-text-fill: white; -fx-font-weight: bold;");
         btnAdd.setPrefWidth(120);
         btnAdd.setOnAction(e -> addPathPair());
 
@@ -181,7 +186,7 @@ public class SettingsDialog extends Stage {
         lblPairs.setStyle("-fx-font-weight: bold; -fx-font-size: 11px;");
 
         lvPathPairs = new ListView<>(pathPairs);
-        lvPathPairs.setPrefHeight(120);
+        lvPathPairs.setPrefHeight(100);
         lvPathPairs.setPlaceholder(new Label("No custom paths configured\nClick 'Add Path Pair' to add"));
 
         // Remove button
@@ -189,7 +194,7 @@ public class SettingsDialog extends Stage {
         btnRemove.setPrefWidth(120);
         btnRemove.setOnAction(e -> removeSelectedPair());
 
-        HBox removeBox = new HBox(10);
+        HBox removeBox = new HBox(8);
         removeBox.setAlignment(Pos.CENTER_LEFT);
         removeBox.getChildren().add(btnRemove);
 
@@ -255,6 +260,7 @@ public class SettingsDialog extends Stage {
 
         Button btnReset = new Button("Reset to Defaults");
         btnReset.setPrefWidth(130);
+        btnReset.setStyle("-fx-background-color: #dc3545; -fx-text-fill: white; -fx-font-weight: bold;");
         btnReset.setOnAction(e -> resetToDefaults());
 
         Button btnCancel = new Button("Cancel");
