@@ -110,18 +110,18 @@ public class SettingsDialog extends Stage {
         Label lblHttp = new Label("HTTP Ports:");
         lblHttp.setMinWidth(100);
         tfHttpPorts = new TextField();
-        tfHttpPorts.setPromptText("e.g., 80,8080,8000");
+        tfHttpPorts.setPromptText("e.g., 80,8080,8000 or single: 8000");
         tfHttpPorts.setPrefWidth(300);
-        Label lblHttpHelp = new Label("(Separate multiple ports with commas)");
+        Label lblHttpHelp = new Label("(Single port or multiple ports separated by commas)");
         lblHttpHelp.setStyle("-fx-text-fill: #888; -fx-font-size: 10px;");
 
         // RTSP Ports
         Label lblRtsp = new Label("RTSP Ports:");
         lblRtsp.setMinWidth(100);
         tfRtspPorts = new TextField();
-        tfRtspPorts.setPromptText("e.g., 554,8554");
+        tfRtspPorts.setPromptText("e.g., 554,8554 or single: 554");
         tfRtspPorts.setPrefWidth(300);
-        Label lblRtspHelp = new Label("(Separate multiple ports with commas)");
+        Label lblRtspHelp = new Label("(Single port or multiple ports separated by commas)");
         lblRtspHelp.setStyle("-fx-text-fill: #888; -fx-font-size: 10px;");
 
         grid.add(lblHttp, 0, 0);
