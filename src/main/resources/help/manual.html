@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CCTV Discovery Tool - User Manual</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            line-height: 1.6;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        h1 {
+            color: #1976D2;
+            border-bottom: 3px solid #1976D2;
+            padding-bottom: 10px;
+        }
+        h2 {
+            color: #424242;
+            margin-top: 30px;
+            border-left: 4px solid #1976D2;
+            padding-left: 10px;
+        }
+        h3 {
+            color: #616161;
+        }
+        .warning {
+            background-color: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        .info {
+            background-color: #d1ecf1;
+            border-left: 4px solid #0dcaf0;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        code {
+            background-color: #f4f4f4;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Consolas', monospace;
+        }
+        .step {
+            background-color: white;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        ul {
+            margin-left: 20px;
+        }
+        li {
+            margin-bottom: 8px;
+        }
+    </style>
+</head>
+<body>
+    <h1>CCTV Discovery & Audit Tool</h1>
+    <p><strong>Version:</strong> 1.0.0</p>
+    <p><strong>Date:</strong> January 2026</p>
+
+    <div class="warning">
+        <strong>⚠ Important:</strong> This tool performs network scanning and authentication attempts.
+        Only use it on networks where you have explicit authorization. Unauthorized network scanning
+        may be illegal in your jurisdiction.
+    </div>
+
+    <h2>1. Overview</h2>
+    <p>
+        The CCTV Discovery Tool is a comprehensive solution for discovering, auditing, and documenting
+        IP-based CCTV cameras and NVR/DVR systems on your network. It supports both ONVIF-compliant
+        devices and proprietary RTSP implementations from major manufacturers.
+    </p>
+
+    <h2>2. Quick Start Guide</h2>
+
+    <div class="step">
+        <h3>Step 1: Select Network Range</h3>
+        <p>Choose one of three options:</p>
+        <ul>
+            <li><strong>Network Interface:</strong> Automatically scan the selected network adapter's subnet (default /24)</li>
+            <li><strong>Manual IP Range:</strong> Specify start and end IP addresses (e.g., 192.168.1.1 to 192.168.1.254)</li>
+            <li><strong>CIDR Notation:</strong> Enter a CIDR block (e.g., 192.168.1.0/24)</li>
+        </ul>
+        <p>The tool will display the number of possible IPs to scan.</p>
+    </div>
+
+    <div class="step">
+        <h3>Step 2: Add Credentials</h3>
+        <p>Add up to 4 username/password combinations that will be tested against discovered devices:</p>
+        <ul>
+            <li>Default username is "admin" (most common)</li>
+            <li>Enter password in plaintext (required for RTSP authentication)</li>
+            <li>Click "Add Credential" to add to the list</li>
+            <li>Right-click credentials to delete them</li>
+        </ul>
+        <div class="info">
+            <strong>Tip:</strong> Common default passwords include: admin, 12345, password, [blank]
+        </div>
+    </div>
+
+    <div class="step">
+        <h3>Step 3: Start Discovery</h3>
+        <p>Click "Start Discovery" to begin the process. The tool will:</p>
+        <ol>
+            <li>Run WS-Discovery to find ONVIF-compliant devices</li>
+            <li>Optionally perform a deep port scan (you'll be asked)</li>
+            <li>Attempt authentication with each credential</li>
+            <li>Discover RTSP stream URLs</li>
+            <li>Analyze video streams for codec, resolution, and compliance</li>
+        </ol>
+        <p>Progress will be displayed in the Progress section.</p>
+    </div>
+
+    <div class="step">
+        <h3>Step 4: Review Results</h3>
+        <p>The results table shows:</p>
+        <ul>
+            <li><strong>IP Address:</strong> Device network address</li>
+            <li><strong>Status:</strong> Current processing status or completion state</li>
+            <li><strong>Device Name:</strong> Camera/NVR name from ONVIF</li>
+            <li><strong>Manufacturer:</strong> Detected from MAC address OUI</li>
+            <li><strong>Streams:</strong> Number of discovered RTSP streams</li>
+            <li><strong>Error:</strong> Any error messages</li>
+        </ul>
+    </div>
+
+    <div class="step">
+        <h3>Step 5: Export to Excel</h3>
+        <p>When discovery is complete:</p>
+        <ol>
+            <li>Click "Export to Excel"</li>
+            <li>Enter a Site ID (required)</li>
+            <li>Choose save location</li>
+        </ol>
+        <p>The Excel report includes:</p>
+        <ul>
+            <li>Complete device information</li>
+            <li>All discovered streams with technical details</li>
+            <li>Compliance highlighting (non-compliant streams in red)</li>
+            <li>Plaintext credentials (handle securely!)</li>
+        </ul>
+    </div>
+
+    <h2>3. Features</h2>
+
+    <h3>WS-Discovery (ONVIF)</h3>
+    <p>
+        Broadcasts a multicast probe to discover ONVIF-compliant cameras automatically.
+        This is the fastest discovery method and provides the most metadata.
+    </p>
+
+    <h3>Port Scanning</h3>
+    <p>Scans the following ports:</p>
+    <ul>
+        <li><code>80, 8080, 443, 8443</code> - HTTP/HTTPS (ONVIF)</li>
+        <li><code>554</code> - RTSP (streaming)</li>
+        <li><code>8000, 37777, 34567</code> - Manufacturer-specific (NVR detection)</li>
+    </ul>
+
+    <h3>Manufacturer Detection</h3>
+    <p>
+        Automatically identifies manufacturer from MAC address using IEEE OUI database.
+        Optimized for Indian market with brands like CP Plus, Hikvision, Dahua, etc.
+    </p>
+
+    <h3>Smart RTSP Path Guessing</h3>
+    <p>Uses a three-tier approach:</p>
+    <ol>
+        <li><strong>Smart Cache:</strong> Tries paths that worked for similar devices</li>
+        <li><strong>Manufacturer Defaults:</strong> Known paths for Hikvision, Dahua, Axis, etc.</li>
+        <li><strong>Generic Paths:</strong> Common RTSP URL patterns</li>
+    </ol>
+
+    <h3>NVR/DVR Channel Iteration</h3>
+    <p>
+        When an NVR is detected (via ONVIF GetVideoSources > 1 or special ports open),
+        the tool automatically iterates through channels 1-64 to discover all connected cameras.
+    </p>
+
+    <h3>Stream Analysis</h3>
+    <p>
+        Uses JavaCV/FFmpeg to analyze each stream for 10 seconds and extract:
+    </p>
+    <ul>
+        <li>Resolution (e.g., 1920x1080)</li>
+        <li>Frame rate (FPS)</li>
+        <li>Video codec (H.264, H.265, etc.)</li>
+        <li>Bitrate (kbps)</li>
+    </ul>
+
+    <h3>Compliance Checking</h3>
+    <p>
+        Sub-streams are checked against compliance requirements:
+    </p>
+    <ul>
+        <li>Resolution: 360p - 480p</li>
+        <li>Codec: H.264</li>
+        <li>Bitrate: &lt; 256 kbps</li>
+    </ul>
+    <p>Non-compliant streams are highlighted in red in the Excel export.</p>
+
+    <h2>4. Troubleshooting</h2>
+
+    <h3>No devices found</h3>
+    <ul>
+        <li>Verify you're on the correct network</li>
+        <li>Check firewall settings (UDP port 3702 for ONVIF)</li>
+        <li>Try enabling "deep port scan"</li>
+        <li>Ensure devices are powered on and connected</li>
+    </ul>
+
+    <h3>Authentication failures</h3>
+    <ul>
+        <li>Verify credentials are correct</li>
+        <li>Try common defaults: admin/admin, admin/12345</li>
+        <li>Check if device has authentication enabled</li>
+        <li>Some devices require ONVIF user creation</li>
+    </ul>
+
+    <h3>Stream analysis fails</h3>
+    <ul>
+        <li>Ensure RTSP port 554 is accessible</li>
+        <li>Check network bandwidth</li>
+        <li>Verify credentials allow stream access</li>
+        <li>Some cameras require separate streaming credentials</li>
+    </ul>
+
+    <h2>5. Technical Specifications</h2>
+    <ul>
+        <li><strong>Platform:</strong> Java 8+</li>
+        <li><strong>UI Framework:</strong> JavaFX 11</li>
+        <li><strong>Video Processing:</strong> JavaCV 1.5.9 (FFmpeg/OpenCV)</li>
+        <li><strong>ONVIF:</strong> WS-Discovery, SOAP 1.2, WS-Security</li>
+        <li><strong>RTSP:</strong> TCP transport, Digest authentication</li>
+        <li><strong>Export Format:</strong> XLSX (Excel 2007+)</li>
+    </ul>
+
+    <h2>6. Security Considerations</h2>
+    <div class="warning">
+        <ul>
+            <li>Excel reports contain plaintext passwords - store securely</li>
+            <li>Network scanning may trigger IDS/IPS alerts</li>
+            <li>Only use on networks where you have authorization</li>
+            <li>Credentials are stored in memory during operation</li>
+            <li>Logs may contain sensitive information</li>
+        </ul>
+    </div>
+
+    <h2>7. Support</h2>
+    <p>
+        For technical support or questions, contact your system administrator or
+        refer to the project documentation.
+    </p>
+
+    <hr>
+    <p style="text-align: center; color: #757575; font-size: 0.9em;">
+        © 2026 Consultancy Services Ltd. All rights reserved.
+    </p>
+</body>
+</html>

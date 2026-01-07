@@ -1,0 +1,277 @@
+/* CCTV Discovery Application Styles - Professional Flat Design */
+
+.root {
+    -fx-background-color: #f5f5f5;
+    -fx-font-family: "Segoe UI", "Arial", sans-serif;
+    -fx-font-size: 13px;
+}
+
+/* Split Pane */
+.split-pane {
+    -fx-background-color: #ffffff;
+}
+
+.split-pane-divider {
+    -fx-background-color: #e0e0e0;
+    -fx-padding: 0 1 0 1;
+}
+
+/* Left Panel - Controls */
+.left-panel {
+    -fx-background-color: #fafafa;
+    -fx-padding: 15px;
+}
+
+.scroll-pane {
+    -fx-background-color: transparent;
+}
+
+.scroll-pane > .viewport {
+    -fx-background-color: transparent;
+}
+
+/* Header */
+.header-title {
+    -fx-font-size: 24px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #1976D2;
+}
+
+/* Section Titles */
+.section-title {
+    -fx-font-size: 14px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #424242;
+    -fx-padding: 10px 0 5px 0;
+}
+
+/* Buttons */
+.button {
+    -fx-background-color: #1976D2;
+    -fx-text-fill: white;
+    -fx-background-radius: 3px;
+    -fx-cursor: hand;
+    -fx-padding: 8px 16px;
+    -fx-font-weight: bold;
+}
+
+.button:hover {
+    -fx-background-color: #1565C0;
+}
+
+.button:pressed {
+    -fx-background-color: #0D47A1;
+}
+
+.button:disabled {
+    -fx-background-color: #BDBDBD;
+    -fx-text-fill: #757575;
+    -fx-cursor: default;
+    -fx-opacity: 0.6;
+}
+
+.button-secondary {
+    -fx-background-color: #757575;
+}
+
+.button-secondary:hover {
+    -fx-background-color: #616161;
+}
+
+.button-success {
+    -fx-background-color: #388E3C;
+}
+
+.button-success:hover {
+    -fx-background-color: #2E7D32;
+}
+
+.button-danger {
+    -fx-background-color: #D32F2F;
+}
+
+.button-danger:hover {
+    -fx-background-color: #C62828;
+}
+
+/* Text Fields */
+.text-field, .text-area {
+    -fx-background-color: white;
+    -fx-border-color: #BDBDBD;
+    -fx-border-radius: 3px;
+    -fx-background-radius: 3px;
+    -fx-padding: 6px 10px;
+}
+
+.text-field:focused, .text-area:focused {
+    -fx-border-color: #1976D2;
+    -fx-border-width: 2px;
+}
+
+/* ComboBox */
+.combo-box {
+    -fx-background-color: white;
+    -fx-border-color: #BDBDBD;
+    -fx-border-radius: 3px;
+    -fx-background-radius: 3px;
+}
+
+.combo-box:focused {
+    -fx-border-color: #1976D2;
+    -fx-border-width: 2px;
+}
+
+/* Radio Buttons */
+.radio-button {
+    -fx-text-fill: #424242;
+}
+
+.radio-button .radio {
+    -fx-border-color: #757575;
+    -fx-border-radius: 1em;
+}
+
+.radio-button:selected .radio {
+    -fx-background-color: #1976D2;
+}
+
+/* Progress Bar */
+.progress-bar {
+    -fx-accent: #1976D2;
+}
+
+.progress-bar > .track {
+    -fx-background-color: #E0E0E0;
+    -fx-background-radius: 3px;
+}
+
+.progress-bar > .bar {
+    -fx-background-color: #1976D2;
+    -fx-background-radius: 3px;
+    -fx-padding: 4px;
+}
+
+/* Table View */
+.table-view {
+    -fx-background-color: white;
+    -fx-border-color: #E0E0E0;
+}
+
+.table-view .column-header {
+    -fx-background-color: #EEEEEE;
+    -fx-font-weight: bold;
+    -fx-border-color: #E0E0E0;
+    -fx-padding: 8px;
+}
+
+.table-view .column-header-background {
+    -fx-background-color: #FAFAFA;
+}
+
+.table-row-cell {
+    -fx-cell-size: 30px;
+}
+
+.table-row-cell:odd {
+    -fx-background-color: #FAFAFA;
+}
+
+.table-row-cell:even {
+    -fx-background-color: white;
+}
+
+.table-row-cell:selected {
+    -fx-background-color: #BBDEFB;
+}
+
+.table-cell {
+    -fx-padding: 5px;
+    -fx-border-color: transparent;
+}
+
+/* Status cells */
+.status-pending {
+    -fx-background-color: #FFF9C4;
+}
+
+.status-scanning {
+    -fx-background-color: #E1F5FE;
+}
+
+.status-completed {
+    -fx-background-color: #C8E6C9;
+}
+
+.status-error, .status-auth-failed {
+    -fx-background-color: #FFCDD2;
+}
+
+/* ListView for credentials */
+.list-view {
+    -fx-background-color: white;
+    -fx-border-color: #BDBDBD;
+    -fx-border-radius: 3px;
+}
+
+.list-cell {
+    -fx-background-color: white;
+    -fx-text-fill: #424242;
+    -fx-padding: 8px;
+}
+
+.list-cell:filled:selected {
+    -fx-background-color: #BBDEFB;
+}
+
+.list-cell:filled:hover {
+    -fx-background-color: #E3F2FD;
+}
+
+/* Labels */
+.label {
+    -fx-text-fill: #424242;
+}
+
+.label-info {
+    -fx-text-fill: #1976D2;
+    -fx-font-size: 12px;
+}
+
+.label-warning {
+    -fx-text-fill: #F57C00;
+    -fx-font-weight: bold;
+}
+
+.label-error {
+    -fx-text-fill: #D32F2F;
+    -fx-font-weight: bold;
+}
+
+/* Separator */
+.separator {
+    -fx-background-color: #E0E0E0;
+}
+
+/* Context Menu */
+.context-menu {
+    -fx-background-color: white;
+    -fx-border-color: #BDBDBD;
+    -fx-border-width: 1px;
+}
+
+.menu-item {
+    -fx-background-color: white;
+}
+
+.menu-item:hover, .menu-item:focused {
+    -fx-background-color: #E3F2FD;
+}
+
+/* Tooltip */
+.tooltip {
+    -fx-background-color: #424242;
+    -fx-text-fill: white;
+    -fx-font-size: 12px;
+    -fx-background-radius: 3px;
+    -fx-padding: 6px 10px;
+}
