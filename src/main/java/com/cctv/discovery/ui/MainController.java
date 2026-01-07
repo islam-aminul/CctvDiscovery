@@ -504,9 +504,8 @@ public class MainController {
             }
         }
 
-        List<Device> finalDevices = new ArrayList<>(wsDevices);
-
         // Phase 2: Port scan
+        final List<Device> finalDevices;
         if (doPortScan) {
             List<String> ips = getIPList();
             List<Device> portScanDevices = networkScanner.performPortScan(ips, (current, total) -> {
@@ -518,6 +517,8 @@ public class MainController {
             });
 
             finalDevices = networkScanner.mergeDeviceLists(wsDevices, portScanDevices);
+        } else {
+            finalDevices = new ArrayList<>(wsDevices);
         }
 
         // Add devices to table
