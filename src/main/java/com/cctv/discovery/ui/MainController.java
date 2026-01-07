@@ -113,7 +113,19 @@ public class MainController {
         splitPane.getItems().addAll(leftScroll, rightPanel);
 
         scene = new Scene(splitPane, 1400, 800);
-        scene.getStylesheets().add(getClass().getResource("/css/app.css").toExternalForm());
+
+        // Load CSS with null check to prevent startup crashes
+        try {
+            java.net.URL cssResource = getClass().getResource("/css/app.css");
+            if (cssResource != null) {
+                scene.getStylesheets().add(cssResource.toExternalForm());
+                logger.info("CSS loaded successfully");
+            } else {
+                logger.warn("CSS file not found: /css/app.css - using default styling");
+            }
+        } catch (Exception e) {
+            logger.error("Failed to load CSS", e);
+        }
 
         return scene;
     }
@@ -504,9 +516,8 @@ public class MainController {
             }
         }
 
-        List<Device> finalDevices = new ArrayList<>(wsDevices);
-
         // Phase 2: Port scan
+        final List<Device> finalDevices;
         if (doPortScan) {
             List<String> ips = getIPList();
             List<Device> portScanDevices = networkScanner.performPortScan(ips, (current, total) -> {
@@ -518,6 +529,8 @@ public class MainController {
             });
 
             finalDevices = networkScanner.mergeDeviceLists(wsDevices, portScanDevices);
+        } else {
+            finalDevices = new ArrayList<>(wsDevices);
         }
 
         // Add devices to table
