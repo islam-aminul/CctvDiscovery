@@ -25,16 +25,26 @@ public class Launcher extends Application {
 
             // Set application icon
             try {
-                Image icon = new Image(getClass().getResourceAsStream("/icon.png"));
-                primaryStage.getIcons().add(icon);
+                java.io.InputStream iconStream = getClass().getResourceAsStream("/icon.png");
+                if (iconStream != null) {
+                    Image icon = new Image(iconStream);
+                    primaryStage.getIcons().add(icon);
+                    logger.info("Application icon loaded successfully");
+                } else {
+                    logger.warn("Icon resource not found: /icon.png");
+                }
             } catch (Exception e) {
                 logger.warn("Could not load application icon", e);
             }
 
             // Create main controller and scene
+            logger.info("Creating main controller...");
             controller = new MainController(primaryStage);
+
+            logger.info("Creating scene...");
             Scene scene = controller.createScene();
 
+            logger.info("Setting up stage...");
             primaryStage.setScene(scene);
             primaryStage.setMinWidth(1200);
             primaryStage.setMinHeight(700);
@@ -47,13 +57,15 @@ public class Launcher extends Application {
                 }
             });
 
+            logger.info("Showing primary stage...");
             primaryStage.show();
 
             logger.info("Application started successfully");
 
         } catch (Exception e) {
             logger.error("Failed to start application", e);
-            throw new RuntimeException("Application startup failed", e);
+            e.printStackTrace(); // Print full stack trace to stderr
+            throw new RuntimeException("Application startup failed: " + e.getMessage(), e);
         }
     }
 
