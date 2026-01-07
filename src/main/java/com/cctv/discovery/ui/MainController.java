@@ -133,11 +133,11 @@ public class MainController {
     }
 
     private VBox createLeftPanel() {
-        VBox vbox = new VBox(15);
-        vbox.setPadding(new Insets(15));
+        VBox vbox = new VBox(8);
+        vbox.setPadding(new Insets(10));
         vbox.getStyleClass().add("left-panel");
 
-        // Header
+        // Header Panel - Full width with left/right alignment
         Label title = new Label("CCTV Discovery Tool");
         title.getStyleClass().add("header-title");
 
@@ -147,9 +147,17 @@ public class MainController {
         Button btnHelp = new Button("User Manual");
         btnHelp.setOnAction(e -> showHelpManual());
 
-        HBox header = new HBox(10, title, new Region(), btnSettings, btnHelp);
+        // Right side button container
+        HBox buttonBox = new HBox(10, btnSettings, btnHelp);
+        buttonBox.setAlignment(Pos.CENTER_RIGHT);
+
+        // Main header container
+        HBox header = new HBox(8);
         header.setAlignment(Pos.CENTER_LEFT);
-        HBox.setHgrow(header.getChildren().get(1), Priority.ALWAYS);
+        header.setPadding(new Insets(8));
+        header.setStyle("-fx-background-color: #f0f0f0; -fx-border-color: #cccccc; -fx-border-width: 0 0 1 0;");
+        HBox.setHgrow(title, Priority.ALWAYS);
+        header.getChildren().addAll(title, buttonBox);
 
         // Network Section
         VBox networkSection = createNetworkSection();
@@ -184,7 +192,7 @@ public class MainController {
     }
 
     private VBox createNetworkSection() {
-        VBox vbox = new VBox(10);
+        VBox vbox = new VBox(6);
 
         Label lblTitle = new Label("Network Selection");
         lblTitle.getStyleClass().add("section-title");
@@ -204,7 +212,7 @@ public class MainController {
         populateNetworkInterfaces();
         cbInterfaces.setMaxWidth(Double.MAX_VALUE);
 
-        // Manual range
+        // Manual range - side by side
         tfStartIP = new TextField();
         tfStartIP.setPromptText("Start IP (e.g., 192.168.1.1)");
         tfStartIP.setDisable(true);
@@ -212,6 +220,10 @@ public class MainController {
         tfEndIP = new TextField();
         tfEndIP.setPromptText("End IP (e.g., 192.168.1.254)");
         tfEndIP.setDisable(true);
+
+        HBox ipRangeBox = new HBox(8, tfStartIP, tfEndIP);
+        HBox.setHgrow(tfStartIP, Priority.ALWAYS);
+        HBox.setHgrow(tfEndIP, Priority.ALWAYS);
 
         // CIDR
         tfCIDR = new TextField();
@@ -234,7 +246,7 @@ public class MainController {
         vbox.getChildren().addAll(
                 lblTitle,
                 rbInterface, cbInterfaces,
-                rbManualRange, tfStartIP, tfEndIP,
+                rbManualRange, ipRangeBox,
                 rbCIDR, tfCIDR,
                 lblIpCount
         );
@@ -244,32 +256,37 @@ public class MainController {
     }
 
     private VBox createCredentialSection() {
-        VBox vbox = new VBox(10);
+        VBox vbox = new VBox(6);
 
         Label lblTitle = new Label("Credentials (Max 4)");
         lblTitle.getStyleClass().add("section-title");
 
+        // Username and Password side by side
         tfUsername = new TextField("admin");
         tfUsername.setPromptText("Username");
 
         tfPassword = new TextField();
         tfPassword.setPromptText("Password");
 
+        HBox credentialBox = new HBox(8, tfUsername, tfPassword);
+        HBox.setHgrow(tfUsername, Priority.ALWAYS);
+        HBox.setHgrow(tfPassword, Priority.ALWAYS);
+
         btnAddCredential = new Button("Add Credential");
         btnAddCredential.setMaxWidth(Double.MAX_VALUE);
         btnAddCredential.setOnAction(e -> addCredential());
 
         lvCredentials = new ListView<>(credentials);
-        lvCredentials.setPrefHeight(120);
+        lvCredentials.setPrefHeight(100);
         lvCredentials.setCellFactory(param -> new CredentialListCell());
         lvCredentials.setContextMenu(createCredentialContextMenu());
 
-        vbox.getChildren().addAll(lblTitle, tfUsername, tfPassword, btnAddCredential, lvCredentials);
+        vbox.getChildren().addAll(lblTitle, credentialBox, btnAddCredential, lvCredentials);
         return vbox;
     }
 
     private VBox createActionSection() {
-        VBox vbox = new VBox(10);
+        VBox vbox = new VBox(6);
 
         Label lblTitle = new Label("Discovery");
         lblTitle.getStyleClass().add("section-title");
@@ -277,7 +294,7 @@ public class MainController {
         btnStart = new Button("Start Discovery");
         btnStart.getStyleClass().add("button-success");
         btnStart.setMaxWidth(Double.MAX_VALUE);
-        btnStart.setPrefHeight(40);
+        btnStart.setPrefHeight(35);
         btnStart.setDisable(true);
         btnStart.setOnAction(e -> startDiscovery());
 
@@ -287,14 +304,14 @@ public class MainController {
     }
 
     private VBox createProgressSection() {
-        VBox vbox = new VBox(10);
+        VBox vbox = new VBox(6);
 
         Label lblTitle = new Label("Progress");
         lblTitle.getStyleClass().add("section-title");
 
         progressBar = new ProgressBar(0);
         progressBar.setMaxWidth(Double.MAX_VALUE);
-        progressBar.setPrefHeight(20);
+        progressBar.setPrefHeight(18);
 
         lblProgress = new Label("Ready");
         lblProgress.getStyleClass().add("label-info");
@@ -304,7 +321,7 @@ public class MainController {
     }
 
     private VBox createExportSection() {
-        VBox vbox = new VBox(10);
+        VBox vbox = new VBox(6);
 
         Label lblTitle = new Label("Export");
         lblTitle.getStyleClass().add("section-title");
