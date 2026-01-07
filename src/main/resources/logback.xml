@@ -1,17 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
-    <!-- Console appender -->
+    <!-- Console appender - always works -->
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
             <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
         </encoder>
     </appender>
 
-    <!-- File appender -->
+    <!-- File appender - logs in same directory as JAR/EXE -->
     <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
-        <file>logs/cctv-discovery.log</file>
+        <file>cctv-discovery.log</file>
         <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
-            <fileNamePattern>logs/cctv-discovery.%d{yyyy-MM-dd}.log</fileNamePattern>
+            <fileNamePattern>cctv-discovery.%d{yyyy-MM-dd}.log</fileNamePattern>
             <maxHistory>30</maxHistory>
             <totalSizeCap>100MB</totalSizeCap>
         </rollingPolicy>
@@ -21,7 +21,7 @@
     </appender>
 
     <!-- Root logger -->
-    <root level="INFO">
+    <root level="DEBUG">
         <appender-ref ref="CONSOLE" />
         <appender-ref ref="FILE" />
     </root>
@@ -29,4 +29,5 @@
     <!-- Reduce verbosity of some libraries -->
     <logger name="org.bytedeco" level="WARN" />
     <logger name="org.apache.poi" level="WARN" />
+    <logger name="org.apache.http" level="WARN" />
 </configuration>
