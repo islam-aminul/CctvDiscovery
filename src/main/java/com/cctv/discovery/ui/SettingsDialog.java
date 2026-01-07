@@ -11,6 +11,9 @@ import javafx.stage.Stage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * Simplified settings dialog for non-technical users.
  * Only allows configuration of ports and custom RTSP paths.
@@ -129,24 +132,28 @@ public class SettingsDialog extends Stage {
     private VBox createRtspPathsSection() {
         VBox vbox = new VBox(12);
 
-        Label lblTitle = new Label("Custom RTSP Paths");
+        Label lblTitle = new Label("Custom RTSP Paths (Main & Sub Stream Pairs)");
         lblTitle.setStyle("-fx-font-weight: bold; -fx-font-size: 13px;");
 
-        Label lblHelp = new Label("Add custom RTSP paths if default paths don't work (one path per line)");
+        Label lblHelp = new Label("Add custom RTSP path pairs (main stream, then sub stream on next line)");
         lblHelp.setStyle("-fx-text-fill: #666; -fx-font-size: 11px;");
         lblHelp.setWrapText(true);
 
         taCustomRtspPaths = new TextArea();
-        taCustomRtspPaths.setPromptText("Examples:\n/live\n/stream1\n/h264/ch1/main/av_stream\n/cam/realmonitor?channel=1&subtype=0");
+        taCustomRtspPaths.setPromptText("Example (enter in pairs):\n/h264/ch1/main/av_stream\n/h264/ch1/sub/av_stream\n/cam/realmonitor?channel=1&subtype=0\n/cam/realmonitor?channel=1&subtype=1");
         taCustomRtspPaths.setPrefRowCount(8);
         taCustomRtspPaths.setWrapText(false);
         taCustomRtspPaths.setStyle("-fx-font-family: 'Courier New', monospace;");
 
-        Label lblExample = new Label("These paths will be tried in addition to the built-in manufacturer paths");
-        lblExample.setStyle("-fx-text-fill: #888; -fx-font-size: 10px; -fx-font-style: italic;");
+        Label lblExample = new Label("⚠ Important: Enter paths in pairs (Line 1=Main, Line 2=Sub, Line 3=Main, Line 4=Sub, etc.)");
+        lblExample.setStyle("-fx-text-fill: #ff6600; -fx-font-size: 10px; -fx-font-weight: bold;");
         lblExample.setWrapText(true);
 
-        vbox.getChildren().addAll(lblTitle, lblHelp, taCustomRtspPaths, lblExample);
+        Label lblNote = new Label("These path pairs will be tried in addition to the built-in manufacturer paths");
+        lblNote.setStyle("-fx-text-fill: #888; -fx-font-size: 10px; -fx-font-style: italic;");
+        lblNote.setWrapText(true);
+
+        vbox.getChildren().addAll(lblTitle, lblHelp, taCustomRtspPaths, lblExample, lblNote);
 
         return vbox;
     }
@@ -214,17 +221,34 @@ public class SettingsDialog extends Stage {
             if (!customPaths.isEmpty()) {
                 // Clean up: remove empty lines, trim each line
                 String[] lines = customPaths.split("\n");
-                StringBuilder cleaned = new StringBuilder();
+                List<String> cleanedPaths = new ArrayList<>();
                 for (String line : lines) {
                     line = line.trim();
                     if (!line.isEmpty()) {
-                        if (cleaned.length() > 0) {
-                            cleaned.append(";");
-                        }
-                        cleaned.append(line);
+                        cleanedPaths.add(line);
                     }
                 }
-                config.setProperty("rtsp.custom.paths", cleaned.toString());
+
+                // Validate that paths are in pairs (even number)
+                if (cleanedPaths.size() % 2 != 0) {
+                    showError("Invalid Path Configuration",
+                        "RTSP paths must be entered in pairs (main + sub stream).\n" +
+                        "You have " + cleanedPaths.size() + " path(s).\n\n" +
+                        "Each pair should be:\n" +
+                        "Line 1: Main stream path\n" +
+                        "Line 2: Sub stream path");
+                    return;
+                }
+
+                // Join paths with semicolon
+                StringBuilder joined = new StringBuilder();
+                for (int i = 0; i < cleanedPaths.size(); i++) {
+                    if (i > 0) {
+                        joined.append(";");
+                    }
+                    joined.append(cleanedPaths.get(i));
+                }
+                config.setProperty("rtsp.custom.paths", joined.toString());
             } else {
                 config.setProperty("rtsp.custom.paths", "");
             }

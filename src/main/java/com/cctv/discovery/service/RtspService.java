@@ -78,7 +78,8 @@ public class RtspService {
      * Discover RTSP streams for a device using waterfall approach:
      * 1. Smart cache (paths that worked for similar devices)
      * 2. Manufacturer-specific paths
-     * 3. Generic paths
+     * 3. Custom user-configured path pairs (main + sub)
+     * 4. Generic paths
      */
     public List<RTSPStream> discoverStreams(Device device, String username, String password) {
         List<RTSPStream> streams = new ArrayList<>();
@@ -106,13 +107,46 @@ public class RtspService {
             }
         }
 
-        // 3. Try custom user-configured paths
+        // 3. Try custom user-configured path pairs (main + sub)
         String[] customPaths = AppConfig.getInstance().getCustomRtspPaths();
-        if (customPaths.length > 0) {
-            logger.debug("Adding {} custom RTSP paths from configuration", customPaths.length);
-            for (String path : customPaths) {
-                if (!pathsToTry.contains(path)) {
-                    pathsToTry.add(path);
+        if (customPaths.length > 0 && customPaths.length % 2 == 0) {
+            logger.debug("Trying {} custom RTSP path pairs from configuration", customPaths.length / 2);
+
+            // Process custom paths as pairs
+            for (int i = 0; i < customPaths.length; i += 2) {
+                String mainPath = customPaths[i];
+                String subPath = customPaths[i + 1];
+
+                logger.debug("Trying custom path pair: main={}, sub={}", mainPath, subPath);
+
+                // Try main stream
+                String mainUrl = "rtsp://" + device.getIpAddress() + ":554" + mainPath;
+                RTSPStream mainStream = testRtspUrl(mainUrl, username, password);
+
+                if (mainStream != null) {
+                    streams.add(mainStream);
+                    logger.info("Found working custom main stream: {}", mainUrl);
+
+                    // Try paired sub stream
+                    String subUrl = "rtsp://" + device.getIpAddress() + ":554" + subPath;
+                    RTSPStream subStream = testRtspUrl(subUrl, username, password);
+                    if (subStream != null) {
+                        streams.add(subStream);
+                        logger.info("Found working custom sub stream: {}", subUrl);
+                    }
+
+                    // Add to smart cache
+                    if (macPrefix != null) {
+                        SMART_CACHE.computeIfAbsent(macPrefix, k -> new ArrayList<>()).add(mainPath);
+                        if (subStream != null) {
+                            SMART_CACHE.get(macPrefix).add(subPath);
+                        }
+                    }
+
+                    // Found working custom paths, return
+                    if (streams.size() >= 2) {
+                        return streams;
+                    }
                 }
             }
         }
