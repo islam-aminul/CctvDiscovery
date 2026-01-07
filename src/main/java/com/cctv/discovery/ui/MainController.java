@@ -1,5 +1,6 @@
 package com.cctv.discovery.ui;
 
+import com.cctv.discovery.config.AppConfig;
 import com.cctv.discovery.discovery.NetworkScanner;
 import com.cctv.discovery.discovery.StreamAnalyzer;
 import com.cctv.discovery.export.ExcelExporter;
@@ -38,6 +39,7 @@ import java.util.concurrent.Executors;
  */
 public class MainController {
     private static final Logger logger = LoggerFactory.getLogger(MainController.class);
+    private final AppConfig config = AppConfig.getInstance();
 
     private Stage primaryStage;
     private Scene scene;
@@ -139,10 +141,13 @@ public class MainController {
         Label title = new Label("CCTV Discovery Tool");
         title.getStyleClass().add("header-title");
 
+        Button btnSettings = new Button("Settings");
+        btnSettings.setOnAction(e -> showSettings());
+
         Button btnHelp = new Button("User Manual");
         btnHelp.setOnAction(e -> showHelpManual());
 
-        HBox header = new HBox(10, title, new Region(), btnHelp);
+        HBox header = new HBox(10, title, new Region(), btnSettings, btnHelp);
         header.setAlignment(Pos.CENTER_LEFT);
         HBox.setHgrow(header.getChildren().get(1), Priority.ALWAYS);
 
@@ -668,26 +673,28 @@ public class MainController {
         // Step 2: Auto-generate protection password (numeric only, no delimiters)
         // Format: {DeviceCount}{YYYYMMDD}{FixedCode}
         // Example: 25 devices on 2026-01-07 → "252026010748275"
-        int deviceCount = devices.size();
-        String dateStr = new java.text.SimpleDateFormat("yyyyMMdd").format(new java.util.Date());
-        String fixedCode = "482753";
-        String generatedPassword = "" + deviceCount + dateStr + fixedCode;
+        String generatedPassword = null;
+        if (config.isExcelPasswordEnabled()) {
+            int deviceCount = devices.size();
+            String dateStr = new java.text.SimpleDateFormat("yyyyMMdd").format(new java.util.Date());
+            String fixedCode = config.getExcelPasswordFixedCode();
+            generatedPassword = "" + deviceCount + dateStr + fixedCode;
+            // Note: Password is NOT logged or displayed to prevent user tampering
+        }
 
-        // Note: Password is NOT logged or displayed to prevent user tampering
-
-        // Step 3: Choose file location with default to Documents folder
+        // Step 3: Choose file location with default from config
         FileChooser fileChooser = new FileChooser();
         fileChooser.setTitle("Save Excel Report");
         fileChooser.setInitialFileName("CCTV_Audit_" + siteId.get() + ".xlsx");
 
-        // Set initial directory to user's Documents folder
-        String userHome = System.getProperty("user.home");
-        File documentsDir = new File(userHome, "Documents");
-        if (documentsDir.exists() && documentsDir.isDirectory()) {
-            fileChooser.setInitialDirectory(documentsDir);
+        // Set initial directory from config
+        String exportDir = config.getExportDefaultDirectory();
+        File initialDir = new File(exportDir);
+        if (initialDir.exists() && initialDir.isDirectory()) {
+            fileChooser.setInitialDirectory(initialDir);
         } else {
-            // Fallback to user home if Documents doesn't exist
-            fileChooser.setInitialDirectory(new File(userHome));
+            // Fallback to user home if configured directory doesn't exist
+            fileChooser.setInitialDirectory(new File(System.getProperty("user.home")));
         }
 
         fileChooser.getExtensionFilters().add(
@@ -714,6 +721,12 @@ public class MainController {
                 showAlert("Export Error", "Failed to export: " + e.getMessage(), Alert.AlertType.ERROR);
             }
         }
+    }
+
+    private void showSettings() {
+        logger.info("Opening settings dialog");
+        SettingsDialog settingsDialog = new SettingsDialog(primaryStage);
+        settingsDialog.showAndWait();
     }
 
     private void showHelpManual() {
