@@ -148,9 +148,11 @@ public class MainController {
 
         Button btnSettings = new Button("Settings");
         btnSettings.setOnAction(e -> showSettings());
+        btnSettings.setStyle("-fx-background-color: #0078d4; -fx-text-fill: white; -fx-font-weight: bold;");
 
         Button btnHelp = new Button("User Manual");
         btnHelp.setOnAction(e -> showHelpManual());
+        btnHelp.setStyle("-fx-background-color: #28a745; -fx-text-fill: white; -fx-font-weight: bold;");
 
         // Right side button container
         HBox buttonBox = new HBox(10, btnSettings, btnHelp);
