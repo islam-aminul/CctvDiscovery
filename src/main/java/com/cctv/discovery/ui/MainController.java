@@ -113,7 +113,19 @@ public class MainController {
         splitPane.getItems().addAll(leftScroll, rightPanel);
 
         scene = new Scene(splitPane, 1400, 800);
-        scene.getStylesheets().add(getClass().getResource("/css/app.css").toExternalForm());
+
+        // Load CSS with null check to prevent startup crashes
+        try {
+            java.net.URL cssResource = getClass().getResource("/css/app.css");
+            if (cssResource != null) {
+                scene.getStylesheets().add(cssResource.toExternalForm());
+                logger.info("CSS loaded successfully");
+            } else {
+                logger.warn("CSS file not found: /css/app.css - using default styling");
+            }
+        } catch (Exception e) {
+            logger.error("Failed to load CSS", e);
+        }
 
         return scene;
     }
