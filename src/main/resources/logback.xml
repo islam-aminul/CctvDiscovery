@@ -1,27 +1,29 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
-    <!-- Console appender -->
+    <!-- Console appender - always works -->
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
             <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
         </encoder>
     </appender>
 
-    <!-- File appender -->
+    <!-- File appender - with user home directory for reliability -->
     <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
-        <file>logs/cctv-discovery.log</file>
+        <file>${user.home}/cctv-discovery/logs/cctv-discovery.log</file>
         <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
-            <fileNamePattern>logs/cctv-discovery.%d{yyyy-MM-dd}.log</fileNamePattern>
+            <fileNamePattern>${user.home}/cctv-discovery/logs/cctv-discovery.%d{yyyy-MM-dd}.log</fileNamePattern>
             <maxHistory>30</maxHistory>
             <totalSizeCap>100MB</totalSizeCap>
         </rollingPolicy>
         <encoder>
             <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
         </encoder>
+        <!-- Create parent directories if they don't exist -->
+        <prudent>false</prudent>
     </appender>
 
     <!-- Root logger -->
-    <root level="INFO">
+    <root level="DEBUG">
         <appender-ref ref="CONSOLE" />
         <appender-ref ref="FILE" />
     </root>
@@ -29,4 +31,5 @@
     <!-- Reduce verbosity of some libraries -->
     <logger name="org.bytedeco" level="WARN" />
     <logger name="org.apache.poi" level="WARN" />
+    <logger name="org.apache.http" level="WARN" />
 </configuration>
