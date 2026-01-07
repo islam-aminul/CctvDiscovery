@@ -104,25 +104,17 @@ public class ExcelExporter {
     /**
      * Protect worksheet to prevent tampering.
      * Users can view and select cells but cannot modify content.
+     *
+     * The protectSheet() method locks all cells by default and prevents:
+     * - Editing cell values
+     * - Inserting/deleting rows and columns
+     * - Formatting cells, rows, and columns
+     * - Any structural changes to the worksheet
      */
     private void protectSheet(Sheet sheet, String password) {
         // Enable sheet protection with password
+        // This automatically locks all cells and prevents modifications
         sheet.protectSheet(password);
-
-        // Lock all cells (already locked by default in POI)
-        // But ensure the default style has locking enabled
-        sheet.lockDeleteColumns(true);
-        sheet.lockDeleteRows(true);
-        sheet.lockFormatCells(true);
-        sheet.lockFormatColumns(true);
-        sheet.lockFormatRows(true);
-        sheet.lockInsertColumns(true);
-        sheet.lockInsertRows(true);
-
-        // Allow users to:
-        // - Select locked cells (for viewing)
-        // - Select unlocked cells (none in this case)
-        // These are enabled by default, no need to disable
 
         logger.info("Sheet protection applied successfully");
     }
