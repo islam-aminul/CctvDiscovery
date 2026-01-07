@@ -356,7 +356,7 @@
                     <!-- Sign EXE with signtool (Windows only) -->
                     <execution>
                         <id>sign-exe</id>
-                        <phase>package</phase>
+                        <phase>verify</phase>
                         <goals>
                             <goal>exec</goal>
                         </goals>
@@ -441,7 +441,7 @@
                 <executions>
                     <execution>
                         <id>make-assembly</id>
-                        <phase>package</phase>
+                        <phase>install</phase>
                         <goals>
                             <goal>single</goal>
                         </goals>
