@@ -1,6 +1,8 @@
 package com.cctv.discovery.ui;
 
 import com.cctv.discovery.config.AppConfig;
+import javafx.collections.FXCollections;
+import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
@@ -27,8 +29,11 @@ public class SettingsDialog extends Stage {
     private TextField tfHttpPorts;
     private TextField tfRtspPorts;
 
-    // Custom RTSP Paths
-    private TextArea taCustomRtspPaths;
+    // Custom RTSP Path Pairs
+    private TextField tfMainPath;
+    private TextField tfSubPath;
+    private ListView<String> lvPathPairs;
+    private ObservableList<String> pathPairs;
 
     public SettingsDialog(Stage owner) {
         initOwner(owner);
@@ -36,8 +41,11 @@ public class SettingsDialog extends Stage {
         setTitle("Settings");
         setResizable(false);
 
+        // Initialize path pairs list
+        this.pathPairs = FXCollections.observableArrayList();
+
         VBox root = createContent();
-        Scene scene = new Scene(root, 550, 500);
+        Scene scene = new Scene(root, 650, 600);
 
         try {
             java.net.URL cssResource = getClass().getResource("/css/app.css");
@@ -132,30 +140,107 @@ public class SettingsDialog extends Stage {
     private VBox createRtspPathsSection() {
         VBox vbox = new VBox(12);
 
-        Label lblTitle = new Label("Custom RTSP Paths (Main & Sub Stream Pairs)");
+        Label lblTitle = new Label("Custom RTSP Path Pairs");
         lblTitle.setStyle("-fx-font-weight: bold; -fx-font-size: 13px;");
 
-        Label lblHelp = new Label("Add custom RTSP path pairs (main stream, then sub stream on next line)");
+        Label lblHelp = new Label("Add custom stream path pairs for cameras with non-standard configurations");
         lblHelp.setStyle("-fx-text-fill: #666; -fx-font-size: 11px;");
         lblHelp.setWrapText(true);
 
-        taCustomRtspPaths = new TextArea();
-        taCustomRtspPaths.setPromptText("Example (enter in pairs):\n/h264/ch1/main/av_stream\n/h264/ch1/sub/av_stream\n/cam/realmonitor?channel=1&subtype=0\n/cam/realmonitor?channel=1&subtype=1");
-        taCustomRtspPaths.setPrefRowCount(8);
-        taCustomRtspPaths.setWrapText(false);
-        taCustomRtspPaths.setStyle("-fx-font-family: 'Courier New', monospace;");
+        // Input fields for new path pair
+        GridPane inputGrid = new GridPane();
+        inputGrid.setHgap(10);
+        inputGrid.setVgap(10);
+        inputGrid.setStyle("-fx-background-color: #f5f5f5; -fx-padding: 10;");
 
-        Label lblExample = new Label("⚠ Important: Enter paths in pairs (Line 1=Main, Line 2=Sub, Line 3=Main, Line 4=Sub, etc.)");
-        lblExample.setStyle("-fx-text-fill: #ff6600; -fx-font-size: 10px; -fx-font-weight: bold;");
-        lblExample.setWrapText(true);
+        Label lblMain = new Label("Main Stream Path:");
+        lblMain.setMinWidth(120);
+        tfMainPath = new TextField();
+        tfMainPath.setPromptText("/h264/ch1/main/av_stream");
+        tfMainPath.setPrefWidth(350);
 
-        Label lblNote = new Label("These path pairs will be tried in addition to the built-in manufacturer paths");
-        lblNote.setStyle("-fx-text-fill: #888; -fx-font-size: 10px; -fx-font-style: italic;");
+        Label lblSub = new Label("Sub Stream Path:");
+        lblSub.setMinWidth(120);
+        tfSubPath = new TextField();
+        tfSubPath.setPromptText("/h264/ch1/sub/av_stream");
+        tfSubPath.setPrefWidth(350);
+
+        Button btnAdd = new Button("Add Path Pair");
+        btnAdd.getStyleClass().add("button-success");
+        btnAdd.setPrefWidth(120);
+        btnAdd.setOnAction(e -> addPathPair());
+
+        inputGrid.add(lblMain, 0, 0);
+        inputGrid.add(tfMainPath, 1, 0);
+        inputGrid.add(lblSub, 0, 1);
+        inputGrid.add(tfSubPath, 1, 1);
+        inputGrid.add(btnAdd, 1, 2);
+
+        // List view for existing path pairs
+        Label lblPairs = new Label("Configured Path Pairs:");
+        lblPairs.setStyle("-fx-font-weight: bold; -fx-font-size: 11px;");
+
+        lvPathPairs = new ListView<>(pathPairs);
+        lvPathPairs.setPrefHeight(120);
+        lvPathPairs.setPlaceholder(new Label("No custom paths configured\nClick 'Add Path Pair' to add"));
+
+        // Remove button
+        Button btnRemove = new Button("Remove Selected");
+        btnRemove.setPrefWidth(120);
+        btnRemove.setOnAction(e -> removeSelectedPair());
+
+        HBox removeBox = new HBox(10);
+        removeBox.setAlignment(Pos.CENTER_LEFT);
+        removeBox.getChildren().add(btnRemove);
+
+        Label lblNote = new Label("💡 Tip: Main stream is usually high quality, Sub stream is lower quality for bandwidth saving");
+        lblNote.setStyle("-fx-text-fill: #0066cc; -fx-font-size: 10px; -fx-font-style: italic;");
         lblNote.setWrapText(true);
 
-        vbox.getChildren().addAll(lblTitle, lblHelp, taCustomRtspPaths, lblExample, lblNote);
+        vbox.getChildren().addAll(lblTitle, lblHelp, inputGrid, lblPairs, lvPathPairs, removeBox, lblNote);
 
         return vbox;
+    }
+
+    private void addPathPair() {
+        String mainPath = tfMainPath.getText().trim();
+        String subPath = tfSubPath.getText().trim();
+
+        // Validate inputs
+        if (mainPath.isEmpty() || subPath.isEmpty()) {
+            showError("Missing Information", "Please enter both Main Stream Path and Sub Stream Path");
+            return;
+        }
+
+        if (!mainPath.startsWith("/")) {
+            showError("Invalid Main Path", "Path must start with '/' (e.g., /h264/ch1/main/av_stream)");
+            return;
+        }
+
+        if (!subPath.startsWith("/")) {
+            showError("Invalid Sub Path", "Path must start with '/' (e.g., /h264/ch1/sub/av_stream)");
+            return;
+        }
+
+        // Add to list (display format: "Main: /path | Sub: /path")
+        String pairDisplay = String.format("Main: %s | Sub: %s", mainPath, subPath);
+        pathPairs.add(pairDisplay);
+
+        // Clear input fields
+        tfMainPath.clear();
+        tfSubPath.clear();
+
+        logger.info("Added custom RTSP path pair: main={}, sub={}", mainPath, subPath);
+    }
+
+    private void removeSelectedPair() {
+        int selectedIndex = lvPathPairs.getSelectionModel().getSelectedIndex();
+        if (selectedIndex >= 0) {
+            pathPairs.remove(selectedIndex);
+            logger.info("Removed path pair at index {}", selectedIndex);
+        } else {
+            showError("No Selection", "Please select a path pair to remove");
+        }
     }
 
     private HBox createButtonBox() {
@@ -186,13 +271,17 @@ public class SettingsDialog extends Stage {
         tfHttpPorts.setText(arrayToString(config.getHttpPorts()));
         tfRtspPorts.setText(arrayToString(config.getRtspPorts()));
 
-        // Custom RTSP paths
+        // Custom RTSP path pairs
         String customPaths = config.getProperty("rtsp.custom.paths");
         if (customPaths != null && !customPaths.isEmpty()) {
-            // Convert semicolon-separated to line-separated
-            taCustomRtspPaths.setText(customPaths.replace(";", "\n"));
-        } else {
-            taCustomRtspPaths.setText("");
+            String[] paths = customPaths.split(";");
+            // Process paths in pairs
+            for (int i = 0; i < paths.length - 1; i += 2) {
+                String mainPath = paths[i].trim();
+                String subPath = paths[i + 1].trim();
+                String pairDisplay = String.format("Main: %s | Sub: %s", mainPath, subPath);
+                pathPairs.add(pairDisplay);
+            }
         }
     }
 
@@ -216,39 +305,26 @@ public class SettingsDialog extends Stage {
             config.setProperty("discovery.http.ports", httpPorts);
             config.setProperty("discovery.rtsp.ports", rtspPorts);
 
-            // Save custom RTSP paths (convert line-separated to semicolon-separated)
-            String customPaths = taCustomRtspPaths.getText().trim();
-            if (!customPaths.isEmpty()) {
-                // Clean up: remove empty lines, trim each line
-                String[] lines = customPaths.split("\n");
-                List<String> cleanedPaths = new ArrayList<>();
-                for (String line : lines) {
-                    line = line.trim();
-                    if (!line.isEmpty()) {
-                        cleanedPaths.add(line);
+            // Save custom RTSP path pairs
+            if (!pathPairs.isEmpty()) {
+                StringBuilder pathsBuilder = new StringBuilder();
+
+                for (String pairDisplay : pathPairs) {
+                    // Parse the display format "Main: /path | Sub: /path"
+                    String[] parts = pairDisplay.split("\\|");
+                    if (parts.length == 2) {
+                        String mainPath = parts[0].replace("Main:", "").trim();
+                        String subPath = parts[1].replace("Sub:", "").trim();
+
+                        if (pathsBuilder.length() > 0) {
+                            pathsBuilder.append(";");
+                        }
+                        pathsBuilder.append(mainPath).append(";").append(subPath);
                     }
                 }
 
-                // Validate that paths are in pairs (even number)
-                if (cleanedPaths.size() % 2 != 0) {
-                    showError("Invalid Path Configuration",
-                        "RTSP paths must be entered in pairs (main + sub stream).\n" +
-                        "You have " + cleanedPaths.size() + " path(s).\n\n" +
-                        "Each pair should be:\n" +
-                        "Line 1: Main stream path\n" +
-                        "Line 2: Sub stream path");
-                    return;
-                }
-
-                // Join paths with semicolon
-                StringBuilder joined = new StringBuilder();
-                for (int i = 0; i < cleanedPaths.size(); i++) {
-                    if (i > 0) {
-                        joined.append(";");
-                    }
-                    joined.append(cleanedPaths.get(i));
-                }
-                config.setProperty("rtsp.custom.paths", joined.toString());
+                config.setProperty("rtsp.custom.paths", pathsBuilder.toString());
+                logger.info("Saved {} custom RTSP path pairs", pathPairs.size());
             } else {
                 config.setProperty("rtsp.custom.paths", "");
             }
@@ -279,6 +355,11 @@ public class SettingsDialog extends Stage {
         confirm.showAndWait().ifPresent(response -> {
             if (response == ButtonType.OK) {
                 config.resetAllToDefaults();
+
+                // Clear path pairs
+                pathPairs.clear();
+
+                // Reload settings
                 loadCurrentSettings();
 
                 Alert alert = new Alert(Alert.AlertType.INFORMATION);
