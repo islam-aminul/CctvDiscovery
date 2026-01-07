@@ -641,16 +641,76 @@ public class MainController {
     }
 
     private void exportToExcel() {
-        TextInputDialog dialog = new TextInputDialog();
-        dialog.setTitle("Export Report");
-        dialog.setHeaderText("Enter Report Details");
-        dialog.setContentText("Site ID (required):");
+        // Step 1: Get Site ID
+        TextInputDialog siteDialog = new TextInputDialog();
+        siteDialog.setTitle("Export Report");
+        siteDialog.setHeaderText("Enter Report Details");
+        siteDialog.setContentText("Site ID (required):");
 
-        Optional<String> siteId = dialog.showAndWait();
+        Optional<String> siteId = siteDialog.showAndWait();
         if (!siteId.isPresent() || siteId.get().trim().isEmpty()) {
             return;
         }
 
+        // Step 2: Get Protection Password
+        Dialog<String> passwordDialog = new Dialog<>();
+        passwordDialog.setTitle("Excel Protection");
+        passwordDialog.setHeaderText("Set Password Protection");
+        passwordDialog.setContentText("The Excel file will be protected to prevent tampering.\nEnter a strong password:");
+
+        // Add password field
+        PasswordField passwordField = new PasswordField();
+        passwordField.setPromptText("Password");
+        PasswordField confirmPasswordField = new PasswordField();
+        confirmPasswordField.setPromptText("Confirm Password");
+
+        GridPane grid = new GridPane();
+        grid.setHgap(10);
+        grid.setVgap(10);
+        grid.setPadding(new Insets(20, 150, 10, 10));
+        grid.add(new Label("Password:"), 0, 0);
+        grid.add(passwordField, 1, 0);
+        grid.add(new Label("Confirm:"), 0, 1);
+        grid.add(confirmPasswordField, 1, 1);
+
+        passwordDialog.getDialogPane().setContent(grid);
+        passwordDialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
+
+        // Convert result to password string
+        passwordDialog.setResultConverter(dialogButton -> {
+            if (dialogButton == ButtonType.OK) {
+                String pwd = passwordField.getText();
+                String confirm = confirmPasswordField.getText();
+
+                if (pwd == null || pwd.trim().isEmpty()) {
+                    Platform.runLater(() -> showAlert("Invalid Password",
+                        "Password cannot be empty!", Alert.AlertType.WARNING));
+                    return null;
+                }
+
+                if (!pwd.equals(confirm)) {
+                    Platform.runLater(() -> showAlert("Password Mismatch",
+                        "Passwords do not match!", Alert.AlertType.WARNING));
+                    return null;
+                }
+
+                if (pwd.length() < 6) {
+                    Platform.runLater(() -> showAlert("Weak Password",
+                        "Password must be at least 6 characters long!", Alert.AlertType.WARNING));
+                    return null;
+                }
+
+                return pwd;
+            }
+            return null;
+        });
+
+        Optional<String> password = passwordDialog.showAndWait();
+        if (!password.isPresent() || password.get() == null) {
+            return;
+        }
+
+        // Step 3: Choose file location
         FileChooser fileChooser = new FileChooser();
         fileChooser.setTitle("Save Excel Report");
         fileChooser.setInitialFileName("CCTV_Audit_" + siteId.get() + ".xlsx");
@@ -660,9 +720,12 @@ public class MainController {
         File file = fileChooser.showSaveDialog(primaryStage);
         if (file != null) {
             try {
-                excelExporter.exportToExcel(new ArrayList<>(devices), siteId.get(), null, null, file);
-                showAlert("Export Complete", "Report exported successfully to:\n" + file.getAbsolutePath(),
-                        Alert.AlertType.INFORMATION);
+                // Export with password protection
+                excelExporter.exportToExcel(new ArrayList<>(devices), siteId.get(), null, null, file, password.get());
+                showAlert("Export Complete",
+                    "Report exported successfully to:\n" + file.getAbsolutePath() +
+                    "\n\nThe worksheet is PASSWORD PROTECTED.\nKeep your password safe!",
+                    Alert.AlertType.INFORMATION);
             } catch (Exception e) {
                 logger.error("Export error", e);
                 showAlert("Export Error", "Failed to export: " + e.getMessage(), Alert.AlertType.ERROR);

@@ -20,14 +20,14 @@ public class ExcelExporter {
     private static final Logger logger = LoggerFactory.getLogger(ExcelExporter.class);
 
     /**
-     * Export devices to Excel file.
+     * Export devices to Excel file with password protection.
      */
     public void exportToExcel(List<Device> devices, String siteId, String premiseName,
-                               String operatorName, File outputFile) throws Exception {
+                               String operatorName, File outputFile, String password) throws Exception {
         Workbook workbook = new XSSFWorkbook();
         Sheet sheet = workbook.createSheet("CCTV Audit Report");
 
-        // Create styles
+        // Create styles with locked cells
         CellStyle warningStyle = createWarningStyle(workbook);
         CellStyle headerStyle = createHeaderStyle(workbook);
         CellStyle dataStyle = createDataStyle(workbook);
@@ -35,10 +35,10 @@ public class ExcelExporter {
 
         int rowNum = 0;
 
-        // Warning row
+        // Warning row - Enhanced with protection notice
         Row warningRow = sheet.createRow(rowNum++);
         Cell warningCell = warningRow.createCell(0);
-        warningCell.setCellValue("⚠ WARNING: This document contains PLAINTEXT PASSWORDS. Handle with care!");
+        warningCell.setCellValue("⚠ WARNING: This document contains PLAINTEXT PASSWORDS. Handle with care! [PROTECTED]");
         warningCell.setCellStyle(warningStyle);
         sheet.addMergedRegion(new CellRangeAddress(0, 0, 0, 15));
         warningRow.setHeightInPoints(25);
@@ -86,6 +86,12 @@ public class ExcelExporter {
             sheet.autoSizeColumn(i);
         }
 
+        // Apply worksheet protection
+        if (password != null && !password.isEmpty()) {
+            protectSheet(sheet, password);
+            logger.info("Worksheet protected with password");
+        }
+
         // Write to file
         try (FileOutputStream fos = new FileOutputStream(outputFile)) {
             workbook.write(fos);
@@ -93,6 +99,32 @@ public class ExcelExporter {
 
         workbook.close();
         logger.info("Excel report exported to: {}", outputFile.getAbsolutePath());
+    }
+
+    /**
+     * Protect worksheet to prevent tampering.
+     * Users can view and select cells but cannot modify content.
+     */
+    private void protectSheet(Sheet sheet, String password) {
+        // Enable sheet protection with password
+        sheet.protectSheet(password);
+
+        // Lock all cells (already locked by default in POI)
+        // But ensure the default style has locking enabled
+        sheet.lockDeleteColumns(true);
+        sheet.lockDeleteRows(true);
+        sheet.lockFormatCells(true);
+        sheet.lockFormatColumns(true);
+        sheet.lockFormatRows(true);
+        sheet.lockInsertColumns(true);
+        sheet.lockInsertRows(true);
+
+        // Allow users to:
+        // - Select locked cells (for viewing)
+        // - Select unlocked cells (none in this case)
+        // These are enabled by default, no need to disable
+
+        logger.info("Sheet protection applied successfully");
     }
 
     private int addMetadataRow(Sheet sheet, int rowNum, String label, String value, CellStyle style) {

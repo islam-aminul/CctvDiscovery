@@ -137,6 +137,8 @@
         <ol>
             <li>Click "Export to Excel"</li>
             <li>Enter a Site ID (required)</li>
+            <li><strong>Set a protection password (minimum 6 characters)</strong></li>
+            <li>Confirm the password</li>
             <li>Choose save location</li>
         </ol>
         <p>The Excel report includes:</p>
@@ -145,7 +147,13 @@
             <li>All discovered streams with technical details</li>
             <li>Compliance highlighting (non-compliant streams in red)</li>
             <li>Plaintext credentials (handle securely!)</li>
+            <li><strong>Password-protected worksheet to prevent tampering</strong></li>
         </ul>
+        <div class="warning">
+            <strong>🔒 Password Protection:</strong> The exported Excel file is protected with the password you provide.
+            Users can view the data but cannot modify, delete, or insert rows/columns without the password.
+            <strong>Keep your password safe!</strong>
+        </div>
     </div>
 
     <h2>3. Features</h2>
@@ -245,12 +253,33 @@
     <h2>6. Security Considerations</h2>
     <div class="warning">
         <ul>
-            <li>Excel reports contain plaintext passwords - store securely</li>
+            <li><strong>Excel Protection:</strong> All exported files are password-protected to prevent unauthorized modifications</li>
+            <li>Excel reports contain plaintext passwords - store securely and limit access</li>
+            <li><strong>Password Management:</strong> Use a strong password (minimum 6 characters recommended) for Excel protection</li>
             <li>Network scanning may trigger IDS/IPS alerts</li>
             <li>Only use on networks where you have authorization</li>
             <li>Credentials are stored in memory during operation</li>
             <li>Logs may contain sensitive information</li>
         </ul>
+    </div>
+
+    <h3>Excel Protection Details</h3>
+    <p>The worksheet protection prevents:</p>
+    <ul>
+        <li>Modifying cell values</li>
+        <li>Deleting or inserting rows/columns</li>
+        <li>Changing cell formatting</li>
+        <li>Tampering with compliance indicators</li>
+    </ul>
+    <p>Users <strong>can still</strong>:</p>
+    <ul>
+        <li>View all data (including passwords)</li>
+        <li>Select and copy cells</li>
+        <li>Print the report</li>
+        <li>Save a copy of the file</li>
+    </ul>
+    <div class="info">
+        <strong>Note:</strong> To unprotect the worksheet for editing, open Excel, go to Review → Unprotect Sheet, and enter the password you set during export.
     </div>
 
     <h2>7. Support</h2>

@@ -11,7 +11,7 @@ A comprehensive Java 8 application for discovering, auditing, and documenting IP
 - **NVR/DVR Support**: Automatic channel iteration (1-64) for multi-camera systems
 - **Stream Analysis**: JavaCV-powered video analysis (codec, resolution, FPS, bitrate)
 - **Compliance Checking**: Automatic validation against technical requirements with visual highlighting
-- **Excel Export**: Professional reports with Consolas font, compliance highlighting, and metadata
+- **Excel Export**: Professional reports with Consolas font, compliance highlighting, metadata, and password protection
 - **Professional UI**: Modern JavaFX interface with real-time progress tracking
 
 ## Architecture
@@ -142,8 +142,11 @@ Click "Start Discovery" to begin:
 
 - Click "Export to Excel" when complete
 - Enter Site ID (required)
+- **Set a protection password** (minimum 6 characters)
+- Confirm password
 - Choose save location
 - Report includes all device/stream metadata with compliance highlighting
+- **Worksheet is password-protected** to prevent tampering
 
 ## Technical Details
 
@@ -188,10 +191,28 @@ Non-compliant cells are highlighted in **red** in Excel.
 
 ⚠️ **IMPORTANT**:
 
-- Excel reports contain **plaintext passwords** - handle securely
+- **Excel Protection**: All exported files are password-protected to prevent unauthorized modifications
+- Excel reports contain **plaintext passwords** - handle securely and limit access
+- **Password Management**: Use a strong password (minimum 6 characters) for Excel protection
 - Network scanning may trigger IDS/IPS alerts
 - **Only use on networks where you have explicit authorization**
 - Logs may contain sensitive information (stored in `logs/`)
+
+### Excel Protection Features
+
+The worksheet protection prevents:
+- Modifying cell values
+- Deleting or inserting rows/columns
+- Changing cell formatting
+- Tampering with compliance indicators
+
+Users can still:
+- View all data (including passwords)
+- Select and copy cells
+- Print the report
+- Save a copy of the file
+
+To unprotect: Excel → Review → Unprotect Sheet → Enter password
 
 ## Troubleshooting
 
