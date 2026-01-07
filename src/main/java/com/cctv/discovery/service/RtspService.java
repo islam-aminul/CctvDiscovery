@@ -1,5 +1,6 @@
 package com.cctv.discovery.service;
 
+import com.cctv.discovery.config.AppConfig;
 import com.cctv.discovery.model.Device;
 import com.cctv.discovery.model.RTSPStream;
 import com.cctv.discovery.util.AuthUtils;
@@ -105,7 +106,18 @@ public class RtspService {
             }
         }
 
-        // 3. Try generic paths
+        // 3. Try custom user-configured paths
+        String[] customPaths = AppConfig.getInstance().getCustomRtspPaths();
+        if (customPaths.length > 0) {
+            logger.debug("Adding {} custom RTSP paths from configuration", customPaths.length);
+            for (String path : customPaths) {
+                if (!pathsToTry.contains(path)) {
+                    pathsToTry.add(path);
+                }
+            }
+        }
+
+        // 4. Try generic paths
         for (String path : MANUFACTURER_PATHS.get("GENERIC")) {
             if (!pathsToTry.contains(path)) {
                 pathsToTry.add(path);

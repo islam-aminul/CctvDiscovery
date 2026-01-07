@@ -6,61 +6,35 @@ import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
-import javafx.stage.DirectoryChooser;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
-
 /**
- * Settings dialog for configuring application properties.
+ * Simplified settings dialog for non-technical users.
+ * Only allows configuration of ports and custom RTSP paths.
  */
 public class SettingsDialog extends Stage {
     private static final Logger logger = LoggerFactory.getLogger(SettingsDialog.class);
 
     private final AppConfig config = AppConfig.getInstance();
 
-    // Network Discovery Fields
-    private TextField tfOnvifPort;
-    private TextField tfOnvifMulticast;
-    private TextField tfOnvifTimeout;
+    // Port Fields
     private TextField tfHttpPorts;
     private TextField tfRtspPorts;
 
-    // Threading Fields
-    private TextField tfThreadMultiplier;
-    private TextField tfMaxThreads;
-    private TextField tfStreamThreads;
-
-    // Timeout Fields
-    private TextField tfSocketConnect;
-    private TextField tfSocketRead;
-    private TextField tfRtspTimeout;
-    private TextField tfStreamTimeout;
-
-    // RTSP Fields
-    private TextField tfNvrMaxChannels;
-    private TextField tfNvrFailures;
-
-    // Export Fields
-    private TextField tfExportDir;
-    private CheckBox cbPasswordEnabled;
-    private TextField tfPasswordCode;
-
-    // MAC Resolution
-    private CheckBox cbMacEnabled;
-    private TextField tfMacTimeout;
+    // Custom RTSP Paths
+    private TextArea taCustomRtspPaths;
 
     public SettingsDialog(Stage owner) {
         initOwner(owner);
         initModality(Modality.APPLICATION_MODAL);
-        setTitle("Application Settings");
-        setResizable(true);
+        setTitle("Settings");
+        setResizable(false);
 
         VBox root = createContent();
-        Scene scene = new Scene(root, 700, 650);
+        Scene scene = new Scene(root, 550, 500);
 
         try {
             java.net.URL cssResource = getClass().getResource("/css/app.css");
@@ -76,242 +50,103 @@ public class SettingsDialog extends Stage {
     }
 
     private VBox createContent() {
-        VBox vbox = new VBox(15);
+        VBox vbox = new VBox(20);
         vbox.setPadding(new Insets(20));
 
-        Label title = new Label("Application Configuration");
-        title.setStyle("-fx-font-size: 18px; -fx-font-weight: bold;");
+        // Title
+        Label title = new Label("Application Settings");
+        title.setStyle("-fx-font-size: 16px; -fx-font-weight: bold;");
 
-        Label subtitle = new Label("Configure ports, timeouts, and paths. Changes take effect after restart.");
+        Label subtitle = new Label("Configure ports and RTSP paths for cameras with custom settings");
         subtitle.setStyle("-fx-text-fill: #666; -fx-font-size: 12px;");
 
-        TabPane tabPane = new TabPane();
-        tabPane.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
+        // Port Settings Section
+        VBox portSection = createPortSection();
 
-        // Create tabs
-        Tab networkTab = new Tab("Network", createNetworkTab());
-        Tab performanceTab = new Tab("Performance", createPerformanceTab());
-        Tab timeoutsTab = new Tab("Timeouts", createTimeoutsTab());
-        Tab exportTab = new Tab("Export", createExportTab());
-        Tab advancedTab = new Tab("Advanced", createAdvancedTab());
-
-        tabPane.getTabs().addAll(networkTab, performanceTab, timeoutsTab, exportTab, advancedTab);
+        // RTSP Paths Section
+        VBox rtspSection = createRtspPathsSection();
 
         // Buttons
         HBox buttonBox = createButtonBox();
 
-        vbox.getChildren().addAll(title, subtitle, new Separator(), tabPane, buttonBox);
-        VBox.setVgrow(tabPane, Priority.ALWAYS);
+        vbox.getChildren().addAll(
+                title,
+                subtitle,
+                new Separator(),
+                portSection,
+                new Separator(),
+                rtspSection,
+                buttonBox
+        );
 
         return vbox;
     }
 
-    private VBox createNetworkTab() {
-        VBox vbox = new VBox(15);
-        vbox.setPadding(new Insets(15));
+    private VBox createPortSection() {
+        VBox vbox = new VBox(12);
 
-        // ONVIF Settings
-        Label lblOnvif = new Label("ONVIF Discovery");
-        lblOnvif.setStyle("-fx-font-weight: bold;");
+        Label lblTitle = new Label("Port Configuration");
+        lblTitle.setStyle("-fx-font-weight: bold; -fx-font-size: 13px;");
 
-        GridPane onvifGrid = new GridPane();
-        onvifGrid.setHgap(10);
-        onvifGrid.setVgap(10);
+        Label lblHelp = new Label("Only change these if your cameras use non-standard ports");
+        lblHelp.setStyle("-fx-text-fill: #666; -fx-font-size: 11px;");
 
-        tfOnvifPort = new TextField();
-        tfOnvifMulticast = new TextField();
-        tfOnvifTimeout = new TextField();
+        GridPane grid = new GridPane();
+        grid.setHgap(15);
+        grid.setVgap(12);
 
-        onvifGrid.add(new Label("ONVIF Port:"), 0, 0);
-        onvifGrid.add(tfOnvifPort, 1, 0);
-        onvifGrid.add(new Label("Multicast Address:"), 0, 1);
-        onvifGrid.add(tfOnvifMulticast, 1, 1);
-        onvifGrid.add(new Label("Discovery Timeout (ms):"), 0, 2);
-        onvifGrid.add(tfOnvifTimeout, 1, 2);
-
-        // Port Scanning
-        Label lblPorts = new Label("Port Scanning");
-        lblPorts.setStyle("-fx-font-weight: bold;");
-
-        GridPane portsGrid = new GridPane();
-        portsGrid.setHgap(10);
-        portsGrid.setVgap(10);
-
+        // HTTP Ports
+        Label lblHttp = new Label("HTTP Ports:");
+        lblHttp.setMinWidth(100);
         tfHttpPorts = new TextField();
+        tfHttpPorts.setPromptText("e.g., 80,8080,8000");
+        tfHttpPorts.setPrefWidth(300);
+        Label lblHttpHelp = new Label("(Separate multiple ports with commas)");
+        lblHttpHelp.setStyle("-fx-text-fill: #888; -fx-font-size: 10px;");
+
+        // RTSP Ports
+        Label lblRtsp = new Label("RTSP Ports:");
+        lblRtsp.setMinWidth(100);
         tfRtspPorts = new TextField();
+        tfRtspPorts.setPromptText("e.g., 554,8554");
+        tfRtspPorts.setPrefWidth(300);
+        Label lblRtspHelp = new Label("(Separate multiple ports with commas)");
+        lblRtspHelp.setStyle("-fx-text-fill: #888; -fx-font-size: 10px;");
 
-        portsGrid.add(new Label("HTTP Ports (comma-separated):"), 0, 0);
-        portsGrid.add(tfHttpPorts, 1, 0);
-        portsGrid.add(new Label("RTSP Ports (comma-separated):"), 0, 1);
-        portsGrid.add(tfRtspPorts, 1, 1);
+        grid.add(lblHttp, 0, 0);
+        grid.add(tfHttpPorts, 1, 0);
+        grid.add(lblHttpHelp, 1, 1);
 
-        vbox.getChildren().addAll(
-                lblOnvif, onvifGrid,
-                new Separator(),
-                lblPorts, portsGrid
-        );
+        grid.add(lblRtsp, 0, 2);
+        grid.add(tfRtspPorts, 1, 2);
+        grid.add(lblRtspHelp, 1, 3);
 
-        return vbox;
-    }
-
-    private VBox createPerformanceTab() {
-        VBox vbox = new VBox(15);
-        vbox.setPadding(new Insets(15));
-
-        Label lblThreading = new Label("Threading Configuration");
-        lblThreading.setStyle("-fx-font-weight: bold;");
-
-        GridPane grid = new GridPane();
-        grid.setHgap(10);
-        grid.setVgap(10);
-
-        tfThreadMultiplier = new TextField();
-        tfMaxThreads = new TextField();
-        tfStreamThreads = new TextField();
-
-        grid.add(new Label("Port Scan Thread Multiplier:"), 0, 0);
-        grid.add(tfThreadMultiplier, 1, 0);
-        grid.add(new Label("(Threads = CPU cores × multiplier)"), 2, 0);
-
-        grid.add(new Label("Max Port Scan Threads:"), 0, 1);
-        grid.add(tfMaxThreads, 1, 1);
-
-        grid.add(new Label("Max Stream Analysis Threads:"), 0, 2);
-        grid.add(tfStreamThreads, 1, 2);
-
-        Label note = new Label("Note: Higher thread counts improve speed but increase CPU usage.");
-        note.setStyle("-fx-text-fill: #666; -fx-font-size: 11px;");
-
-        vbox.getChildren().addAll(lblThreading, grid, note);
+        vbox.getChildren().addAll(lblTitle, lblHelp, grid);
 
         return vbox;
     }
 
-    private VBox createTimeoutsTab() {
-        VBox vbox = new VBox(15);
-        vbox.setPadding(new Insets(15));
+    private VBox createRtspPathsSection() {
+        VBox vbox = new VBox(12);
 
-        Label lblTimeouts = new Label("Timeout Configuration (milliseconds)");
-        lblTimeouts.setStyle("-fx-font-weight: bold;");
+        Label lblTitle = new Label("Custom RTSP Paths");
+        lblTitle.setStyle("-fx-font-weight: bold; -fx-font-size: 13px;");
 
-        GridPane grid = new GridPane();
-        grid.setHgap(10);
-        grid.setVgap(10);
+        Label lblHelp = new Label("Add custom RTSP paths if default paths don't work (one path per line)");
+        lblHelp.setStyle("-fx-text-fill: #666; -fx-font-size: 11px;");
+        lblHelp.setWrapText(true);
 
-        tfSocketConnect = new TextField();
-        tfSocketRead = new TextField();
-        tfRtspTimeout = new TextField();
-        tfStreamTimeout = new TextField();
+        taCustomRtspPaths = new TextArea();
+        taCustomRtspPaths.setPromptText("Examples:\n/live\n/stream1\n/h264/ch1/main/av_stream\n/cam/realmonitor?channel=1&subtype=0");
+        taCustomRtspPaths.setPrefRowCount(8);
+        taCustomRtspPaths.setWrapText(false);
+        taCustomRtspPaths.setStyle("-fx-font-family: 'Courier New', monospace;");
 
-        grid.add(new Label("Socket Connect Timeout:"), 0, 0);
-        grid.add(tfSocketConnect, 1, 0);
+        Label lblExample = new Label("These paths will be tried in addition to the built-in manufacturer paths");
+        lblExample.setStyle("-fx-text-fill: #888; -fx-font-size: 10px; -fx-font-style: italic;");
+        lblExample.setWrapText(true);
 
-        grid.add(new Label("Socket Read Timeout:"), 0, 1);
-        grid.add(tfSocketRead, 1, 1);
-
-        grid.add(new Label("RTSP Connection Timeout:"), 0, 2);
-        grid.add(tfRtspTimeout, 1, 2);
-
-        grid.add(new Label("Stream Analysis Timeout:"), 0, 3);
-        grid.add(tfStreamTimeout, 1, 3);
-
-        Label note = new Label("Note: Lower timeouts speed up scanning but may miss slow devices.");
-        note.setStyle("-fx-text-fill: #666; -fx-font-size: 11px;");
-
-        vbox.getChildren().addAll(lblTimeouts, grid, note);
-
-        return vbox;
-    }
-
-    private VBox createExportTab() {
-        VBox vbox = new VBox(15);
-        vbox.setPadding(new Insets(15));
-
-        Label lblExport = new Label("Export Settings");
-        lblExport.setStyle("-fx-font-weight: bold;");
-
-        GridPane grid = new GridPane();
-        grid.setHgap(10);
-        grid.setVgap(10);
-
-        tfExportDir = new TextField();
-        tfExportDir.setPrefWidth(350);
-        Button btnBrowse = new Button("Browse...");
-        btnBrowse.setOnAction(e -> browseExportDirectory());
-
-        HBox exportDirBox = new HBox(10, tfExportDir, btnBrowse);
-        exportDirBox.setAlignment(Pos.CENTER_LEFT);
-
-        grid.add(new Label("Default Export Directory:"), 0, 0);
-        grid.add(exportDirBox, 1, 0);
-
-        // Password Protection
-        Label lblPassword = new Label("Excel Password Protection");
-        lblPassword.setStyle("-fx-font-weight: bold;");
-
-        GridPane passwordGrid = new GridPane();
-        passwordGrid.setHgap(10);
-        passwordGrid.setVgap(10);
-
-        cbPasswordEnabled = new CheckBox("Enable password protection");
-        tfPasswordCode = new TextField();
-
-        passwordGrid.add(cbPasswordEnabled, 0, 0, 2, 1);
-        passwordGrid.add(new Label("Fixed Code (secret):"), 0, 1);
-        passwordGrid.add(tfPasswordCode, 1, 1);
-
-        Label note = new Label("Note: Password format is {DeviceCount}{YYYYMMDD}{FixedCode}");
-        note.setStyle("-fx-text-fill: #666; -fx-font-size: 11px;");
-
-        vbox.getChildren().addAll(
-                lblExport, grid,
-                new Separator(),
-                lblPassword, passwordGrid, note
-        );
-
-        return vbox;
-    }
-
-    private VBox createAdvancedTab() {
-        VBox vbox = new VBox(15);
-        vbox.setPadding(new Insets(15));
-
-        Label lblRtsp = new Label("RTSP/NVR Settings");
-        lblRtsp.setStyle("-fx-font-weight: bold;");
-
-        GridPane rtspGrid = new GridPane();
-        rtspGrid.setHgap(10);
-        rtspGrid.setVgap(10);
-
-        tfNvrMaxChannels = new TextField();
-        tfNvrFailures = new TextField();
-
-        rtspGrid.add(new Label("Max NVR Channels to Scan:"), 0, 0);
-        rtspGrid.add(tfNvrMaxChannels, 1, 0);
-
-        rtspGrid.add(new Label("Stop After Failures:"), 0, 1);
-        rtspGrid.add(tfNvrFailures, 1, 1);
-
-        // MAC Resolution
-        Label lblMac = new Label("MAC Address Resolution");
-        lblMac.setStyle("-fx-font-weight: bold;");
-
-        GridPane macGrid = new GridPane();
-        macGrid.setHgap(10);
-        macGrid.setVgap(10);
-
-        cbMacEnabled = new CheckBox("Enable MAC address resolution");
-        tfMacTimeout = new TextField();
-
-        macGrid.add(cbMacEnabled, 0, 0, 2, 1);
-        macGrid.add(new Label("ARP Timeout (ms):"), 0, 1);
-        macGrid.add(tfMacTimeout, 1, 1);
-
-        vbox.getChildren().addAll(
-                lblRtsp, rtspGrid,
-                new Separator(),
-                lblMac, macGrid
-        );
+        vbox.getChildren().addAll(lblTitle, lblHelp, taCustomRtspPaths, lblExample);
 
         return vbox;
     }
@@ -340,66 +175,59 @@ public class SettingsDialog extends Stage {
     }
 
     private void loadCurrentSettings() {
-        // Network
-        tfOnvifPort.setText(String.valueOf(config.getOnvifPort()));
-        tfOnvifMulticast.setText(config.getOnvifMulticast());
-        tfOnvifTimeout.setText(String.valueOf(config.getOnvifTimeout()));
+        // Ports
         tfHttpPorts.setText(arrayToString(config.getHttpPorts()));
         tfRtspPorts.setText(arrayToString(config.getRtspPorts()));
 
-        // Performance
-        tfThreadMultiplier.setText(String.valueOf(config.getPortScanThreadMultiplier()));
-        tfMaxThreads.setText(String.valueOf(config.getPortScanMaxThreads()));
-        tfStreamThreads.setText(String.valueOf(config.getStreamAnalysisMaxThreads()));
-
-        // Timeouts
-        tfSocketConnect.setText(String.valueOf(config.getSocketConnectTimeout()));
-        tfSocketRead.setText(String.valueOf(config.getSocketReadTimeout()));
-        tfRtspTimeout.setText(String.valueOf(config.getRtspConnectTimeout()));
-        tfStreamTimeout.setText(String.valueOf(config.getStreamAnalysisTimeout()));
-
-        // Export
-        tfExportDir.setText(config.getExportDefaultDirectory());
-        cbPasswordEnabled.setSelected(config.isExcelPasswordEnabled());
-        tfPasswordCode.setText(config.getExcelPasswordFixedCode());
-
-        // Advanced
-        tfNvrMaxChannels.setText(String.valueOf(config.getNvrMaxChannels()));
-        tfNvrFailures.setText(String.valueOf(config.getNvrConsecutiveFailures()));
-        cbMacEnabled.setSelected(config.isMacResolutionEnabled());
-        tfMacTimeout.setText(String.valueOf(config.getMacResolutionTimeout()));
+        // Custom RTSP paths
+        String customPaths = config.getProperty("rtsp.custom.paths");
+        if (customPaths != null && !customPaths.isEmpty()) {
+            // Convert semicolon-separated to line-separated
+            taCustomRtspPaths.setText(customPaths.replace(";", "\n"));
+        } else {
+            taCustomRtspPaths.setText("");
+        }
     }
 
     private void saveSettings() {
         try {
-            // Network
-            config.setProperty("discovery.onvif.port", tfOnvifPort.getText());
-            config.setProperty("discovery.onvif.multicast", tfOnvifMulticast.getText());
-            config.setProperty("discovery.onvif.timeout", tfOnvifTimeout.getText());
-            config.setProperty("discovery.http.ports", tfHttpPorts.getText());
-            config.setProperty("discovery.rtsp.ports", tfRtspPorts.getText());
+            // Validate port inputs
+            String httpPorts = tfHttpPorts.getText().trim();
+            String rtspPorts = tfRtspPorts.getText().trim();
 
-            // Performance
-            config.setProperty("threads.port.scan.multiplier", tfThreadMultiplier.getText());
-            config.setProperty("threads.port.scan.max", tfMaxThreads.getText());
-            config.setProperty("threads.stream.analysis.max", tfStreamThreads.getText());
+            if (!validatePortList(httpPorts)) {
+                showError("Invalid HTTP Ports", "Please enter valid port numbers separated by commas (e.g., 80,8080)");
+                return;
+            }
 
-            // Timeouts
-            config.setProperty("timeout.socket.connect", tfSocketConnect.getText());
-            config.setProperty("timeout.socket.read", tfSocketRead.getText());
-            config.setProperty("timeout.rtsp.connect", tfRtspTimeout.getText());
-            config.setProperty("timeout.stream.analysis", tfStreamTimeout.getText());
+            if (!validatePortList(rtspPorts)) {
+                showError("Invalid RTSP Ports", "Please enter valid port numbers separated by commas (e.g., 554,8554)");
+                return;
+            }
 
-            // Export
-            config.setProperty("export.default.directory", tfExportDir.getText());
-            config.setProperty("export.excel.password.enabled", String.valueOf(cbPasswordEnabled.isSelected()));
-            config.setProperty("export.excel.password.fixed.code", tfPasswordCode.getText());
+            // Save ports
+            config.setProperty("discovery.http.ports", httpPorts);
+            config.setProperty("discovery.rtsp.ports", rtspPorts);
 
-            // Advanced
-            config.setProperty("rtsp.nvr.max.channels", tfNvrMaxChannels.getText());
-            config.setProperty("rtsp.nvr.consecutive.failures", tfNvrFailures.getText());
-            config.setProperty("mac.resolution.enabled", String.valueOf(cbMacEnabled.isSelected()));
-            config.setProperty("mac.resolution.timeout", tfMacTimeout.getText());
+            // Save custom RTSP paths (convert line-separated to semicolon-separated)
+            String customPaths = taCustomRtspPaths.getText().trim();
+            if (!customPaths.isEmpty()) {
+                // Clean up: remove empty lines, trim each line
+                String[] lines = customPaths.split("\n");
+                StringBuilder cleaned = new StringBuilder();
+                for (String line : lines) {
+                    line = line.trim();
+                    if (!line.isEmpty()) {
+                        if (cleaned.length() > 0) {
+                            cleaned.append(";");
+                        }
+                        cleaned.append(line);
+                    }
+                }
+                config.setProperty("rtsp.custom.paths", cleaned.toString());
+            } else {
+                config.setProperty("rtsp.custom.paths", "");
+            }
 
             // Save to file
             config.saveUserSettings();
@@ -407,18 +235,14 @@ public class SettingsDialog extends Stage {
             Alert alert = new Alert(Alert.AlertType.INFORMATION);
             alert.setTitle("Settings Saved");
             alert.setHeaderText("Configuration Updated");
-            alert.setContentText("Settings have been saved successfully.\nRestart the application for changes to take effect.");
+            alert.setContentText("Settings saved successfully.\n\nRestart the application for changes to take effect.");
             alert.showAndWait();
 
             close();
 
         } catch (Exception e) {
             logger.error("Error saving settings", e);
-            Alert alert = new Alert(Alert.AlertType.ERROR);
-            alert.setTitle("Error");
-            alert.setHeaderText("Failed to Save Settings");
-            alert.setContentText("Error: " + e.getMessage());
-            alert.showAndWait();
+            showError("Save Error", "Failed to save settings: " + e.getMessage());
         }
     }
 
@@ -426,7 +250,7 @@ public class SettingsDialog extends Stage {
         Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
         confirm.setTitle("Reset to Defaults");
         confirm.setHeaderText("Reset All Settings?");
-        confirm.setContentText("This will reset all settings to default values. Continue?");
+        confirm.setContentText("This will reset all custom settings to defaults.\nAre you sure?");
 
         confirm.showAndWait().ifPresent(response -> {
             if (response == ButtonType.OK) {
@@ -442,19 +266,31 @@ public class SettingsDialog extends Stage {
         });
     }
 
-    private void browseExportDirectory() {
-        DirectoryChooser chooser = new DirectoryChooser();
-        chooser.setTitle("Select Default Export Directory");
-
-        File currentDir = new File(tfExportDir.getText());
-        if (currentDir.exists() && currentDir.isDirectory()) {
-            chooser.setInitialDirectory(currentDir);
+    private boolean validatePortList(String portList) {
+        if (portList.isEmpty()) {
+            return false;
         }
 
-        File selectedDir = chooser.showDialog(this);
-        if (selectedDir != null) {
-            tfExportDir.setText(selectedDir.getAbsolutePath());
+        String[] parts = portList.split(",");
+        for (String part : parts) {
+            try {
+                int port = Integer.parseInt(part.trim());
+                if (port < 1 || port > 65535) {
+                    return false;
+                }
+            } catch (NumberFormatException e) {
+                return false;
+            }
         }
+        return true;
+    }
+
+    private void showError(String title, String message) {
+        Alert alert = new Alert(Alert.AlertType.ERROR);
+        alert.setTitle(title);
+        alert.setHeaderText(null);
+        alert.setContentText(message);
+        alert.showAndWait();
     }
 
     private String arrayToString(int[] array) {

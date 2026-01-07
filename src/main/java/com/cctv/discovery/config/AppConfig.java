@@ -220,6 +220,19 @@ public class AppConfig {
         return getInt("rtsp.nvr.consecutive.failures", 3);
     }
 
+    public String[] getCustomRtspPaths() {
+        String value = getProperty("rtsp.custom.paths");
+        if (value != null && !value.trim().isEmpty()) {
+            String[] paths = value.split(";");
+            // Trim each path
+            for (int i = 0; i < paths.length; i++) {
+                paths[i] = paths[i].trim();
+            }
+            return paths;
+        }
+        return new String[0];
+    }
+
     // Stream Analysis
     public int getStreamAnalysisDuration() {
         return getInt("stream.analysis.duration", 10);
