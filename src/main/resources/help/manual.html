@@ -3,299 +3,984 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CCTV Discovery Tool - User Manual</title>
+    <title>CCTV Discovery & Audit Tool - User Manual</title>
     <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
         body {
-            font-family: 'Segoe UI', Arial, sans-serif;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             line-height: 1.6;
-            max-width: 900px;
-            margin: 0 auto;
-            padding: 20px;
+            color: #333;
             background-color: #f5f5f5;
+            padding: 20px;
         }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 40px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            border-radius: 8px;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 40px;
+            padding-bottom: 20px;
+            border-bottom: 3px solid #0078d4;
+        }
+
         h1 {
-            color: #1976D2;
-            border-bottom: 3px solid #1976D2;
-            padding-bottom: 10px;
+            color: #0078d4;
+            font-size: 2.5em;
+            margin-bottom: 10px;
         }
+
+        .subtitle {
+            color: #666;
+            font-size: 1.2em;
+        }
+
+        nav {
+            background-color: #f8f9fa;
+            padding: 20px;
+            margin-bottom: 30px;
+            border-radius: 5px;
+            border-left: 4px solid #0078d4;
+        }
+
+        nav h2 {
+            color: #0078d4;
+            margin-bottom: 15px;
+            font-size: 1.3em;
+        }
+
+        nav ul {
+            list-style: none;
+        }
+
+        nav ul li {
+            margin: 8px 0;
+        }
+
+        nav ul li a {
+            color: #0078d4;
+            text-decoration: none;
+            transition: all 0.3s;
+        }
+
+        nav ul li a:hover {
+            color: #005a9e;
+            text-decoration: underline;
+        }
+
+        section {
+            margin-bottom: 50px;
+        }
+
         h2 {
-            color: #424242;
-            margin-top: 30px;
-            border-left: 4px solid #1976D2;
-            padding-left: 10px;
+            color: #0078d4;
+            font-size: 2em;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #e0e0e0;
         }
+
         h3 {
-            color: #616161;
+            color: #333;
+            font-size: 1.5em;
+            margin-top: 25px;
+            margin-bottom: 15px;
         }
-        .warning {
+
+        h4 {
+            color: #555;
+            font-size: 1.2em;
+            margin-top: 20px;
+            margin-bottom: 10px;
+        }
+
+        p {
+            margin-bottom: 15px;
+            text-align: justify;
+        }
+
+        .screenshot {
+            margin: 20px 0;
+            text-align: center;
+        }
+
+        .screenshot img {
+            max-width: 100%;
+            height: auto;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .screenshot-caption {
+            margin-top: 10px;
+            font-style: italic;
+            color: #666;
+            font-size: 0.9em;
+        }
+
+        .note {
             background-color: #fff3cd;
             border-left: 4px solid #ffc107;
             padding: 15px;
             margin: 20px 0;
+            border-radius: 4px;
         }
-        .info {
+
+        .note strong {
+            color: #856404;
+        }
+
+        .tip {
             background-color: #d1ecf1;
-            border-left: 4px solid #0dcaf0;
+            border-left: 4px solid #17a2b8;
             padding: 15px;
             margin: 20px 0;
+            border-radius: 4px;
         }
+
+        .tip strong {
+            color: #0c5460;
+        }
+
+        .warning {
+            background-color: #f8d7da;
+            border-left: 4px solid #dc3545;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+
+        .warning strong {
+            color: #721c24;
+        }
+
+        ol, ul {
+            margin-left: 30px;
+            margin-bottom: 15px;
+        }
+
+        li {
+            margin-bottom: 8px;
+        }
+
         code {
             background-color: #f4f4f4;
             padding: 2px 6px;
             border-radius: 3px;
-            font-family: 'Consolas', monospace;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
         }
-        .step {
-            background-color: white;
-            padding: 15px;
-            margin: 10px 0;
+
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+
+        .feature-card {
+            background-color: #f8f9fa;
+            padding: 20px;
             border-radius: 5px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            border-left: 4px solid #0078d4;
         }
-        ul {
-            margin-left: 20px;
+
+        .feature-card h4 {
+            color: #0078d4;
+            margin-top: 0;
         }
-        li {
-            margin-bottom: 8px;
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+
+        table th {
+            background-color: #0078d4;
+            color: white;
+            padding: 12px;
+            text-align: left;
+        }
+
+        table td {
+            padding: 10px 12px;
+            border-bottom: 1px solid #ddd;
+        }
+
+        table tr:hover {
+            background-color: #f5f5f5;
+        }
+
+        footer {
+            margin-top: 50px;
+            padding-top: 20px;
+            border-top: 2px solid #e0e0e0;
+            text-align: center;
+            color: #666;
         }
     </style>
 </head>
 <body>
-    <h1>CCTV Discovery & Audit Tool</h1>
-    <p><strong>Version:</strong> 1.0.0</p>
-    <p><strong>Date:</strong> January 2026</p>
+    <div class="container">
+        <header>
+            <h1>CCTV Discovery & Audit Tool</h1>
+            <p class="subtitle">User Manual - Version 1.0.0</p>
+            <p class="subtitle">Consultancy Services Ltd.</p>
+        </header>
 
-    <div class="warning">
-        <strong>⚠ Important:</strong> This tool performs network scanning and authentication attempts.
-        Only use it on networks where you have explicit authorization. Unauthorized network scanning
-        may be illegal in your jurisdiction.
+        <nav>
+            <h2>Table of Contents</h2>
+            <ul>
+                <li><a href="#overview">1. Overview</a></li>
+                <li><a href="#getting-started">2. Getting Started</a></li>
+                <li><a href="#main-window">3. Main Window</a></li>
+                <li><a href="#network-selection">4. Network Selection</a></li>
+                <li><a href="#credentials">5. Credential Management</a></li>
+                <li><a href="#settings">6. Settings Configuration</a></li>
+                <li><a href="#discovery">7. Running Discovery</a></li>
+                <li><a href="#results">8. Viewing Results</a></li>
+                <li><a href="#export">9. Exporting to Excel</a></li>
+                <li><a href="#troubleshooting">10. Troubleshooting</a></li>
+                <li><a href="#faq">11. Frequently Asked Questions</a></li>
+            </ul>
+        </nav>
+
+        <section id="overview">
+            <h2>1. Overview</h2>
+            <p>
+                The CCTV Discovery & Audit Tool is a professional network scanning application designed to automatically discover
+                and audit IP cameras, NVRs, and DVRs on your network. It uses advanced discovery protocols including ONVIF
+                (WS-Discovery), RTSP stream analysis, and HTTP detection to identify CCTV devices.
+            </p>
+
+            <h3>Key Features</h3>
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <h4>🔍 Multi-Protocol Discovery</h4>
+                    <p>Supports ONVIF, RTSP, and HTTP-based camera discovery</p>
+                </div>
+                <div class="feature-card">
+                    <h4>📹 Stream Analysis</h4>
+                    <p>Automatic RTSP stream detection with codec and resolution analysis using JavaCV</p>
+                </div>
+                <div class="feature-card">
+                    <h4>🔐 Multiple Credentials</h4>
+                    <p>Test up to 4 different credential sets simultaneously</p>
+                </div>
+                <div class="feature-card">
+                    <h4>⚙️ Customizable Settings</h4>
+                    <p>Configure custom ports and RTSP paths for non-standard cameras</p>
+                </div>
+                <div class="feature-card">
+                    <h4>📊 Excel Export</h4>
+                    <p>Password-protected Excel reports with comprehensive device information</p>
+                </div>
+                <div class="feature-card">
+                    <h4>🌐 Flexible Network Scanning</h4>
+                    <p>Scan by network interface, IP range, or CIDR notation</p>
+                </div>
+            </div>
+
+            <div class="note">
+                <strong>Note:</strong> This tool requires Java 8 or higher and is designed for authorized network security
+                assessments and camera inventory management only.
+            </div>
+        </section>
+
+        <section id="getting-started">
+            <h2>2. Getting Started</h2>
+
+            <h3>System Requirements</h3>
+            <ul>
+                <li><strong>Operating System:</strong> Windows 7/8/10/11, Linux (Ubuntu 18.04+), macOS 10.14+</li>
+                <li><strong>Java Runtime:</strong> Java 8 (JRE 1.8) or higher</li>
+                <li><strong>Memory:</strong> Minimum 2GB RAM (4GB recommended for large networks)</li>
+                <li><strong>Network:</strong> Active network connection with access to target camera network</li>
+                <li><strong>Screen Resolution:</strong> 1366x768 or higher</li>
+            </ul>
+
+            <h3>Installation</h3>
+            <ol>
+                <li>Extract the application ZIP file to a desired location</li>
+                <li>Ensure Java 8 JRE is installed (bundled JRE is included in the package)</li>
+                <li>Run <code>CctvDiscovery.exe</code> (Windows) or <code>java -jar cctv-discovery-1.0.0-SNAPSHOT.jar</code> (Linux/Mac)</li>
+            </ol>
+
+            <h3>First Launch</h3>
+            <p>
+                Upon first launch, the application will create a <code>user-settings.properties</code> file in the same
+                directory as the executable. This file stores your custom settings and preferences.
+            </p>
+
+            <div class="screenshot">
+                <img src="images/main-window.png" alt="Main Application Window">
+                <p class="screenshot-caption">Figure 1: Main Application Window</p>
+            </div>
+        </section>
+
+        <section id="main-window">
+            <h2>3. Main Window</h2>
+            <p>
+                The main window is divided into several key sections for efficient workflow:
+            </p>
+
+            <h3>Header Section</h3>
+            <p>
+                The header contains the application title and two important buttons:
+            </p>
+            <ul>
+                <li><strong>Settings (Blue):</strong> Opens the configuration dialog for customizing ports and RTSP paths</li>
+                <li><strong>Help (Teal):</strong> Displays quick guide and provides access to this user manual</li>
+            </ul>
+
+            <div class="screenshot">
+                <img src="images/header-buttons.png" alt="Header Buttons">
+                <p class="screenshot-caption">Figure 2: Header with Settings and Help buttons</p>
+            </div>
+
+            <h3>Left Panel - Control Section</h3>
+            <p>The left panel contains all controls needed to configure and run discovery:</p>
+            <ol>
+                <li><strong>Network Selection:</strong> Choose target network range</li>
+                <li><strong>Credentials:</strong> Manage authentication credentials</li>
+                <li><strong>Discovery:</strong> Start/stop discovery process</li>
+                <li><strong>Progress:</strong> Monitor discovery status</li>
+                <li><strong>Export:</strong> Export results to Excel</li>
+            </ol>
+
+            <h3>Right Panel - Results Section</h3>
+            <p>Displays discovered devices in a sortable table with columns:</p>
+            <ul>
+                <li>IP Address</li>
+                <li>MAC Address</li>
+                <li>Manufacturer</li>
+                <li>Model</li>
+                <li>HTTP Port(s)</li>
+                <li>RTSP Stream(s)</li>
+                <li>Credential Used</li>
+            </ul>
+        </section>
+
+        <section id="network-selection">
+            <h2>4. Network Selection</h2>
+            <p>
+                The Network Selection section allows you to specify which network range to scan for cameras.
+                Three options are available:
+            </p>
+
+            <div class="screenshot">
+                <img src="images/network-selection.png" alt="Network Selection Options">
+                <p class="screenshot-caption">Figure 3: Network Selection Options</p>
+            </div>
+
+            <h3>Option 1: Network Interface</h3>
+            <p>
+                Select a network interface from the dropdown. The application will automatically scan the entire subnet
+                associated with the selected interface.
+            </p>
+            <ul>
+                <li><strong>Use Case:</strong> Scanning your local network</li>
+                <li><strong>Example:</strong> Select "Ethernet - 192.168.1.100" to scan 192.168.1.0/24</li>
+            </ul>
+
+            <h3>Option 2: Manual IP Range</h3>
+            <p>
+                Specify custom start and end IP addresses for scanning a specific range.
+            </p>
+            <ul>
+                <li><strong>Start IP:</strong> Enter the first IP address (e.g., 192.168.1.1)</li>
+                <li><strong>End IP:</strong> Enter the last IP address (e.g., 192.168.1.254)</li>
+                <li><strong>Use Case:</strong> Scanning a subset of a larger network</li>
+            </ul>
+
+            <div class="tip">
+                <strong>💡 Tip:</strong> The application displays "Possible IPs" count in italic, centered text to help
+                you estimate scan time. Larger ranges will take longer to scan.
+            </div>
+
+            <h3>Option 3: CIDR Notation</h3>
+            <p>
+                Use CIDR notation for network professionals who prefer subnet mask notation.
+            </p>
+            <ul>
+                <li><strong>Format:</strong> IP/prefix (e.g., 192.168.1.0/24)</li>
+                <li><strong>Examples:</strong>
+                    <ul>
+                        <li>192.168.1.0/24 = 254 hosts</li>
+                        <li>10.0.0.0/16 = 65,534 hosts</li>
+                        <li>172.16.0.0/22 = 1,022 hosts</li>
+                    </ul>
+                </li>
+            </ul>
+
+            <div class="warning">
+                <strong>⚠️ Warning:</strong> Scanning large networks (>/16) can take significant time and may trigger
+                network security alerts. Always ensure you have authorization before scanning.
+            </div>
+        </section>
+
+        <section id="credentials">
+            <h2>5. Credential Management</h2>
+            <p>
+                The Credentials section allows you to manage up to 4 different username/password combinations that will
+                be tested against discovered devices.
+            </p>
+
+            <div class="screenshot">
+                <img src="images/add-credentials.png" alt="Add Credentials">
+                <p class="screenshot-caption">Figure 4: Adding Credentials</p>
+            </div>
+
+            <h3>Adding Credentials</h3>
+            <ol>
+                <li>Enter the <strong>Username</strong> in the left field (e.g., "admin")</li>
+                <li>Enter the <strong>Password</strong> in the right field</li>
+                <li>Click <strong>"Add Credential"</strong> button</li>
+                <li>The credential pair appears in the list below</li>
+            </ol>
+
+            <div class="note">
+                <strong>Note:</strong> The default username "admin" is pre-filled as it's the most common default for IP cameras.
+                You must add at least one credential before starting discovery.
+            </div>
+
+            <h3>Editing Credentials</h3>
+            <p>To modify an existing credential:</p>
+            <ol>
+                <li>Right-click on the credential in the list</li>
+                <li>Select <strong>"Edit"</strong> from the context menu</li>
+                <li>The username and password fields will be populated with the selected values</li>
+                <li>Make your changes and click "Add Credential" to save</li>
+            </ol>
+
+            <div class="screenshot">
+                <img src="images/edit-credentials.png" alt="Edit Credentials Context Menu">
+                <p class="screenshot-caption">Figure 5: Edit and Delete options in context menu</p>
+            </div>
+
+            <h3>Deleting Credentials</h3>
+            <ol>
+                <li>Right-click on the credential in the list</li>
+                <li>Select <strong>"Delete"</strong> from the context menu</li>
+                <li>The credential is immediately removed</li>
+            </ol>
+
+            <h3>Common Default Credentials</h3>
+            <table>
+                <tr>
+                    <th>Manufacturer</th>
+                    <th>Default Username</th>
+                    <th>Default Password</th>
+                </tr>
+                <tr>
+                    <td>Hikvision</td>
+                    <td>admin</td>
+                    <td>12345</td>
+                </tr>
+                <tr>
+                    <td>Dahua</td>
+                    <td>admin</td>
+                    <td>admin</td>
+                </tr>
+                <tr>
+                    <td>Axis</td>
+                    <td>root</td>
+                    <td>pass</td>
+                </tr>
+                <tr>
+                    <td>Foscam</td>
+                    <td>admin</td>
+                    <td>(blank)</td>
+                </tr>
+                <tr>
+                    <td>Ubiquiti</td>
+                    <td>ubnt</td>
+                    <td>ubnt</td>
+                </tr>
+            </table>
+        </section>
+
+        <section id="settings">
+            <h2>6. Settings Configuration</h2>
+            <p>
+                The Settings dialog allows you to configure custom ports and RTSP paths for cameras that use non-standard
+                configurations. Click the <strong>Settings</strong> button in the header to open it.
+            </p>
+
+            <div class="screenshot">
+                <img src="images/settings-dialog.png" alt="Settings Dialog">
+                <p class="screenshot-caption">Figure 6: Settings Dialog Overview</p>
+            </div>
+
+            <h3>Port Configuration</h3>
+            <p>
+                By default, the application scans standard ports (HTTP: 80, 8080, 8000; RTSP: 554, 8554). If your cameras
+                use different ports, you can specify them here.
+            </p>
+
+            <div class="screenshot">
+                <img src="images/settings-ports.png" alt="Port Configuration">
+                <p class="screenshot-caption">Figure 7: Port Configuration Section</p>
+            </div>
+
+            <h4>HTTP Ports</h4>
+            <p>Enter ports where camera web interfaces might be accessible:</p>
+            <ul>
+                <li><strong>Single port:</strong> <code>8000</code></li>
+                <li><strong>Multiple ports:</strong> <code>80,8080,8000,8081</code></li>
+            </ul>
+
+            <h4>RTSP Ports</h4>
+            <p>Enter ports where RTSP streams might be accessible:</p>
+            <ul>
+                <li><strong>Single port:</strong> <code>554</code></li>
+                <li><strong>Multiple ports:</strong> <code>554,8554</code></li>
+            </ul>
+
+            <h3>Custom RTSP Path Pairs</h3>
+            <p>
+                Some camera manufacturers use custom RTSP path formats. If the default paths don't work, you can add custom
+                path pairs (Main stream + Sub stream).
+            </p>
+
+            <div class="screenshot">
+                <img src="images/settings-rtsp-paths.png" alt="RTSP Path Configuration">
+                <p class="screenshot-caption">Figure 8: Custom RTSP Path Pairs Configuration</p>
+            </div>
+
+            <h4>Adding Custom Path Pairs</h4>
+            <ol>
+                <li>Enter the <strong>Main Stream Path</strong> (e.g., <code>/h264/ch1/main/av_stream</code>)</li>
+                <li>Enter the <strong>Sub Stream Path</strong> (e.g., <code>/h264/ch1/sub/av_stream</code>)</li>
+                <li>Click the blue <strong>"Add Path Pair"</strong> button</li>
+                <li>The path pair appears in the list below</li>
+            </ol>
+
+            <div class="tip">
+                <strong>💡 Tip:</strong> Main stream is typically high quality (1080p/4K), while sub stream is lower quality
+                (480p/720p) for bandwidth saving. Both are discovered and reported.
+            </div>
+
+            <h4>Common RTSP Path Formats</h4>
+            <table>
+                <tr>
+                    <th>Manufacturer</th>
+                    <th>Main Stream Path</th>
+                    <th>Sub Stream Path</th>
+                </tr>
+                <tr>
+                    <td>Hikvision</td>
+                    <td>/Streaming/Channels/101</td>
+                    <td>/Streaming/Channels/102</td>
+                </tr>
+                <tr>
+                    <td>Dahua</td>
+                    <td>/cam/realmonitor?channel=1&subtype=0</td>
+                    <td>/cam/realmonitor?channel=1&subtype=1</td>
+                </tr>
+                <tr>
+                    <td>Axis</td>
+                    <td>/axis-media/media.amp</td>
+                    <td>/axis-media/media.amp?resolution=640x480</td>
+                </tr>
+            </table>
+
+            <h3>Saving Settings</h3>
+            <p>Click the <strong>Save</strong> button to apply your settings. The application will display a confirmation
+            message and recommend restarting for changes to take effect.</p>
+
+            <div class="note">
+                <strong>Note:</strong> Settings are saved to <code>user-settings.properties</code> in the application directory
+                and persist across application restarts.
+            </div>
+
+            <h3>Resetting to Defaults</h3>
+            <p>
+                If you want to remove all custom settings and return to defaults, click the red <strong>"Reset to Defaults"</strong>
+                button. This will clear all custom ports and RTSP paths.
+            </p>
+        </section>
+
+        <section id="discovery">
+            <h2>7. Running Discovery</h2>
+            <p>
+                Once you've configured the network range and added at least one credential, you're ready to run discovery.
+            </p>
+
+            <h3>Starting Discovery</h3>
+            <ol>
+                <li>Verify network selection is correct</li>
+                <li>Ensure at least one credential is added</li>
+                <li>Click the green <strong>"Start Discovery"</strong> button</li>
+            </ol>
+
+            <div class="screenshot">
+                <img src="images/discovery-progress.png" alt="Discovery in Progress">
+                <p class="screenshot-caption">Figure 9: Discovery Progress Display</p>
+            </div>
+
+            <h3>Discovery Process</h3>
+            <p>The application performs the following steps automatically:</p>
+
+            <h4>Phase 1: Network Scanning</h4>
+            <ul>
+                <li>Pings all IPs in the specified range</li>
+                <li>Identifies live hosts</li>
+                <li>Progress bar shows completion percentage</li>
+            </ul>
+
+            <h4>Phase 2: Port Detection</h4>
+            <ul>
+                <li>Scans HTTP and RTSP ports on live hosts</li>
+                <li>Uses concurrent threading for speed</li>
+                <li>Status updates in real-time</li>
+            </ul>
+
+            <h4>Phase 3: ONVIF Discovery</h4>
+            <ul>
+                <li>Sends WS-Discovery probe to multicast address</li>
+                <li>Identifies ONVIF-compliant devices</li>
+                <li>Extracts manufacturer and model information</li>
+            </ul>
+
+            <h4>Phase 4: RTSP Stream Discovery</h4>
+            <ul>
+                <li>Tests common RTSP paths for each manufacturer</li>
+                <li>Tests custom paths from Settings</li>
+                <li>Uses smart caching for faster subsequent discoveries</li>
+                <li>Falls back to generic paths if manufacturer-specific paths fail</li>
+            </ul>
+
+            <h4>Phase 5: Stream Analysis</h4>
+            <ul>
+                <li>Uses JavaCV to analyze discovered RTSP streams</li>
+                <li>Extracts codec information (H.264, H.265, MJPEG)</li>
+                <li>Determines resolution (1080p, 4K, etc.)</li>
+                <li>Calculates frame rate</li>
+            </ul>
+
+            <h3>Progress Monitoring</h3>
+            <p>The Progress section shows:</p>
+            <ul>
+                <li><strong>Progress Bar:</strong> Visual representation of completion (0-100%)</li>
+                <li><strong>Status Label:</strong> Current operation (e.g., "Scanning IPs...", "Discovering streams...")</li>
+            </ul>
+
+            <div class="tip">
+                <strong>💡 Tip:</strong> Discovery time depends on network size and number of devices. A /24 network (254 hosts)
+                typically takes 2-5 minutes. Larger networks may take 30+ minutes.
+            </div>
+
+            <h3>Discovery Completion</h3>
+            <p>When discovery completes:</p>
+            <ul>
+                <li>Progress bar reaches 100%</li>
+                <li>Status shows "Discovery complete"</li>
+                <li>Discovered devices appear in the results table</li>
+                <li>Export button becomes enabled</li>
+            </ul>
+        </section>
+
+        <section id="results">
+            <h2>8. Viewing Results</h2>
+            <p>
+                Discovered devices are displayed in a sortable table in the right panel. Each row represents one discovered camera or NVR/DVR.
+            </p>
+
+            <div class="screenshot">
+                <img src="images/results-table.png" alt="Discovery Results Table">
+                <p class="screenshot-caption">Figure 10: Discovery Results Table</p>
+            </div>
+
+            <h3>Table Columns</h3>
+            <table>
+                <tr>
+                    <th>Column</th>
+                    <th>Description</th>
+                </tr>
+                <tr>
+                    <td><strong>IP Address</strong></td>
+                    <td>Device IP address on the network</td>
+                </tr>
+                <tr>
+                    <td><strong>MAC Address</strong></td>
+                    <td>Hardware MAC address (used for manufacturer identification)</td>
+                </tr>
+                <tr>
+                    <td><strong>Manufacturer</strong></td>
+                    <td>Camera manufacturer (e.g., Hikvision, Dahua, Axis)</td>
+                </tr>
+                <tr>
+                    <td><strong>Model</strong></td>
+                    <td>Specific device model (if available via ONVIF)</td>
+                </tr>
+                <tr>
+                    <td><strong>HTTP Port(s)</strong></td>
+                    <td>Open HTTP ports (comma-separated if multiple)</td>
+                </tr>
+                <tr>
+                    <td><strong>RTSP Stream(s)</strong></td>
+                    <td>Discovered RTSP URLs with codec and resolution info</td>
+                </tr>
+                <tr>
+                    <td><strong>Credential Used</strong></td>
+                    <td>Username:password that successfully authenticated</td>
+                </tr>
+            </table>
+
+            <h3>Sorting Results</h3>
+            <p>Click any column header to sort the table by that column. Click again to reverse sort order.</p>
+
+            <h3>Understanding RTSP Stream Information</h3>
+            <p>The RTSP Stream(s) column displays detailed stream information:</p>
+            <ul>
+                <li><strong>Format:</strong> <code>rtsp://ip:port/path [codec, resolution, fps]</code></li>
+                <li><strong>Example:</strong> <code>rtsp://192.168.1.100:554/Streaming/Channels/101 [H264, 1920x1080, 25fps]</code></li>
+            </ul>
+
+            <div class="note">
+                <strong>Note:</strong> Multiple streams may be listed if both main and sub streams are discovered.
+            </div>
+        </section>
+
+        <section id="export">
+            <h2>9. Exporting to Excel</h2>
+            <p>
+                After discovery completes, you can export the results to a password-protected Excel file for documentation
+                and reporting purposes.
+            </p>
+
+            <h3>Export Process</h3>
+            <ol>
+                <li>Enter a <strong>Site ID</strong> in the text field (e.g., "Building A", "Main Office")</li>
+                <li>Click the <strong>"Export to Excel"</strong> button</li>
+                <li>Choose save location in the file dialog</li>
+                <li>Excel file is generated with automatic password protection</li>
+            </ol>
+
+            <div class="screenshot">
+                <img src="images/export-dialog.png" alt="Export Dialog">
+                <p class="screenshot-caption">Figure 11: Export Dialog with Site ID</p>
+            </div>
+
+            <h3>Excel File Contents</h3>
+            <p>The generated Excel file includes:</p>
+
+            <h4>Header Section</h4>
+            <ul>
+                <li>Site ID</li>
+                <li>Scan date and time</li>
+                <li>Total devices discovered</li>
+                <li>Network range scanned</li>
+                <li>Application version</li>
+            </ul>
+
+            <h4>Device Table</h4>
+            <p>All discovered devices with columns matching the results table, plus:</p>
+            <ul>
+                <li>Sequential device number</li>
+                <li>Additional notes (if any)</li>
+                <li>Firmware version (if available)</li>
+            </ul>
+
+            <h4>Formatting</h4>
+            <ul>
+                <li>Professional styling with alternating row colors</li>
+                <li>Frozen header row for easy scrolling</li>
+                <li>Auto-sized columns for readability</li>
+                <li>Bold headers with background color</li>
+            </ul>
+
+            <h3>Password Protection</h3>
+            <p>
+                The Excel file is automatically password-protected to prevent unauthorized access. The password is generated
+                using a secure formula:
+            </p>
+            <div class="note">
+                <strong>Password Formula:</strong> {Device Count} + {Date YYYYMMDD} + {Fixed Code}<br>
+                <strong>Example:</strong> 25 devices discovered on 2026-01-08 → Password: <code>2520260108482753</code>
+            </div>
+
+            <div class="warning">
+                <strong>⚠️ Security Note:</strong> The password is NOT displayed or logged to prevent user tampering.
+                You must calculate it using the formula above or contact your administrator.
+            </div>
+
+            <h3>File Naming</h3>
+            <p>
+                Default filename: <code>CCTV_Audit_{SiteID}.xlsx</code><br>
+                Example: <code>CCTV_Audit_Building_A.xlsx</code>
+            </p>
+        </section>
+
+        <section id="troubleshooting">
+            <h2>10. Troubleshooting</h2>
+
+            <h3>Common Issues and Solutions</h3>
+
+            <h4>Issue: No Devices Discovered</h4>
+            <p><strong>Possible Causes and Solutions:</strong></p>
+            <ul>
+                <li><strong>Wrong network range:</strong> Verify IP range/CIDR covers camera subnet</li>
+                <li><strong>Firewall blocking:</strong> Temporarily disable firewall or add exception for the application</li>
+                <li><strong>Cameras using non-standard ports:</strong> Add custom ports in Settings</li>
+                <li><strong>Incorrect credentials:</strong> Verify usernames and passwords are correct</li>
+                <li><strong>Network isolation:</strong> Ensure cameras are on reachable network segment</li>
+            </ul>
+
+            <h4>Issue: RTSP Streams Not Detected</h4>
+            <p><strong>Solutions:</strong></p>
+            <ul>
+                <li>Add manufacturer-specific RTSP paths in Settings → Custom RTSP Path Pairs</li>
+                <li>Check camera documentation for correct RTSP URL format</li>
+                <li>Verify RTSP port is open (default 554, or custom in Settings)</li>
+                <li>Ensure credentials have RTSP access permissions</li>
+            </ul>
+
+            <h4>Issue: Application Crashes or Freezes</h4>
+            <p><strong>Solutions:</strong></p>
+            <ul>
+                <li>Check <code>cctv-discovery.log</code> file in application directory for errors</li>
+                <li>Reduce network range size for memory-constrained systems</li>
+                <li>Close other applications to free up memory</li>
+                <li>Ensure Java 8 is properly installed</li>
+            </ul>
+
+            <h4>Issue: Excel Export Fails</h4>
+            <p><strong>Solutions:</strong></p>
+            <ul>
+                <li>Ensure export directory has write permissions</li>
+                <li>Close any existing Excel file with the same name</li>
+                <li>Check available disk space</li>
+                <li>Try exporting to a different location</li>
+            </ul>
+
+            <h4>Issue: Settings Not Persisting</h4>
+            <p><strong>Solutions:</strong></p>
+            <ul>
+                <li>Check <code>user-settings.properties</code> file exists in application directory</li>
+                <li>Verify application directory has write permissions</li>
+                <li>Run application as administrator (Windows)</li>
+            </ul>
+
+            <h3>Log Files</h3>
+            <p>
+                Log files are automatically created in the same directory as the application:
+            </p>
+            <ul>
+                <li><code>cctv-discovery.log</code> - Current session log</li>
+                <li><code>cctv-discovery.YYYY-MM-DD.log</code> - Daily rolled logs (max 30 days)</li>
+            </ul>
+
+            <p>
+                Log files contain detailed information about discovery operations, errors, and debugging information.
+                Include relevant log excerpts when reporting issues.
+            </p>
+        </section>
+
+        <section id="faq">
+            <h2>11. Frequently Asked Questions</h2>
+
+            <h4>Q: Is this tool legal to use?</h4>
+            <p>
+                <strong>A:</strong> Yes, but only on networks you own or have explicit authorization to scan. Unauthorized
+                network scanning may violate laws such as the Computer Fraud and Abuse Act (CFAA) in the US or similar
+                laws in other jurisdictions. Always obtain proper authorization before scanning.
+            </p>
+
+            <h4>Q: How long does a typical scan take?</h4>
+            <p>
+                <strong>A:</strong> Scan time depends on network size:
+            </p>
+            <ul>
+                <li>Small network (/27 or 30 IPs): 30-60 seconds</li>
+                <li>Medium network (/24 or 254 IPs): 2-5 minutes</li>
+                <li>Large network (/16 or 65,534 IPs): 30-60 minutes</li>
+            </ul>
+
+            <h4>Q: Can I scan multiple networks simultaneously?</h4>
+            <p>
+                <strong>A:</strong> Not in a single instance. You can run multiple instances of the application to scan
+                different networks concurrently.
+            </p>
+
+            <h4>Q: Does the tool work with all camera brands?</h4>
+            <p>
+                <strong>A:</strong> The tool works with most IP cameras that support standard protocols (ONVIF, RTSP, HTTP).
+                For cameras with proprietary protocols or custom RTSP paths, you may need to configure custom settings.
+            </p>
+
+            <h4>Q: How are MAC addresses resolved?</h4>
+            <p>
+                <strong>A:</strong> MAC addresses are resolved using ARP (Address Resolution Protocol) for devices on the
+                same subnet. For devices on different subnets, MAC address may not be available.
+            </p>
+
+            <h4>Q: Can I save discovered device list for later use?</h4>
+            <p>
+                <strong>A:</strong> Yes, export to Excel after each scan. The Excel file serves as a permanent record.
+                The application does not maintain a database of previous scans.
+            </p>
+
+            <h4>Q: What network permissions does the tool require?</h4>
+            <p>
+                <strong>A:</strong> The tool requires:
+            </p>
+            <ul>
+                <li>ICMP (ping) for host discovery</li>
+                <li>TCP connection to HTTP and RTSP ports</li>
+                <li>UDP multicast for ONVIF discovery (239.255.255.250:3702)</li>
+            </ul>
+
+            <h4>Q: Is my data sent anywhere or stored remotely?</h4>
+            <p>
+                <strong>A:</strong> No. The tool operates entirely offline. All data remains on your local machine.
+                No information is transmitted to external servers.
+            </p>
+
+            <h4>Q: Can I customize the Excel export format?</h4>
+            <p>
+                <strong>A:</strong> Currently, the Excel format is fixed. However, you can modify the generated Excel
+                file after export to add custom fields or formatting.
+            </p>
+
+            <h4>Q: What happens if discovery is interrupted?</h4>
+            <p>
+                <strong>A:</strong> Partial results are not saved. You will need to restart the discovery process.
+                To minimize interruptions, ensure stable network connectivity and sufficient system resources before starting.
+            </p>
+
+            <h4>Q: How can I get support?</h4>
+            <p>
+                <strong>A:</strong> For technical support, contact Consultancy Services Ltd. Include:
+            </p>
+            <ul>
+                <li>Application version (shown in About section)</li>
+                <li>Operating system and version</li>
+                <li>Detailed description of the issue</li>
+                <li>Relevant log file excerpts</li>
+                <li>Steps to reproduce the problem</li>
+            </ul>
+        </section>
+
+        <footer>
+            <p>&copy; 2026 Consultancy Services Ltd. All rights reserved.</p>
+            <p>CCTV Discovery & Audit Tool - Version 1.0.0</p>
+            <p>For support and inquiries: <a href="mailto:support@consultancyservices.com">support@consultancyservices.com</a></p>
+        </footer>
     </div>
-
-    <h2>1. Overview</h2>
-    <p>
-        The CCTV Discovery Tool is a comprehensive solution for discovering, auditing, and documenting
-        IP-based CCTV cameras and NVR/DVR systems on your network. It supports both ONVIF-compliant
-        devices and proprietary RTSP implementations from major manufacturers.
-    </p>
-
-    <h2>2. Quick Start Guide</h2>
-
-    <div class="step">
-        <h3>Step 1: Select Network Range</h3>
-        <p>Choose one of three options:</p>
-        <ul>
-            <li><strong>Network Interface:</strong> Automatically scan the selected network adapter's subnet (default /24)</li>
-            <li><strong>Manual IP Range:</strong> Specify start and end IP addresses (e.g., 192.168.1.1 to 192.168.1.254)</li>
-            <li><strong>CIDR Notation:</strong> Enter a CIDR block (e.g., 192.168.1.0/24)</li>
-        </ul>
-        <p>The tool will display the number of possible IPs to scan.</p>
-    </div>
-
-    <div class="step">
-        <h3>Step 2: Add Credentials</h3>
-        <p>Add up to 4 username/password combinations that will be tested against discovered devices:</p>
-        <ul>
-            <li>Default username is "admin" (most common)</li>
-            <li>Enter password in plaintext (required for RTSP authentication)</li>
-            <li>Click "Add Credential" to add to the list</li>
-            <li>Right-click credentials to delete them</li>
-        </ul>
-        <div class="info">
-            <strong>Tip:</strong> Common default passwords include: admin, 12345, password, [blank]
-        </div>
-    </div>
-
-    <div class="step">
-        <h3>Step 3: Start Discovery</h3>
-        <p>Click "Start Discovery" to begin the process. The tool will:</p>
-        <ol>
-            <li>Run WS-Discovery to find ONVIF-compliant devices</li>
-            <li>Optionally perform a deep port scan (you'll be asked)</li>
-            <li>Attempt authentication with each credential</li>
-            <li>Discover RTSP stream URLs</li>
-            <li>Analyze video streams for codec, resolution, and compliance</li>
-        </ol>
-        <p>Progress will be displayed in the Progress section.</p>
-    </div>
-
-    <div class="step">
-        <h3>Step 4: Review Results</h3>
-        <p>The results table shows:</p>
-        <ul>
-            <li><strong>IP Address:</strong> Device network address</li>
-            <li><strong>Status:</strong> Current processing status or completion state</li>
-            <li><strong>Device Name:</strong> Camera/NVR name from ONVIF</li>
-            <li><strong>Manufacturer:</strong> Detected from MAC address OUI</li>
-            <li><strong>Streams:</strong> Number of discovered RTSP streams</li>
-            <li><strong>Error:</strong> Any error messages</li>
-        </ul>
-    </div>
-
-    <div class="step">
-        <h3>Step 5: Export to Excel</h3>
-        <p>When discovery is complete:</p>
-        <ol>
-            <li>Click "Export to Excel"</li>
-            <li>Enter a Site ID (required)</li>
-            <li>Choose save location (defaults to Documents folder)</li>
-            <li>File is saved and <strong>automatically password-protected</strong></li>
-        </ol>
-        <p>The Excel report includes:</p>
-        <ul>
-            <li>Complete device information</li>
-            <li>All discovered streams with technical details</li>
-            <li>Compliance highlighting (non-compliant streams in red)</li>
-            <li>Plaintext credentials (handle securely!)</li>
-            <li><strong>Password-protected worksheet to prevent tampering</strong></li>
-        </ul>
-        <div class="warning">
-            <strong>🔒 Password Protection:</strong> The application automatically password-protects the Excel file
-            to maintain data integrity. The password is <strong>NOT shown to you</strong> as it is intended for
-            your supervisor/authority to access and verify the report.
-            <br><br>
-            <strong>Important:</strong> Do not attempt to modify the Excel file. Submit it as-is to your supervisor.
-            They have the means to access and verify the data.
-        </div>
-    </div>
-
-    <h2>3. Features</h2>
-
-    <h3>WS-Discovery (ONVIF)</h3>
-    <p>
-        Broadcasts a multicast probe to discover ONVIF-compliant cameras automatically.
-        This is the fastest discovery method and provides the most metadata.
-    </p>
-
-    <h3>Port Scanning</h3>
-    <p>Scans the following ports:</p>
-    <ul>
-        <li><code>80, 8080, 443, 8443</code> - HTTP/HTTPS (ONVIF)</li>
-        <li><code>554</code> - RTSP (streaming)</li>
-        <li><code>8000, 37777, 34567</code> - Manufacturer-specific (NVR detection)</li>
-    </ul>
-
-    <h3>Manufacturer Detection</h3>
-    <p>
-        Automatically identifies manufacturer from MAC address using IEEE OUI database.
-        Optimized for Indian market with brands like CP Plus, Hikvision, Dahua, etc.
-    </p>
-
-    <h3>Smart RTSP Path Guessing</h3>
-    <p>Uses a three-tier approach:</p>
-    <ol>
-        <li><strong>Smart Cache:</strong> Tries paths that worked for similar devices</li>
-        <li><strong>Manufacturer Defaults:</strong> Known paths for Hikvision, Dahua, Axis, etc.</li>
-        <li><strong>Generic Paths:</strong> Common RTSP URL patterns</li>
-    </ol>
-
-    <h3>NVR/DVR Channel Iteration</h3>
-    <p>
-        When an NVR is detected (via ONVIF GetVideoSources > 1 or special ports open),
-        the tool automatically iterates through channels 1-64 to discover all connected cameras.
-    </p>
-
-    <h3>Stream Analysis</h3>
-    <p>
-        Uses JavaCV/FFmpeg to analyze each stream for 10 seconds and extract:
-    </p>
-    <ul>
-        <li>Resolution (e.g., 1920x1080)</li>
-        <li>Frame rate (FPS)</li>
-        <li>Video codec (H.264, H.265, etc.)</li>
-        <li>Bitrate (kbps)</li>
-    </ul>
-
-    <h3>Compliance Checking</h3>
-    <p>
-        Sub-streams are checked against compliance requirements:
-    </p>
-    <ul>
-        <li>Resolution: 360p - 480p</li>
-        <li>Codec: H.264</li>
-        <li>Bitrate: &lt; 256 kbps</li>
-    </ul>
-    <p>Non-compliant streams are highlighted in red in the Excel export.</p>
-
-    <h2>4. Troubleshooting</h2>
-
-    <h3>No devices found</h3>
-    <ul>
-        <li>Verify you're on the correct network</li>
-        <li>Check firewall settings (UDP port 3702 for ONVIF)</li>
-        <li>Try enabling "deep port scan"</li>
-        <li>Ensure devices are powered on and connected</li>
-    </ul>
-
-    <h3>Authentication failures</h3>
-    <ul>
-        <li>Verify credentials are correct</li>
-        <li>Try common defaults: admin/admin, admin/12345</li>
-        <li>Check if device has authentication enabled</li>
-        <li>Some devices require ONVIF user creation</li>
-    </ul>
-
-    <h3>Stream analysis fails</h3>
-    <ul>
-        <li>Ensure RTSP port 554 is accessible</li>
-        <li>Check network bandwidth</li>
-        <li>Verify credentials allow stream access</li>
-        <li>Some cameras require separate streaming credentials</li>
-    </ul>
-
-    <h2>5. Technical Specifications</h2>
-    <ul>
-        <li><strong>Platform:</strong> Java 8+</li>
-        <li><strong>UI Framework:</strong> JavaFX 11</li>
-        <li><strong>Video Processing:</strong> JavaCV 1.5.9 (FFmpeg/OpenCV)</li>
-        <li><strong>ONVIF:</strong> WS-Discovery, SOAP 1.2, WS-Security</li>
-        <li><strong>RTSP:</strong> TCP transport, Digest authentication</li>
-        <li><strong>Export Format:</strong> XLSX (Excel 2007+)</li>
-    </ul>
-
-    <h2>6. Security Considerations</h2>
-    <div class="warning">
-        <ul>
-            <li><strong>Excel Protection:</strong> All exported files are password-protected to prevent unauthorized modifications</li>
-            <li>Excel reports contain plaintext passwords - store securely and limit access</li>
-            <li><strong>Password Management:</strong> Use a strong password (minimum 6 characters recommended) for Excel protection</li>
-            <li>Network scanning may trigger IDS/IPS alerts</li>
-            <li>Only use on networks where you have authorization</li>
-            <li>Credentials are stored in memory during operation</li>
-            <li>Logs may contain sensitive information</li>
-        </ul>
-    </div>
-
-    <h3>Excel Protection Details</h3>
-    <p>The worksheet protection prevents:</p>
-    <ul>
-        <li>Modifying cell values</li>
-        <li>Deleting or inserting rows/columns</li>
-        <li>Changing cell formatting</li>
-        <li>Tampering with compliance indicators</li>
-    </ul>
-    <p>Users <strong>can still</strong>:</p>
-    <ul>
-        <li>View all data (including passwords)</li>
-        <li>Select and copy cells</li>
-        <li>Print the report</li>
-        <li>Save a copy of the file</li>
-    </ul>
-    <div class="info">
-        <strong>For Field Operators:</strong> You do not need to know the password. Submit the protected
-        Excel file to your supervisor/authority as-is. They will handle the verification.
-        <br><br>
-        <strong>For Supervisors:</strong> See AUTHORITY_MANUAL.md for password derivation instructions.
-    </div>
-
-    <h2>7. Support</h2>
-    <p>
-        For technical support or questions, contact your system administrator or
-        refer to the project documentation.
-    </p>
-
-    <hr>
-    <p style="text-align: center; color: #757575; font-size: 0.9em;">
-        © 2026 Consultancy Services Ltd. All rights reserved.
-    </p>
 </body>
 </html>
