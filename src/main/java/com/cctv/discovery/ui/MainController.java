@@ -232,10 +232,12 @@ public class MainController {
         tfStartIP = new TextField();
         tfStartIP.setPromptText("Start IP (e.g., 192.168.1.1)");
         tfStartIP.setDisable(true);
+        addIPValidation(tfStartIP);
 
         tfEndIP = new TextField();
         tfEndIP.setPromptText("End IP (e.g., 192.168.1.254)");
         tfEndIP.setDisable(true);
+        addIPValidation(tfEndIP);
 
         HBox ipRangeBox = new HBox(8, tfStartIP, tfEndIP);
         HBox.setHgrow(tfStartIP, Priority.ALWAYS);
@@ -425,6 +427,25 @@ public class MainController {
         tfCIDR.setDisable(!rbCIDR.isSelected());
         updateIpCount();
         updateStartButtonState();
+    }
+
+    /**
+     * Adds real-time IP validation to a text field.
+     * Shows red border and background when IP is invalid.
+     */
+    private void addIPValidation(TextField textField) {
+        textField.textProperty().addListener((observable, oldValue, newValue) -> {
+            if (newValue == null || newValue.trim().isEmpty()) {
+                // Empty field - remove styling
+                textField.setStyle("");
+            } else if (NetworkUtils.isValidIP(newValue.trim())) {
+                // Valid IP - remove error styling
+                textField.setStyle("");
+            } else {
+                // Invalid IP - show red styling
+                textField.setStyle("-fx-border-color: #dc3545; -fx-border-width: 2px; -fx-background-color: #fff5f5;");
+            }
+        });
     }
 
     private void updateIpCount() {
