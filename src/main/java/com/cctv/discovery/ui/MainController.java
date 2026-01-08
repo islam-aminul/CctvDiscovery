@@ -474,6 +474,29 @@ public class MainController {
 
     private ContextMenu createCredentialContextMenu() {
         ContextMenu menu = new ContextMenu();
+
+        MenuItem editItem = new MenuItem("Edit");
+        editItem.setOnAction(e -> {
+            Credential selected = lvCredentials.getSelectionModel().getSelectedItem();
+            if (selected != null) {
+                // Populate fields with selected credential
+                tfUsername.setText(selected.getUsername());
+                tfPassword.setText(selected.getPassword());
+
+                // Remove from list temporarily for editing
+                credentials.remove(selected);
+
+                // Enable input fields
+                btnAddCredential.setDisable(false);
+                tfUsername.setDisable(false);
+                tfPassword.setDisable(false);
+
+                updateStartButtonState();
+
+                logger.info("Editing credential: {}", selected.getUsername());
+            }
+        });
+
         MenuItem deleteItem = new MenuItem("Delete");
         deleteItem.setOnAction(e -> {
             Credential selected = lvCredentials.getSelectionModel().getSelectedItem();
@@ -485,9 +508,11 @@ public class MainController {
                     tfPassword.setDisable(false);
                 }
                 updateStartButtonState();
+                logger.info("Deleted credential: {}", selected.getUsername());
             }
         });
-        menu.getItems().add(deleteItem);
+
+        menu.getItems().addAll(editItem, deleteItem);
         return menu;
     }
 
