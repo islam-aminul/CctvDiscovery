@@ -25,6 +25,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.net.InetAddress;
 import java.net.InterfaceAddress;
 import java.net.NetworkInterface;
@@ -150,7 +153,7 @@ public class MainController {
         btnSettings.setOnAction(e -> showSettings());
         btnSettings.setStyle("-fx-background-color: #0078d4; -fx-text-fill: white; -fx-font-weight: bold;");
 
-        Button btnHelp = new Button("User Manual");
+        Button btnHelp = new Button("Help");
         btnHelp.setOnAction(e -> showHelpManual());
         btnHelp.setStyle("-fx-background-color: #17a2b8; -fx-text-fill: white; -fx-font-weight: bold;");
 
@@ -797,17 +800,128 @@ public class MainController {
     }
 
     private void showHelpManual() {
-        Alert alert = new Alert(Alert.AlertType.INFORMATION);
-        alert.setTitle("User Manual");
-        alert.setHeaderText("CCTV Discovery Tool - Quick Guide");
-        alert.setContentText(
-                "1. Select your network range\n" +
-                        "2. Add at least one credential (max 4)\n" +
-                        "3. Click 'Start Discovery'\n" +
-                        "4. Wait for the scan to complete\n" +
-                        "5. Export results to Excel\n\n" +
-                        "For detailed documentation, refer to the manual.");
-        alert.showAndWait();
+        Dialog<Void> dialog = new Dialog<>();
+        dialog.setTitle("Help");
+        dialog.setHeaderText("CCTV Discovery Tool - Quick Guide");
+
+        // Content
+        VBox content = new VBox(15);
+        content.setPadding(new Insets(20));
+        content.setPrefWidth(500);
+
+        Label quickGuide = new Label(
+                "Quick Start Guide:\n\n" +
+                "1. Select Network Range:\n" +
+                "   • Choose network interface, manual IP range, or CIDR notation\n\n" +
+                "2. Add Credentials (Required - Max 4):\n" +
+                "   • Enter username and password\n" +
+                "   • Click 'Add Credential'\n" +
+                "   • Right-click to Edit or Delete credentials\n\n" +
+                "3. Configure Settings (Optional):\n" +
+                "   • Click 'Settings' button to configure custom ports and RTSP paths\n\n" +
+                "4. Start Discovery:\n" +
+                "   • Click 'Start Discovery' button\n" +
+                "   • Monitor progress in the progress section\n\n" +
+                "5. Export Results:\n" +
+                "   • After discovery completes, enter Site ID\n" +
+                "   • Click 'Export to Excel'\n" +
+                "   • Password-protected Excel file will be generated"
+        );
+        quickGuide.setWrapText(true);
+        quickGuide.setStyle("-fx-font-size: 12px;");
+
+        // User Manual button
+        Button btnUserManual = new Button("Open Full User Manual");
+        btnUserManual.setStyle("-fx-background-color: #0078d4; -fx-text-fill: white; -fx-font-weight: bold;");
+        btnUserManual.setPrefWidth(200);
+        btnUserManual.setOnAction(e -> openUserManual());
+
+        HBox buttonBox = new HBox(btnUserManual);
+        buttonBox.setAlignment(Pos.CENTER);
+        buttonBox.setPadding(new Insets(10, 0, 0, 0));
+
+        content.getChildren().addAll(quickGuide, new Separator(), buttonBox);
+        dialog.getDialogPane().setContent(content);
+
+        // Close button
+        ButtonType closeButton = new ButtonType("Close", ButtonBar.ButtonData.OK_DONE);
+        dialog.getDialogPane().getButtonTypes().add(closeButton);
+
+        dialog.showAndWait();
+    }
+
+    private void openUserManual() {
+        try {
+            // Extract manual.html and images to temp directory
+            File tempDir = new File(System.getProperty("java.io.tmpdir"), "cctv-discovery-help");
+            if (!tempDir.exists()) {
+                tempDir.mkdirs();
+            }
+
+            // Extract manual.html
+            File manualFile = extractResource("/help/manual.html", tempDir, "manual.html");
+
+            // Extract images folder
+            File imagesDir = new File(tempDir, "images");
+            if (!imagesDir.exists()) {
+                imagesDir.mkdirs();
+            }
+
+            // Extract all images
+            String[] imageFiles = {
+                "main-window.png",
+                "header-buttons.png",
+                "network-selection.png",
+                "add-credentials.png",
+                "edit-credentials.png",
+                "settings-dialog.png",
+                "settings-ports.png",
+                "settings-rtsp-paths.png",
+                "discovery-progress.png",
+                "results-table.png",
+                "export-dialog.png"
+            };
+
+            for (String imageFile : imageFiles) {
+                extractResource("/help/images/" + imageFile, imagesDir, imageFile);
+            }
+
+            // Open in default browser
+            if (java.awt.Desktop.isDesktopSupported()) {
+                java.awt.Desktop.getDesktop().browse(manualFile.toURI());
+                logger.info("User manual opened in browser: {}", manualFile.getAbsolutePath());
+            } else {
+                showAlert("Cannot Open Manual",
+                    "Unable to open browser. Please manually open:\n" + manualFile.getAbsolutePath(),
+                    Alert.AlertType.WARNING);
+            }
+
+        } catch (Exception e) {
+            logger.error("Error opening user manual", e);
+            showAlert("Error", "Failed to open user manual: " + e.getMessage(), Alert.AlertType.ERROR);
+        }
+    }
+
+    private File extractResource(String resourcePath, File targetDir, String fileName) throws IOException {
+        File targetFile = new File(targetDir, fileName);
+
+        try (InputStream is = getClass().getResourceAsStream(resourcePath)) {
+            if (is == null) {
+                logger.warn("Resource not found: {}", resourcePath);
+                return targetFile; // Return file even if resource doesn't exist yet
+            }
+
+            try (FileOutputStream fos = new FileOutputStream(targetFile)) {
+                byte[] buffer = new byte[8192];
+                int bytesRead;
+                while ((bytesRead = is.read(buffer)) != -1) {
+                    fos.write(buffer, 0, bytesRead);
+                }
+            }
+            logger.debug("Extracted resource: {} to {}", resourcePath, targetFile.getAbsolutePath());
+        }
+
+        return targetFile;
     }
 
     private void disableInputs() {
