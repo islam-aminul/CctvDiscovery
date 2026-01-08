@@ -198,11 +198,25 @@ public class OnvifService {
      * Get device information using ONVIF GetDeviceInformation.
      */
     public boolean getDeviceInformation(Device device, String username, String password) {
+        if (device.getOnvifServiceUrl() == null) {
+            logger.warn("No ONVIF service URL set for device {}", device.getIpAddress());
+            return false;
+        }
+        return getDeviceInformation(device, device.getOnvifServiceUrl(), username, password);
+    }
+
+    /**
+     * Get device information using ONVIF GetDeviceInformation with explicit service URL.
+     */
+    public boolean getDeviceInformation(Device device, String serviceUrl, String username, String password) {
+        logger.info("ONVIF GetDeviceInformation request to {} with user {}", serviceUrl, username);
+
         try {
             String soapRequest = buildGetDeviceInformationRequest(username, password);
-            String response = sendOnvifRequest(device.getOnvifServiceUrl(), soapRequest, username, password);
+            String response = sendOnvifRequest(serviceUrl, soapRequest, username, password);
 
             if (response == null) {
+                logger.warn("ONVIF GetDeviceInformation FAILED for {} - no response", serviceUrl);
                 return false;
             }
 
@@ -211,12 +225,38 @@ public class OnvifService {
             device.setPassword(password);
             device.setOnvifAuthMethod(Device.OnvifAuthMethod.WS_SECURITY);
 
+            logger.info("ONVIF GetDeviceInformation SUCCESS - Model: {}, Manufacturer: {}",
+                device.getModel(), device.getManufacturer());
+
             return true;
 
         } catch (Exception e) {
-            logger.error("Error getting device information for {}", device.getIpAddress(), e);
+            logger.error("ONVIF GetDeviceInformation FAILED for {}: {}", serviceUrl, e.getMessage());
             return false;
         }
+    }
+
+    /**
+     * Try ONVIF device discovery using constructed URLs from detected ports.
+     * Used when WS-Discovery fails (IGMP blocked) but device has HTTP/HTTPS ports open.
+     */
+    public boolean discoverDeviceByPort(Device device, int port, String username, String password) {
+        String protocol = (port == 443 || port == 8443) ? "https" : "http";
+        String serviceUrl = protocol + "://" + device.getIpAddress() + ":" + port + "/onvif/device_service";
+
+        logger.info("Attempting ONVIF on constructed URL: {}", serviceUrl);
+
+        // Try to get device information
+        boolean success = getDeviceInformation(device, serviceUrl, username, password);
+
+        if (success) {
+            device.setOnvifServiceUrl(serviceUrl);
+            logger.info("ONVIF successful on {}, service URL set", serviceUrl);
+            return true;
+        }
+
+        logger.debug("ONVIF failed on {}", serviceUrl);
+        return false;
     }
 
     /**
@@ -272,6 +312,8 @@ public class OnvifService {
      */
     public List<String> getVideoSources(Device device) {
         List<String> sources = new ArrayList<>();
+        logger.info("Retrieving video sources for device: {}", device.getIpAddress());
+
         try {
             String soapRequest = buildGetVideoSourcesRequest(device.getUsername(), device.getPassword());
             String response = sendOnvifRequest(device.getOnvifServiceUrl(), soapRequest,
@@ -279,10 +321,13 @@ public class OnvifService {
 
             if (response != null) {
                 sources = parseVideoSources(response);
+                logger.info("Retrieved {} video sources from ONVIF for {}", sources.size(), device.getIpAddress());
+            } else {
+                logger.warn("No response from GetVideoSources for {}", device.getIpAddress());
             }
 
         } catch (Exception e) {
-            logger.error("Error getting video sources for {}", device.getIpAddress(), e);
+            logger.error("Error getting video sources for {}: {}", device.getIpAddress(), e.getMessage());
         }
         return sources;
     }

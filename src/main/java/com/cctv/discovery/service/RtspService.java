@@ -210,11 +210,13 @@ public class RtspService {
         // Add detected RTSP ports
         if (device.getOpenRtspPorts() != null && !device.getOpenRtspPorts().isEmpty()) {
             ports.addAll(device.getOpenRtspPorts());
+            logger.info("Using detected RTSP ports for {}: {}", device.getIpAddress(), ports);
         }
 
         // If no RTSP ports detected, default to standard port 554
         if (ports.isEmpty()) {
             ports.add(554);
+            logger.info("No RTSP ports detected for {}, using default port 554", device.getIpAddress());
         }
 
         return ports;
