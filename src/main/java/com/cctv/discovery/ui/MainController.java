@@ -154,7 +154,11 @@ public class MainController {
         btnHelp.setOnAction(e -> showHelpManual());
         btnHelp.setStyle("-fx-background-color: #17a2b8; -fx-text-fill: white; -fx-font-weight: bold;");
 
-        // Right side button container - right aligned
+        // Spacer to push buttons to the right
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+
+        // Right side button container
         HBox buttonBox = new HBox(10, btnSettings, btnHelp);
         buttonBox.setAlignment(Pos.CENTER_RIGHT);
 
@@ -163,8 +167,7 @@ public class MainController {
         header.setAlignment(Pos.CENTER_LEFT);
         header.setPadding(new Insets(10, 15, 10, 15));
         header.setStyle("-fx-background-color: #f0f0f0; -fx-border-color: #cccccc; -fx-border-width: 0 0 1 0;");
-        HBox.setHgrow(title, Priority.ALWAYS);
-        header.getChildren().addAll(title, buttonBox);
+        header.getChildren().addAll(title, spacer, buttonBox);
 
         return header;
     }
