@@ -232,10 +232,12 @@ public class MainController {
         tfStartIP = new TextField();
         tfStartIP.setPromptText("Start IP (e.g., 192.168.1.1)");
         tfStartIP.setDisable(true);
+        addIPValidation(tfStartIP);
 
         tfEndIP = new TextField();
         tfEndIP.setPromptText("End IP (e.g., 192.168.1.254)");
         tfEndIP.setDisable(true);
+        addIPValidation(tfEndIP);
 
         HBox ipRangeBox = new HBox(8, tfStartIP, tfEndIP);
         HBox.setHgrow(tfStartIP, Priority.ALWAYS);
@@ -392,6 +394,26 @@ public class MainController {
 
         tvResults.getColumns().addAll(colIp, colStatus, colName, colManufacturer, colStreams, colError);
 
+        // Add context menu for device retry
+        ContextMenu deviceContextMenu = new ContextMenu();
+
+        MenuItem retryMenuItem = new MenuItem("Retry with Different Credential");
+        retryMenuItem.setOnAction(e -> {
+            Device selected = tvResults.getSelectionModel().getSelectedItem();
+            if (selected != null) {
+                showRetryCredentialDialog(selected);
+            }
+        });
+
+        deviceContextMenu.getItems().add(retryMenuItem);
+        tvResults.setContextMenu(deviceContextMenu);
+
+        // Only enable if device is selected
+        tvResults.setOnContextMenuRequested(event -> {
+            Device selected = tvResults.getSelectionModel().getSelectedItem();
+            retryMenuItem.setDisable(selected == null);
+        });
+
         VBox.setVgrow(tvResults, Priority.ALWAYS);
 
         vbox.getChildren().addAll(lblTitle, tvResults);
@@ -425,6 +447,25 @@ public class MainController {
         tfCIDR.setDisable(!rbCIDR.isSelected());
         updateIpCount();
         updateStartButtonState();
+    }
+
+    /**
+     * Adds real-time IP validation to a text field.
+     * Shows red border and background when IP is invalid.
+     */
+    private void addIPValidation(TextField textField) {
+        textField.textProperty().addListener((observable, oldValue, newValue) -> {
+            if (newValue == null || newValue.trim().isEmpty()) {
+                // Empty field - remove styling
+                textField.setStyle("");
+            } else if (NetworkUtils.isValidIP(newValue.trim())) {
+                // Valid IP - remove error styling
+                textField.setStyle("");
+            } else {
+                // Invalid IP - show red styling
+                textField.setStyle("-fx-border-color: #dc3545; -fx-border-width: 2px; -fx-background-color: #fff5f5;");
+            }
+        });
     }
 
     private void updateIpCount() {
@@ -565,18 +606,27 @@ public class MainController {
         boolean doPortScan = false;
         if (wsDevices.isEmpty()) {
             doPortScan = true;
-            Platform.runLater(() -> lblProgress.setText("No ONVIF devices found. Running port scan..."));
+            logger.info("WS-Discovery found 0 devices (IGMP may be blocked), automatically starting port scan");
+            Platform.runLater(() -> lblProgress.setText("No ONVIF devices found via multicast. Running port scan..."));
         } else {
             // Ask user
             final boolean[] result = {false};
             Platform.runLater(() -> {
                 Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
                 alert.setTitle("WS-Discovery Complete");
-                alert.setHeaderText("Found " + wsDevices.size() + " ONVIF device(s).");
-                alert.setContentText("Do you want to perform a deep port scan?");
+                alert.setHeaderText("Found " + wsDevices.size() + " device(s) via ONVIF WS-Discovery");
+                alert.setContentText(
+                        "Expected more devices?\n\n" +
+                        "Port scanning can find:\n" +
+                        "• Devices without ONVIF support\n" +
+                        "• Devices where IGMP/multicast is blocked\n" +
+                        "• Devices on non-standard ports\n\n" +
+                        "Do you want to perform port scan?"
+                );
                 Optional<ButtonType> response = alert.showAndWait();
                 synchronized (result) {
                     result[0] = response.isPresent() && response.get() == ButtonType.OK;
+                    logger.info("User chose {} for port scan", result[0] ? "YES" : "NO");
                     result.notifyAll();
                 }
             });
@@ -653,52 +703,209 @@ public class MainController {
     }
 
     private void authenticateAndDiscoverStreams(Device device) {
+        logger.info("=== Starting authentication for device: {} ===", device.getIpAddress());
         device.setStatus(Device.DeviceStatus.AUTHENTICATING);
         Platform.runLater(() -> tvResults.refresh());
 
-        boolean authenticated = false;
+        // PRIORITY 1: Try ONVIF Discovery
+        boolean onvifSuccess = attemptOnvifAuthentication(device);
 
-        // Try ONVIF first
-        if (device.getOnvifServiceUrl() != null) {
-            for (Credential cred : credentials) {
-                if (onvifService.getDeviceInformation(device, cred.getUsername(), cred.getPassword())) {
-                    authenticated = true;
-                    List<String> videoSources = onvifService.getVideoSources(device);
-                    if (videoSources.size() > 1) {
-                        device.setNvrDvr(true);
-                    }
-                    break;
-                }
-            }
+        // PRIORITY 2: Try RTSP URL Guessing (if ONVIF failed or no streams found)
+        if (!onvifSuccess || device.getRtspStreams().isEmpty()) {
+            logger.info("Falling back to RTSP URL guessing for {}", device.getIpAddress());
+            attemptRtspAuthentication(device);
         }
 
-        // Try RTSP
-        if (!authenticated || device.getRtspStreams().isEmpty()) {
-            for (Credential cred : credentials) {
-                List<RTSPStream> streams = rtspService.discoverStreams(device, cred.getUsername(), cred.getPassword());
-                if (!streams.isEmpty()) {
-                    device.setUsername(cred.getUsername());
-                    device.setPassword(cred.getPassword());
-                    device.getRtspStreams().addAll(streams);
-                    authenticated = true;
-                    break;
-                }
-            }
-        }
-
-        // Check for NVR and iterate channels
-        if (device.isNvrDvr() && authenticated) {
+        // PRIORITY 3: NVR/DVR Channel Iteration (if applicable and authenticated)
+        if (device.isNvrDvr() && device.getUsername() != null) {
+            logger.info("Device {} detected as NVR/DVR, iterating channels", device.getIpAddress());
             List<RTSPStream> nvrStreams = rtspService.iterateNvrChannels(
                     device, device.getUsername(), device.getPassword(), 64);
             device.getRtspStreams().addAll(nvrStreams);
+            logger.info("Found {} additional NVR/DVR streams", nvrStreams.size());
         }
 
-        if (authenticated) {
+        // Set final status
+        if (device.getUsername() != null && !device.getRtspStreams().isEmpty()) {
             device.setStatus(Device.DeviceStatus.COMPLETED);
+            logger.info("=== Device {} authentication COMPLETED - {} streams found ===",
+                    device.getIpAddress(), device.getRtspStreams().size());
         } else {
             device.setStatus(Device.DeviceStatus.AUTH_FAILED);
             device.setAuthFailed(true);
             device.setErrorMessage("Authentication failed with all credentials");
+            logger.warn("=== Device {} authentication FAILED ===", device.getIpAddress());
+        }
+    }
+
+    /**
+     * Attempt ONVIF authentication with all credentials.
+     * Tries service URL from WS-Discovery first, then constructs URLs from detected ports.
+     */
+    private boolean attemptOnvifAuthentication(Device device) {
+        logger.info("--- Attempting ONVIF authentication for {} ---", device.getIpAddress());
+
+        // Case 1: Service URL from WS-Discovery
+        if (device.getOnvifServiceUrl() != null) {
+            logger.info("Using ONVIF service URL from WS-Discovery: {}", device.getOnvifServiceUrl());
+
+            for (Credential cred : credentials) {
+                logger.debug("Trying ONVIF with credential: {}", cred.getUsername());
+
+                if (onvifService.getDeviceInformation(device, cred.getUsername(), cred.getPassword())) {
+                    device.setUsername(cred.getUsername());
+                    device.setPassword(cred.getPassword());
+                    logger.info("ONVIF authentication successful with user: {}", cred.getUsername());
+
+                    List<String> videoSources = onvifService.getVideoSources(device);
+                    if (videoSources.size() > 1) {
+                        device.setNvrDvr(true);
+                        logger.info("Multiple video sources detected - marking as NVR/DVR");
+                    }
+                    return true;
+                }
+            }
+            logger.warn("All credentials failed for WS-Discovery ONVIF URL");
+        }
+
+        // Case 2: Construct URLs from detected ONVIF ports
+        if (!device.getOpenOnvifPorts().isEmpty()) {
+            logger.info("No service URL or WS-Discovery auth failed. Constructing ONVIF URLs from {} detected ports",
+                    device.getOpenOnvifPorts().size());
+
+            for (int port : device.getOpenOnvifPorts()) {
+                logger.info("Trying ONVIF on port: {}", port);
+
+                for (Credential cred : credentials) {
+                    logger.debug("Trying constructed ONVIF URL with credential: {}", cred.getUsername());
+
+                    if (onvifService.discoverDeviceByPort(device, port, cred.getUsername(), cred.getPassword())) {
+                        device.setUsername(cred.getUsername());
+                        device.setPassword(cred.getPassword());
+                        logger.info("ONVIF authentication successful via constructed URL on port {} with user: {}",
+                                port, cred.getUsername());
+
+                        List<String> videoSources = onvifService.getVideoSources(device);
+                        if (videoSources.size() > 1) {
+                            device.setNvrDvr(true);
+                            logger.info("Multiple video sources detected - marking as NVR/DVR");
+                        }
+                        return true;
+                    }
+                }
+            }
+            logger.warn("All ONVIF port/credential combinations failed");
+        } else {
+            logger.info("No ONVIF ports detected for {}, skipping ONVIF", device.getIpAddress());
+        }
+
+        return false;
+    }
+
+    /**
+     * Attempt RTSP URL guessing with all credentials.
+     */
+    private boolean attemptRtspAuthentication(Device device) {
+        logger.info("--- Attempting RTSP URL guessing for {} ---", device.getIpAddress());
+
+        if (device.getOpenRtspPorts().isEmpty()) {
+            logger.warn("No RTSP ports detected for {}, using default 554", device.getIpAddress());
+        }
+
+        for (Credential cred : credentials) {
+            logger.debug("Trying RTSP discovery with credential: {}", cred.getUsername());
+
+            List<RTSPStream> streams = rtspService.discoverStreams(device, cred.getUsername(), cred.getPassword());
+            if (!streams.isEmpty()) {
+                device.setUsername(cred.getUsername());
+                device.setPassword(cred.getPassword());
+                device.getRtspStreams().addAll(streams);
+                logger.info("RTSP discovery successful with user: {} - found {} streams",
+                        cred.getUsername(), streams.size());
+                return true;
+            }
+        }
+
+        logger.warn("All RTSP credential combinations failed");
+        return false;
+    }
+
+    /**
+     * Show dialog to retry authentication with a different credential.
+     */
+    private void showRetryCredentialDialog(Device device) {
+        logger.info("User requested retry for device: {}", device.getIpAddress());
+
+        Dialog<ButtonType> dialog = new Dialog<>();
+        dialog.setTitle("Retry Authentication");
+        dialog.setHeaderText("Retry authentication for " + device.getIpAddress());
+
+        GridPane grid = new GridPane();
+        grid.setHgap(10);
+        grid.setVgap(10);
+        grid.setPadding(new Insets(20));
+
+        TextField tfRetryUsername = new TextField();
+        tfRetryUsername.setPromptText("Username");
+
+        TextField tfRetryPassword = new TextField();
+        tfRetryPassword.setPromptText("Password");
+
+        grid.add(new Label("Username:"), 0, 0);
+        grid.add(tfRetryUsername, 1, 0);
+        grid.add(new Label("Password:"), 0, 1);
+        grid.add(tfRetryPassword, 1, 1);
+
+        dialog.getDialogPane().setContent(grid);
+
+        ButtonType retryButton = new ButtonType("Retry", ButtonBar.ButtonData.OK_DONE);
+        dialog.getDialogPane().getButtonTypes().addAll(retryButton, ButtonType.CANCEL);
+
+        Optional<ButtonType> result = dialog.showAndWait();
+
+        if (result.isPresent() && result.get() == retryButton) {
+            String username = tfRetryUsername.getText().trim();
+            String password = tfRetryPassword.getText().trim();
+
+            if (!username.isEmpty() && !password.isEmpty()) {
+                // Add to credentials list if not already present
+                Credential newCred = new Credential(username, password);
+                boolean exists = credentials.stream()
+                        .anyMatch(c -> c.getUsername().equals(username) && c.getPassword().equals(password));
+
+                if (!exists) {
+                    credentials.add(newCred);
+                    logger.info("Added new credential to list: {}", username);
+                }
+
+                // Retry authentication in background
+                executorService.submit(() -> {
+                    logger.info("=== Starting RETRY authentication for device: {} ===", device.getIpAddress());
+
+                    // Reset device state
+                    device.getRtspStreams().clear();
+                    device.setUsername(null);
+                    device.setPassword(null);
+                    device.setAuthFailed(false);
+                    device.setErrorMessage(null);
+
+                    Platform.runLater(() -> {
+                        device.setStatus(Device.DeviceStatus.AUTHENTICATING);
+                        tvResults.refresh();
+                    });
+
+                    // Run authentication again
+                    authenticateAndDiscoverStreams(device);
+
+                    Platform.runLater(() -> tvResults.refresh());
+                });
+
+                showAlert("Retry Started",
+                        "Retrying authentication for " + device.getIpAddress() + " with new credential.",
+                        Alert.AlertType.INFORMATION);
+            } else {
+                showAlert("Invalid Input", "Please enter both username and password.", Alert.AlertType.WARNING);
+            }
         }
     }
 

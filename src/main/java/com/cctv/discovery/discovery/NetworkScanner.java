@@ -18,7 +18,7 @@ import java.util.concurrent.*;
 public class NetworkScanner {
     private static final Logger logger = LoggerFactory.getLogger(NetworkScanner.class);
 
-    private static final int[] TARGET_PORTS = {80, 8080, 554, 443, 8443, 8000, 37777, 34567};
+    private static final int[] TARGET_PORTS = {80, 8080, 554, 8554, 443, 8443, 8000, 8888, 37777, 34567};
     private static final int PORT_SCAN_TIMEOUT_MS = 2000;
 
     private final OnvifService onvifService;
@@ -110,7 +110,7 @@ public class NetworkScanner {
         for (int port : openPorts) {
             if (port == 80 || port == 8080 || port == 443 || port == 8443) {
                 device.getOpenOnvifPorts().add(port);
-            } else if (port == 554) {
+            } else if (port == 554 || port == 8554 || port == 8888) {
                 device.getOpenRtspPorts().add(port);
             } else {
                 device.getOpenSpecialPorts().add(port);

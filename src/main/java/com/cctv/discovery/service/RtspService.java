@@ -87,6 +87,10 @@ public class RtspService {
         String manufacturer = device.getManufacturer();
         String macPrefix = getMacPrefix(device.getMacAddress());
 
+        // Get detected RTSP ports, default to [554] if none found
+        List<Integer> rtspPorts = getDetectedRtspPorts(device);
+        logger.debug("Device {} - Detected RTSP ports: {}", device.getIpAddress(), rtspPorts);
+
         List<String> pathsToTry = new ArrayList<>();
 
         // 1. Try smart cache first
@@ -119,33 +123,35 @@ public class RtspService {
 
                 logger.debug("Trying custom path pair: main={}, sub={}", mainPath, subPath);
 
-                // Try main stream
-                String mainUrl = "rtsp://" + device.getIpAddress() + ":554" + mainPath;
-                RTSPStream mainStream = testRtspUrl(mainUrl, username, password);
+                // Try main stream on each detected RTSP port
+                for (int port : rtspPorts) {
+                    String mainUrl = "rtsp://" + device.getIpAddress() + ":" + port + mainPath;
+                    RTSPStream mainStream = testRtspUrl(mainUrl, username, password);
 
-                if (mainStream != null) {
-                    streams.add(mainStream);
-                    logger.info("Found working custom main stream: {}", mainUrl);
+                    if (mainStream != null) {
+                        streams.add(mainStream);
+                        logger.info("Found working custom main stream: {}", mainUrl);
 
-                    // Try paired sub stream
-                    String subUrl = "rtsp://" + device.getIpAddress() + ":554" + subPath;
-                    RTSPStream subStream = testRtspUrl(subUrl, username, password);
-                    if (subStream != null) {
-                        streams.add(subStream);
-                        logger.info("Found working custom sub stream: {}", subUrl);
-                    }
-
-                    // Add to smart cache
-                    if (macPrefix != null) {
-                        SMART_CACHE.computeIfAbsent(macPrefix, k -> new ArrayList<>()).add(mainPath);
+                        // Try paired sub stream on same port
+                        String subUrl = "rtsp://" + device.getIpAddress() + ":" + port + subPath;
+                        RTSPStream subStream = testRtspUrl(subUrl, username, password);
                         if (subStream != null) {
-                            SMART_CACHE.get(macPrefix).add(subPath);
+                            streams.add(subStream);
+                            logger.info("Found working custom sub stream: {}", subUrl);
                         }
-                    }
 
-                    // Found working custom paths, return
-                    if (streams.size() >= 2) {
-                        return streams;
+                        // Add to smart cache
+                        if (macPrefix != null) {
+                            SMART_CACHE.computeIfAbsent(macPrefix, k -> new ArrayList<>()).add(mainPath);
+                            if (subStream != null) {
+                                SMART_CACHE.get(macPrefix).add(subPath);
+                            }
+                        }
+
+                        // Found working custom paths, return
+                        if (streams.size() >= 2) {
+                            return streams;
+                        }
                     }
                 }
             }
@@ -158,38 +164,62 @@ public class RtspService {
             }
         }
 
-        // Try each path
+        // Try each path on each detected RTSP port
         for (String path : pathsToTry) {
-            String rtspUrl = "rtsp://" + device.getIpAddress() + ":554" + path;
-            RTSPStream stream = testRtspUrl(rtspUrl, username, password);
+            for (int port : rtspPorts) {
+                String rtspUrl = "rtsp://" + device.getIpAddress() + ":" + port + path;
+                RTSPStream stream = testRtspUrl(rtspUrl, username, password);
 
-            if (stream != null) {
-                streams.add(stream);
-                // Add to smart cache
-                if (macPrefix != null) {
-                    SMART_CACHE.computeIfAbsent(macPrefix, k -> new ArrayList<>()).add(path);
-                }
-                logger.info("Found working RTSP stream: {}", rtspUrl);
+                if (stream != null) {
+                    streams.add(stream);
+                    // Add to smart cache
+                    if (macPrefix != null) {
+                        SMART_CACHE.computeIfAbsent(macPrefix, k -> new ArrayList<>()).add(path);
+                    }
+                    logger.info("Found working RTSP stream: {}", rtspUrl);
 
-                // If we found a stream, try to find sub-stream variant
-                if (streams.size() == 1) {
-                    String subPath = guessSubstreamPath(path);
-                    if (subPath != null && !subPath.equals(path)) {
-                        String subUrl = "rtsp://" + device.getIpAddress() + ":554" + subPath;
-                        RTSPStream subStream = testRtspUrl(subUrl, username, password);
-                        if (subStream != null) {
-                            streams.add(subStream);
+                    // If we found a stream, try to find sub-stream variant on same port
+                    if (streams.size() == 1) {
+                        String subPath = guessSubstreamPath(path);
+                        if (subPath != null && !subPath.equals(path)) {
+                            String subUrl = "rtsp://" + device.getIpAddress() + ":" + port + subPath;
+                            RTSPStream subStream = testRtspUrl(subUrl, username, password);
+                            if (subStream != null) {
+                                streams.add(subStream);
+                            }
                         }
                     }
-                }
 
-                if (streams.size() >= 2) {
-                    break; // Found main and sub stream
+                    if (streams.size() >= 2) {
+                        return streams; // Found main and sub stream
+                    }
                 }
             }
         }
 
         return streams;
+    }
+
+    /**
+     * Get detected RTSP ports from device port scan results.
+     * Defaults to [554] if no RTSP ports were detected.
+     */
+    private List<Integer> getDetectedRtspPorts(Device device) {
+        List<Integer> ports = new ArrayList<>();
+
+        // Add detected RTSP ports
+        if (device.getOpenRtspPorts() != null && !device.getOpenRtspPorts().isEmpty()) {
+            ports.addAll(device.getOpenRtspPorts());
+            logger.info("Using detected RTSP ports for {}: {}", device.getIpAddress(), ports);
+        }
+
+        // If no RTSP ports detected, default to standard port 554
+        if (ports.isEmpty()) {
+            ports.add(554);
+            logger.info("No RTSP ports detected for {}, using default port 554", device.getIpAddress());
+        }
+
+        return ports;
     }
 
     /**
@@ -302,11 +332,17 @@ public class RtspService {
 
     /**
      * Iterate NVR/DVR channels (1-64) and find working streams.
+     * Uses detected RTSP ports from port scan.
      */
     public List<RTSPStream> iterateNvrChannels(Device device, String username, String password, int maxChannels) {
         List<RTSPStream> streams = new ArrayList<>();
         int consecutiveFailures = 0;
         int maxConsecutiveFailures = 3;
+
+        // Get detected RTSP ports - NVR/DVR typically uses same port for all channels
+        List<Integer> rtspPorts = getDetectedRtspPorts(device);
+        int rtspPort = rtspPorts.get(0); // Use first detected port
+        logger.debug("Using RTSP port {} for NVR channel iteration", rtspPort);
 
         String manufacturer = device.getManufacturer();
         boolean isHikvision = manufacturer != null && manufacturer.toUpperCase().contains("HIKVISION");
@@ -327,7 +363,7 @@ public class RtspService {
                 subPath = "/ch" + String.format("%02d", channel) + "/1";
             }
 
-            String mainUrl = "rtsp://" + device.getIpAddress() + ":554" + mainPath;
+            String mainUrl = "rtsp://" + device.getIpAddress() + ":" + rtspPort + mainPath;
             RTSPStream mainStream = testRtspUrl(mainUrl, username, password);
 
             if (mainStream != null) {
@@ -337,7 +373,7 @@ public class RtspService {
                 consecutiveFailures = 0;
 
                 // Try sub stream
-                String subUrl = "rtsp://" + device.getIpAddress() + ":554" + subPath;
+                String subUrl = "rtsp://" + device.getIpAddress() + ":" + rtspPort + subPath;
                 RTSPStream subStream = testRtspUrl(subUrl, username, password);
                 if (subStream != null) {
                     subStream.setStreamName("CH" + channel + " Sub");
