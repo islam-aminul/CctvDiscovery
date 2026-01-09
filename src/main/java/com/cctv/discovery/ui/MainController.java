@@ -47,7 +47,7 @@ public class MainController {
     private Stage primaryStage;
     private Scene scene;
 
-    // Network selection
+    // Network selection - Simple mode
     private RadioButton rbInterface;
     private RadioButton rbManualRange;
     private RadioButton rbCIDR;
@@ -56,6 +56,18 @@ public class MainController {
     private TextField tfEndIP;
     private TextField tfCIDR;
     private Label lblIpCount;
+
+    // Network selection - Advanced mode
+    private CheckBox cbAdvancedMode;
+    private VBox simpleNetworkBox;
+    private VBox advancedNetworkBox;
+    private ListView<NetworkInterfaceItem> lvNetworkInterfaces;
+    private ObservableList<NetworkInterfaceItem> networkInterfaces;
+    private TableView<IpRangeItem> tvIpRanges;
+    private ObservableList<IpRangeItem> ipRanges;
+    private TableView<CidrItem> tvCidrs;
+    private ObservableList<CidrItem> cidrs;
+    private Label lblAdvancedIpCount;
 
     // Credentials
     private TextField tfUsername;
@@ -91,6 +103,9 @@ public class MainController {
         this.primaryStage = primaryStage;
         this.credentials = FXCollections.observableArrayList();
         this.devices = FXCollections.observableArrayList();
+        this.networkInterfaces = FXCollections.observableArrayList();
+        this.ipRanges = FXCollections.observableArrayList();
+        this.cidrs = FXCollections.observableArrayList();
 
         // Initialize services
         this.networkScanner = new NetworkScanner();
@@ -213,6 +228,27 @@ public class MainController {
         Label lblTitle = new Label("Network Selection");
         lblTitle.getStyleClass().add("section-title");
 
+        // Advanced mode toggle
+        cbAdvancedMode = new CheckBox("Advanced Mode (Multiple Networks)");
+        cbAdvancedMode.setOnAction(e -> toggleNetworkMode());
+
+        // Simple network box
+        simpleNetworkBox = createSimpleNetworkBox();
+
+        // Advanced network box
+        advancedNetworkBox = createAdvancedNetworkBox();
+        advancedNetworkBox.setVisible(false);
+        advancedNetworkBox.setManaged(false);
+
+        vbox.getChildren().addAll(lblTitle, cbAdvancedMode, simpleNetworkBox, advancedNetworkBox);
+
+        updateIpCount();
+        return vbox;
+    }
+
+    private VBox createSimpleNetworkBox() {
+        VBox vbox = new VBox(6);
+
         // Radio buttons
         ToggleGroup tg = new ToggleGroup();
         rbInterface = new RadioButton("Network Interface");
@@ -265,14 +301,204 @@ public class MainController {
         tfCIDR.textProperty().addListener((obs, old, val) -> updateIpCount());
 
         vbox.getChildren().addAll(
-                lblTitle,
                 rbInterface, cbInterfaces,
                 rbManualRange, ipRangeBox,
                 rbCIDR, tfCIDR,
                 lblIpCount
         );
 
-        updateIpCount();
+        return vbox;
+    }
+
+    private VBox createAdvancedNetworkBox() {
+        VBox vbox = new VBox(8);
+
+        // Section 1: Network Interfaces
+        Label lblInterfaces = new Label("Network Interfaces:");
+        lblInterfaces.setStyle("-fx-font-weight: bold;");
+
+        lvNetworkInterfaces = new ListView<>(networkInterfaces);
+        lvNetworkInterfaces.setPrefHeight(100);
+        lvNetworkInterfaces.setCellFactory(param -> new ListCell<NetworkInterfaceItem>() {
+            @Override
+            protected void updateItem(NetworkInterfaceItem item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) {
+                    setGraphic(null);
+                    setText(null);
+                } else {
+                    CheckBox checkBox = new CheckBox(item.toString());
+                    checkBox.setSelected(item.isSelected());
+                    checkBox.setOnAction(e -> {
+                        item.setSelected(checkBox.isSelected());
+                        updateAdvancedIpCount();
+                    });
+                    setGraphic(checkBox);
+                }
+            }
+        });
+        populateAdvancedNetworkInterfaces();
+
+        // Section 2: IP Ranges
+        Label lblRanges = new Label("IP Ranges:");
+        lblRanges.setStyle("-fx-font-weight: bold;");
+
+        tvIpRanges = new TableView<>(ipRanges);
+        tvIpRanges.setPrefHeight(100);
+        tvIpRanges.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
+
+        TableColumn<IpRangeItem, String> colStartIp = new TableColumn<>("Start IP");
+        colStartIp.setCellValueFactory(new PropertyValueFactory<>("startIp"));
+        colStartIp.setCellFactory(col -> new TableCell<IpRangeItem, String>() {
+            private final TextField textField = new TextField();
+
+            {
+                textField.setOnAction(e -> commitEdit(textField.getText()));
+                textField.focusedProperty().addListener((obs, wasFocused, isNowFocused) -> {
+                    if (!isNowFocused) {
+                        commitEdit(textField.getText());
+                    }
+                });
+            }
+
+            @Override
+            protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty) {
+                    setGraphic(null);
+                } else {
+                    textField.setText(item);
+                    setGraphic(textField);
+                }
+            }
+
+            @Override
+            public void commitEdit(String newValue) {
+                super.commitEdit(newValue);
+                IpRangeItem range = getTableView().getItems().get(getIndex());
+                range.setStartIp(newValue);
+                updateAdvancedIpCount();
+            }
+        });
+
+        TableColumn<IpRangeItem, String> colEndIp = new TableColumn<>("End IP");
+        colEndIp.setCellValueFactory(new PropertyValueFactory<>("endIp"));
+        colEndIp.setCellFactory(col -> new TableCell<IpRangeItem, String>() {
+            private final TextField textField = new TextField();
+
+            {
+                textField.setOnAction(e -> commitEdit(textField.getText()));
+                textField.focusedProperty().addListener((obs, wasFocused, isNowFocused) -> {
+                    if (!isNowFocused) {
+                        commitEdit(textField.getText());
+                    }
+                });
+            }
+
+            @Override
+            protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty) {
+                    setGraphic(null);
+                } else {
+                    textField.setText(item);
+                    setGraphic(textField);
+                }
+            }
+
+            @Override
+            public void commitEdit(String newValue) {
+                super.commitEdit(newValue);
+                IpRangeItem range = getTableView().getItems().get(getIndex());
+                range.setEndIp(newValue);
+                updateAdvancedIpCount();
+            }
+        });
+
+        tvIpRanges.getColumns().addAll(colStartIp, colEndIp);
+
+        Button btnAddRange = new Button("Add IP Range");
+        btnAddRange.setOnAction(e -> addIpRange());
+        Button btnRemoveRange = new Button("Remove Selected");
+        btnRemoveRange.setOnAction(e -> {
+            IpRangeItem selected = tvIpRanges.getSelectionModel().getSelectedItem();
+            if (selected != null) {
+                ipRanges.remove(selected);
+                updateAdvancedIpCount();
+            }
+        });
+        HBox rangeButtons = new HBox(8, btnAddRange, btnRemoveRange);
+
+        // Section 3: CIDR Notations
+        Label lblCidrs = new Label("CIDR Notations:");
+        lblCidrs.setStyle("-fx-font-weight: bold;");
+
+        tvCidrs = new TableView<>(cidrs);
+        tvCidrs.setPrefHeight(100);
+        tvCidrs.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
+
+        TableColumn<CidrItem, String> colCidr = new TableColumn<>("CIDR");
+        colCidr.setCellValueFactory(new PropertyValueFactory<>("cidr"));
+        colCidr.setCellFactory(col -> new TableCell<CidrItem, String>() {
+            private final TextField textField = new TextField();
+
+            {
+                textField.setOnAction(e -> commitEdit(textField.getText()));
+                textField.focusedProperty().addListener((obs, wasFocused, isNowFocused) -> {
+                    if (!isNowFocused) {
+                        commitEdit(textField.getText());
+                    }
+                });
+            }
+
+            @Override
+            protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty) {
+                    setGraphic(null);
+                } else {
+                    textField.setText(item);
+                    setGraphic(textField);
+                }
+            }
+
+            @Override
+            public void commitEdit(String newValue) {
+                super.commitEdit(newValue);
+                CidrItem cidr = getTableView().getItems().get(getIndex());
+                cidr.setCidr(newValue);
+                updateAdvancedIpCount();
+            }
+        });
+
+        tvCidrs.getColumns().add(colCidr);
+
+        Button btnAddCidr = new Button("Add CIDR");
+        btnAddCidr.setOnAction(e -> addCidr());
+        Button btnRemoveCidr = new Button("Remove Selected");
+        btnRemoveCidr.setOnAction(e -> {
+            CidrItem selected = tvCidrs.getSelectionModel().getSelectedItem();
+            if (selected != null) {
+                cidrs.remove(selected);
+                updateAdvancedIpCount();
+            }
+        });
+        HBox cidrButtons = new HBox(8, btnAddCidr, btnRemoveCidr);
+
+        // IP count label
+        lblAdvancedIpCount = new Label("Total Possible IPs: 0");
+        lblAdvancedIpCount.getStyleClass().add("label-info");
+        lblAdvancedIpCount.setAlignment(Pos.CENTER);
+        lblAdvancedIpCount.setMaxWidth(Double.MAX_VALUE);
+        lblAdvancedIpCount.setStyle("-fx-font-style: italic;");
+
+        vbox.getChildren().addAll(
+                lblInterfaces, lvNetworkInterfaces,
+                lblRanges, tvIpRanges, rangeButtons,
+                lblCidrs, tvCidrs, cidrButtons,
+                lblAdvancedIpCount
+        );
+
         return vbox;
     }
 
@@ -440,6 +666,77 @@ public class MainController {
         }
     }
 
+    private void populateAdvancedNetworkInterfaces() {
+        List<NetworkInterface> interfaces = NetworkUtils.getActiveNetworkInterfaces();
+        for (NetworkInterface ni : interfaces) {
+            try {
+                for (InterfaceAddress addr : ni.getInterfaceAddresses()) {
+                    InetAddress inetAddr = addr.getAddress();
+                    if (inetAddr instanceof java.net.Inet4Address) {
+                        String display = ni.getDisplayName();
+                        String ip = inetAddr.getHostAddress();
+                        networkInterfaces.add(new NetworkInterfaceItem(display, ip, false));
+                    }
+                }
+            } catch (Exception e) {
+                logger.error("Error processing interface", e);
+            }
+        }
+    }
+
+    private void toggleNetworkMode() {
+        boolean advanced = cbAdvancedMode.isSelected();
+        simpleNetworkBox.setVisible(!advanced);
+        simpleNetworkBox.setManaged(!advanced);
+        advancedNetworkBox.setVisible(advanced);
+        advancedNetworkBox.setManaged(advanced);
+
+        if (advanced) {
+            updateAdvancedIpCount();
+        } else {
+            updateIpCount();
+        }
+        updateStartButtonState();
+    }
+
+    private void addIpRange() {
+        ipRanges.add(new IpRangeItem("192.168.1.1", "192.168.1.254"));
+        updateAdvancedIpCount();
+    }
+
+    private void addCidr() {
+        cidrs.add(new CidrItem("192.168.1.0/24"));
+        updateAdvancedIpCount();
+    }
+
+    private void updateAdvancedIpCount() {
+        int count = 0;
+
+        // Count selected network interfaces
+        for (NetworkInterfaceItem item : networkInterfaces) {
+            if (item.isSelected()) {
+                count += 254; // Assume /24 network
+            }
+        }
+
+        // Count IP ranges
+        for (IpRangeItem range : ipRanges) {
+            if (NetworkUtils.isValidIP(range.getStartIp()) && NetworkUtils.isValidIP(range.getEndIp())) {
+                count += NetworkUtils.countIPsInRange(range.getStartIp(), range.getEndIp());
+            }
+        }
+
+        // Count CIDRs
+        for (CidrItem cidr : cidrs) {
+            if (NetworkUtils.isValidCIDR(cidr.getCidr())) {
+                count += NetworkUtils.countIPsInCIDR(cidr.getCidr());
+            }
+        }
+
+        lblAdvancedIpCount.setText("Total Possible IPs: " + count);
+        updateStartButtonState();
+    }
+
     private void updateNetworkMode() {
         cbInterfaces.setDisable(!rbInterface.isSelected());
         tfStartIP.setDisable(!rbManualRange.isSelected());
@@ -566,10 +863,23 @@ public class MainController {
             return;
         }
 
-        boolean validNetwork = (rbInterface.isSelected() && cbInterfaces.getValue() != null) ||
-                (rbManualRange.isSelected() && NetworkUtils.isValidIP(tfStartIP.getText()) &&
-                        NetworkUtils.isValidIP(tfEndIP.getText())) ||
-                (rbCIDR.isSelected() && NetworkUtils.isValidCIDR(tfCIDR.getText()));
+        boolean validNetwork;
+        if (cbAdvancedMode != null && cbAdvancedMode.isSelected()) {
+            // Advanced mode: require at least one source with valid data
+            boolean hasSelectedInterface = networkInterfaces.stream().anyMatch(NetworkInterfaceItem::isSelected);
+            boolean hasValidRange = ipRanges.stream().anyMatch(range ->
+                    NetworkUtils.isValidIP(range.getStartIp()) && NetworkUtils.isValidIP(range.getEndIp()));
+            boolean hasValidCidr = cidrs.stream().anyMatch(cidr ->
+                    NetworkUtils.isValidCIDR(cidr.getCidr()));
+
+            validNetwork = hasSelectedInterface || hasValidRange || hasValidCidr;
+        } else {
+            // Simple mode: original validation
+            validNetwork = (rbInterface.isSelected() && cbInterfaces.getValue() != null) ||
+                    (rbManualRange.isSelected() && NetworkUtils.isValidIP(tfStartIP.getText()) &&
+                            NetworkUtils.isValidIP(tfEndIP.getText())) ||
+                    (rbCIDR.isSelected() && NetworkUtils.isValidCIDR(tfCIDR.getText()));
+        }
 
         boolean hasCredentials = !credentials.isEmpty();
 
@@ -912,20 +1222,58 @@ public class MainController {
     private List<String> getIPList() {
         List<String> ips = new ArrayList<>();
         try {
-            if (rbCIDR.isSelected()) {
-                ips = NetworkUtils.parseCIDR(tfCIDR.getText());
-            } else if (rbManualRange.isSelected()) {
-                ips = NetworkUtils.parseIPRange(tfStartIP.getText(), tfEndIP.getText());
-            } else if (rbInterface.isSelected()) {
-                // Extract CIDR from interface - simplified to /24
-                String selected = cbInterfaces.getValue();
-                if (selected != null) {
-                    String[] parts = selected.split(" - ");
-                    if (parts.length == 2) {
-                        String ip = parts[1];
+            if (cbAdvancedMode.isSelected()) {
+                // Advanced mode: combine all sources
+
+                // Add IPs from selected network interfaces
+                for (NetworkInterfaceItem item : networkInterfaces) {
+                    if (item.isSelected()) {
+                        String ip = item.getIpAddress();
                         String[] octets = ip.split("\\.");
-                        String network = octets[0] + "." + octets[1] + "." + octets[2] + ".0/24";
-                        ips = NetworkUtils.parseCIDR(network);
+                        if (octets.length == 4) {
+                            String network = octets[0] + "." + octets[1] + "." + octets[2] + ".0/24";
+                            ips.addAll(NetworkUtils.parseCIDR(network));
+                        }
+                    }
+                }
+
+                // Add IPs from IP ranges
+                for (IpRangeItem range : ipRanges) {
+                    if (NetworkUtils.isValidIP(range.getStartIp()) && NetworkUtils.isValidIP(range.getEndIp())) {
+                        ips.addAll(NetworkUtils.parseIPRange(range.getStartIp(), range.getEndIp()));
+                    }
+                }
+
+                // Add IPs from CIDRs
+                for (CidrItem cidr : cidrs) {
+                    if (NetworkUtils.isValidCIDR(cidr.getCidr())) {
+                        ips.addAll(NetworkUtils.parseCIDR(cidr.getCidr()));
+                    }
+                }
+
+                logger.info("Advanced mode: generated {} IPs from {} interfaces, {} ranges, {} CIDRs",
+                        ips.size(),
+                        networkInterfaces.stream().filter(NetworkInterfaceItem::isSelected).count(),
+                        ipRanges.size(),
+                        cidrs.size());
+
+            } else {
+                // Simple mode: single source
+                if (rbCIDR.isSelected()) {
+                    ips = NetworkUtils.parseCIDR(tfCIDR.getText());
+                } else if (rbManualRange.isSelected()) {
+                    ips = NetworkUtils.parseIPRange(tfStartIP.getText(), tfEndIP.getText());
+                } else if (rbInterface.isSelected()) {
+                    // Extract CIDR from interface - simplified to /24
+                    String selected = cbInterfaces.getValue();
+                    if (selected != null) {
+                        String[] parts = selected.split(" - ");
+                        if (parts.length == 2) {
+                            String ip = parts[1];
+                            String[] octets = ip.split("\\.");
+                            String network = octets[0] + "." + octets[1] + "." + octets[2] + ".0/24";
+                            ips = NetworkUtils.parseCIDR(network);
+                        }
                     }
                 }
             }
@@ -1132,6 +1480,7 @@ public class MainController {
     }
 
     private void disableInputs() {
+        // Simple mode controls
         rbInterface.setDisable(true);
         rbManualRange.setDisable(true);
         rbCIDR.setDisable(true);
@@ -1139,6 +1488,14 @@ public class MainController {
         tfStartIP.setDisable(true);
         tfEndIP.setDisable(true);
         tfCIDR.setDisable(true);
+
+        // Advanced mode controls
+        cbAdvancedMode.setDisable(true);
+        lvNetworkInterfaces.setDisable(true);
+        tvIpRanges.setDisable(true);
+        tvCidrs.setDisable(true);
+
+        // Credential controls
         tfUsername.setDisable(true);
         tfPassword.setDisable(true);
         btnAddCredential.setDisable(true);
@@ -1147,7 +1504,20 @@ public class MainController {
 
     private void enableInputs() {
         discoveryInProgress = false;
-        updateNetworkMode();
+
+        // Advanced mode toggle
+        cbAdvancedMode.setDisable(false);
+
+        // Enable appropriate mode controls
+        if (cbAdvancedMode.isSelected()) {
+            lvNetworkInterfaces.setDisable(false);
+            tvIpRanges.setDisable(false);
+            tvCidrs.setDisable(false);
+        } else {
+            updateNetworkMode();
+        }
+
+        // Credential controls
         if (credentials.size() < 4) {
             tfUsername.setDisable(false);
             tfPassword.setDisable(false);
@@ -1186,6 +1556,82 @@ public class MainController {
             } else {
                 setText(item.toDisplayString());
             }
+        }
+    }
+
+    // Inner classes for advanced network selection
+    public static class NetworkInterfaceItem {
+        private final String displayName;
+        private final String ipAddress;
+        private boolean selected;
+
+        public NetworkInterfaceItem(String displayName, String ipAddress, boolean selected) {
+            this.displayName = displayName;
+            this.ipAddress = ipAddress;
+            this.selected = selected;
+        }
+
+        public String getDisplayName() {
+            return displayName;
+        }
+
+        public String getIpAddress() {
+            return ipAddress;
+        }
+
+        public boolean isSelected() {
+            return selected;
+        }
+
+        public void setSelected(boolean selected) {
+            this.selected = selected;
+        }
+
+        @Override
+        public String toString() {
+            return displayName + " - " + ipAddress;
+        }
+    }
+
+    public static class IpRangeItem {
+        private String startIp;
+        private String endIp;
+
+        public IpRangeItem(String startIp, String endIp) {
+            this.startIp = startIp;
+            this.endIp = endIp;
+        }
+
+        public String getStartIp() {
+            return startIp;
+        }
+
+        public void setStartIp(String startIp) {
+            this.startIp = startIp;
+        }
+
+        public String getEndIp() {
+            return endIp;
+        }
+
+        public void setEndIp(String endIp) {
+            this.endIp = endIp;
+        }
+    }
+
+    public static class CidrItem {
+        private String cidr;
+
+        public CidrItem(String cidr) {
+            this.cidr = cidr;
+        }
+
+        public String getCidr() {
+            return cidr;
+        }
+
+        public void setCidr(String cidr) {
+            this.cidr = cidr;
         }
     }
 }
