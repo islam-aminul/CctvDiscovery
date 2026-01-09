@@ -104,6 +104,7 @@ public class MainController {
 
     // State
     private boolean discoveryInProgress = false;
+    private boolean networkConfigured = false;
 
     public MainController(Stage primaryStage) {
         this.primaryStage = primaryStage;
@@ -898,27 +899,9 @@ public class MainController {
             return;
         }
 
-        boolean validNetwork;
-        if (cbAdvancedMode != null && cbAdvancedMode.isSelected()) {
-            // Advanced mode: require at least one source with valid data
-            boolean hasSelectedInterface = networkInterfaces.stream().anyMatch(NetworkInterfaceItem::isSelected);
-            boolean hasValidRange = ipRanges.stream().anyMatch(range ->
-                    NetworkUtils.isValidIP(range.getStartIp()) && NetworkUtils.isValidIP(range.getEndIp()));
-            boolean hasValidCidr = cidrs.stream().anyMatch(cidr ->
-                    NetworkUtils.isValidCIDR(cidr.getCidr()));
-
-            validNetwork = hasSelectedInterface || hasValidRange || hasValidCidr;
-        } else {
-            // Simple mode: original validation
-            validNetwork = (rbInterface.isSelected() && cbInterfaces.getValue() != null) ||
-                    (rbManualRange.isSelected() && NetworkUtils.isValidIP(tfStartIP.getText()) &&
-                            NetworkUtils.isValidIP(tfEndIP.getText())) ||
-                    (rbCIDR.isSelected() && NetworkUtils.isValidCIDR(tfCIDR.getText()));
-        }
-
         boolean hasCredentials = !credentials.isEmpty();
 
-        btnStart.setDisable(!validNetwork || !hasCredentials || discoveryInProgress);
+        btnStart.setDisable(!networkConfigured || !hasCredentials || discoveryInProgress);
     }
 
     private void startDiscovery() {
@@ -1257,7 +1240,7 @@ public class MainController {
     private List<String> getIPList() {
         List<String> ips = new ArrayList<>();
         try {
-            if (cbAdvancedMode.isSelected()) {
+            if (cbAdvancedMode != null && cbAdvancedMode.isSelected()) {
                 // Advanced mode: combine all sources
 
                 // Add IPs from selected network interfaces
@@ -1294,11 +1277,11 @@ public class MainController {
 
             } else {
                 // Simple mode: single source
-                if (rbCIDR.isSelected()) {
+                if (rbCIDR != null && rbCIDR.isSelected() && tfCIDR != null) {
                     ips = NetworkUtils.parseCIDR(tfCIDR.getText());
-                } else if (rbManualRange.isSelected()) {
+                } else if (rbManualRange != null && rbManualRange.isSelected() && tfStartIP != null && tfEndIP != null) {
                     ips = NetworkUtils.parseIPRange(tfStartIP.getText(), tfEndIP.getText());
-                } else if (rbInterface.isSelected()) {
+                } else if (rbInterface != null && rbInterface.isSelected() && cbInterfaces != null) {
                     // Extract CIDR from interface - simplified to /24
                     String selected = cbInterfaces.getValue();
                     if (selected != null) {
@@ -1626,27 +1609,33 @@ public class MainController {
             if (sourceCount > 0) {
                 lblNetworkSummary.setText(String.format("Advanced: %d source(s), %d possible IPs", sourceCount, totalIps));
                 lblNetworkSummary.setStyle("-fx-font-style: italic; -fx-text-fill: #28a745;");
+                networkConfigured = true;
             } else {
                 lblNetworkSummary.setText("Advanced mode: No sources configured");
                 lblNetworkSummary.setStyle("-fx-font-style: italic; -fx-text-fill: #dc3545;");
+                networkConfigured = false;
             }
         } else {
             // Simple mode summary
             if (rbInterface != null && rbInterface.isSelected() && cbInterfaces.getValue() != null) {
                 lblNetworkSummary.setText("Interface: " + cbInterfaces.getValue());
                 lblNetworkSummary.setStyle("-fx-font-style: italic; -fx-text-fill: #28a745;");
+                networkConfigured = true;
             } else if (rbManualRange != null && rbManualRange.isSelected() &&
                     NetworkUtils.isValidIP(tfStartIP.getText()) && NetworkUtils.isValidIP(tfEndIP.getText())) {
                 int count = NetworkUtils.countIPsInRange(tfStartIP.getText(), tfEndIP.getText());
                 lblNetworkSummary.setText(String.format("Range: %s - %s (%d IPs)", tfStartIP.getText(), tfEndIP.getText(), count));
                 lblNetworkSummary.setStyle("-fx-font-style: italic; -fx-text-fill: #28a745;");
+                networkConfigured = true;
             } else if (rbCIDR != null && rbCIDR.isSelected() && NetworkUtils.isValidCIDR(tfCIDR.getText())) {
                 int count = NetworkUtils.countIPsInCIDR(tfCIDR.getText());
                 lblNetworkSummary.setText(String.format("CIDR: %s (%d IPs)", tfCIDR.getText(), count));
                 lblNetworkSummary.setStyle("-fx-font-style: italic; -fx-text-fill: #28a745;");
+                networkConfigured = true;
             } else {
                 lblNetworkSummary.setText("Not configured");
                 lblNetworkSummary.setStyle("-fx-font-style: italic; -fx-text-fill: #666;");
+                networkConfigured = false;
             }
         }
     }
