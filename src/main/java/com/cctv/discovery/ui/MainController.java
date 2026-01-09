@@ -71,6 +71,7 @@ public class MainController {
 
     // Network summary in left panel
     private Label lblNetworkSummary;
+    private Button btnConfigureNetwork;
 
     // Credentials
     private TextField tfUsername;
@@ -81,6 +82,7 @@ public class MainController {
 
     // Credential summary in left panel
     private Label lblCredentialSummary;
+    private Button btnManageCredentials;
 
     // Actions
     private Button btnStart;
@@ -239,7 +241,7 @@ public class MainController {
         Label lblTitle = new Label("1. Network Selection");
         lblTitle.getStyleClass().add("section-title");
 
-        Button btnConfigureNetwork = new Button("Configure Network");
+        btnConfigureNetwork = new Button("Configure Network");
         btnConfigureNetwork.setMaxWidth(Double.MAX_VALUE);
         btnConfigureNetwork.setPrefHeight(35);
         btnConfigureNetwork.setOnAction(e -> showNetworkConfigDialog());
@@ -451,12 +453,16 @@ public class MainController {
         tvIpRanges.getColumns().addAll(colStartIp, colEndIp);
 
         Button btnAddRange = new Button("Add IP Range");
+        btnAddRange.setPrefWidth(120);
         btnAddRange.setOnAction(e -> addIpRange());
+
         Button btnRemoveRange = new Button("Remove Selected");
+        btnRemoveRange.setPrefWidth(120);
         btnRemoveRange.setOnAction(e -> {
             IpRangeItem selected = tvIpRanges.getSelectionModel().getSelectedItem();
             if (selected != null) {
                 ipRanges.remove(selected);
+                tvIpRanges.refresh();
                 updateAdvancedIpCount();
             }
         });
@@ -520,12 +526,16 @@ public class MainController {
         tvCidrs.getColumns().add(colCidr);
 
         Button btnAddCidr = new Button("Add CIDR");
+        btnAddCidr.setPrefWidth(120);
         btnAddCidr.setOnAction(e -> addCidr());
+
         Button btnRemoveCidr = new Button("Remove Selected");
+        btnRemoveCidr.setPrefWidth(120);
         btnRemoveCidr.setOnAction(e -> {
             CidrItem selected = tvCidrs.getSelectionModel().getSelectedItem();
             if (selected != null) {
                 cidrs.remove(selected);
+                tvCidrs.refresh();
                 updateAdvancedIpCount();
             }
         });
@@ -554,7 +564,7 @@ public class MainController {
         Label lblTitle = new Label("2. Credentials");
         lblTitle.getStyleClass().add("section-title");
 
-        Button btnManageCredentials = new Button("Add/Manage Credentials");
+        btnManageCredentials = new Button("Add/Manage Credentials");
         btnManageCredentials.setMaxWidth(Double.MAX_VALUE);
         btnManageCredentials.setPrefHeight(35);
         btnManageCredentials.setOnAction(e -> showCredentialManagementDialog());
@@ -703,6 +713,9 @@ public class MainController {
     }
 
     private void populateAdvancedNetworkInterfaces() {
+        // Clear existing items to prevent duplication on repeated modal opens
+        networkInterfaces.clear();
+
         List<NetworkInterface> interfaces = NetworkUtils.getActiveNetworkInterfaces();
         for (NetworkInterface ni : interfaces) {
             try {
@@ -736,12 +749,12 @@ public class MainController {
     }
 
     private void addIpRange() {
-        ipRanges.add(new IpRangeItem("192.168.1.1", "192.168.1.254"));
+        ipRanges.add(new IpRangeItem("", ""));
         updateAdvancedIpCount();
     }
 
     private void addCidr() {
-        cidrs.add(new CidrItem("192.168.1.0/24"));
+        cidrs.add(new CidrItem(""));
         updateAdvancedIpCount();
     }
 
@@ -1498,13 +1511,16 @@ public class MainController {
     }
 
     private void disableInputs() {
-        // Network and credential configuration is now in modals
-        // These are disabled during discovery
+        // Disable modal buttons and start button during discovery
+        btnConfigureNetwork.setDisable(true);
+        btnManageCredentials.setDisable(true);
         btnStart.setDisable(true);
     }
 
     private void enableInputs() {
         discoveryInProgress = false;
+        btnConfigureNetwork.setDisable(false);
+        btnManageCredentials.setDisable(false);
         updateStartButtonState();
     }
 
@@ -1661,6 +1677,7 @@ public class MainController {
 
         btnAddCredential = new Button("Add Credential");
         btnAddCredential.setMaxWidth(Double.MAX_VALUE);
+        btnAddCredential.setPrefHeight(30);
         btnAddCredential.setOnAction(e -> addCredential());
 
         // Credentials list
