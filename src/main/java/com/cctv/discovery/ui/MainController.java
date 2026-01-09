@@ -241,7 +241,7 @@ public class MainController {
         Label lblTitle = new Label("1. Network Selection");
         lblTitle.getStyleClass().add("section-title");
 
-        btnConfigureNetwork = new Button("Configure Network");
+        btnConfigureNetwork = new Button("Select Network");
         btnConfigureNetwork.setMaxWidth(Double.MAX_VALUE);
         btnConfigureNetwork.setPrefHeight(35);
         btnConfigureNetwork.setOnAction(e -> showNetworkConfigDialog());
@@ -396,8 +396,54 @@ public class MainController {
 
             @Override
             public void commitEdit(String newValue) {
-                super.commitEdit(newValue);
                 IpRangeItem range = getTableView().getItems().get(getIndex());
+                String oldValue = range.getStartIp();
+
+                // Validate for duplicates (excluding current item)
+                boolean isDuplicate = false;
+                for (int i = 0; i < getTableView().getItems().size(); i++) {
+                    if (i != getIndex()) {
+                        IpRangeItem other = getTableView().getItems().get(i);
+                        if (other.getStartIp().equals(newValue) && other.getEndIp().equals(range.getEndIp())) {
+                            isDuplicate = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (isDuplicate) {
+                    // Show error alert
+                    Alert alert = new Alert(Alert.AlertType.ERROR);
+                    alert.setTitle("Duplicate IP Range");
+                    alert.setHeaderText("This IP range already exists");
+                    alert.setContentText(String.format("IP Range: %s - %s\n\nPlease enter a different IP range.",
+                                                       newValue, range.getEndIp()));
+                    alert.showAndWait();
+
+                    // Apply error styling and revert to old value
+                    textField.setStyle("-fx-border-color: #dc3545; -fx-border-width: 2px; -fx-background-color: #fff5f5;");
+                    textField.setText(oldValue);
+                    cancelEdit();
+                    return;
+                }
+
+                // Check for overlapping ranges (warn but allow)
+                for (int i = 0; i < getTableView().getItems().size(); i++) {
+                    if (i != getIndex()) {
+                        IpRangeItem other = getTableView().getItems().get(i);
+                        if (isOverlappingIpRange(newValue, range.getEndIp(), other.getStartIp(), other.getEndIp())) {
+                            Alert warning = new Alert(Alert.AlertType.WARNING);
+                            warning.setTitle("Overlapping IP Range");
+                            warning.setHeaderText("This IP range overlaps with an existing range");
+                            warning.setContentText(String.format("New Range: %s - %s\nExisting Range: %s - %s\n\nThis is allowed but may cause redundant scanning.",
+                                                                 newValue, range.getEndIp(), other.getStartIp(), other.getEndIp()));
+                            warning.showAndWait();
+                            break; // Only show warning once
+                        }
+                    }
+                }
+
+                super.commitEdit(newValue);
                 range.setStartIp(newValue);
                 updateAdvancedIpCount();
             }
@@ -443,8 +489,54 @@ public class MainController {
 
             @Override
             public void commitEdit(String newValue) {
-                super.commitEdit(newValue);
                 IpRangeItem range = getTableView().getItems().get(getIndex());
+                String oldValue = range.getEndIp();
+
+                // Validate for duplicates (excluding current item)
+                boolean isDuplicate = false;
+                for (int i = 0; i < getTableView().getItems().size(); i++) {
+                    if (i != getIndex()) {
+                        IpRangeItem other = getTableView().getItems().get(i);
+                        if (other.getStartIp().equals(range.getStartIp()) && other.getEndIp().equals(newValue)) {
+                            isDuplicate = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (isDuplicate) {
+                    // Show error alert
+                    Alert alert = new Alert(Alert.AlertType.ERROR);
+                    alert.setTitle("Duplicate IP Range");
+                    alert.setHeaderText("This IP range already exists");
+                    alert.setContentText(String.format("IP Range: %s - %s\n\nPlease enter a different IP range.",
+                                                       range.getStartIp(), newValue));
+                    alert.showAndWait();
+
+                    // Apply error styling and revert to old value
+                    textField.setStyle("-fx-border-color: #dc3545; -fx-border-width: 2px; -fx-background-color: #fff5f5;");
+                    textField.setText(oldValue);
+                    cancelEdit();
+                    return;
+                }
+
+                // Check for overlapping ranges (warn but allow)
+                for (int i = 0; i < getTableView().getItems().size(); i++) {
+                    if (i != getIndex()) {
+                        IpRangeItem other = getTableView().getItems().get(i);
+                        if (isOverlappingIpRange(range.getStartIp(), newValue, other.getStartIp(), other.getEndIp())) {
+                            Alert warning = new Alert(Alert.AlertType.WARNING);
+                            warning.setTitle("Overlapping IP Range");
+                            warning.setHeaderText("This IP range overlaps with an existing range");
+                            warning.setContentText(String.format("New Range: %s - %s\nExisting Range: %s - %s\n\nThis is allowed but may cause redundant scanning.",
+                                                                 range.getStartIp(), newValue, other.getStartIp(), other.getEndIp()));
+                            warning.showAndWait();
+                            break; // Only show warning once
+                        }
+                    }
+                }
+
+                super.commitEdit(newValue);
                 range.setEndIp(newValue);
                 updateAdvancedIpCount();
             }
@@ -461,7 +553,7 @@ public class MainController {
         Button btnRemoveRange = new Button("Remove Selected");
         btnRemoveRange.setPrefWidth(120);
         btnRemoveRange.setPrefHeight(30);
-        btnRemoveRange.setStyle("-fx-background-color: #dc3545; -fx-text-fill: white; -fx-font-weight: bold;");
+        btnRemoveRange.setStyle("-fx-background-color: #ffc107; -fx-text-fill: black; -fx-font-weight: bold;");
         btnRemoveRange.setOnAction(e -> {
             IpRangeItem selected = tvIpRanges.getSelectionModel().getSelectedItem();
             if (selected != null) {
@@ -519,8 +611,37 @@ public class MainController {
 
             @Override
             public void commitEdit(String newValue) {
-                super.commitEdit(newValue);
                 CidrItem cidr = getTableView().getItems().get(getIndex());
+                String oldValue = cidr.getCidr();
+
+                // Validate for duplicates (excluding current item)
+                boolean isDuplicate = false;
+                for (int i = 0; i < getTableView().getItems().size(); i++) {
+                    if (i != getIndex()) {
+                        CidrItem other = getTableView().getItems().get(i);
+                        if (other.getCidr().equals(newValue)) {
+                            isDuplicate = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (isDuplicate) {
+                    // Show error alert
+                    Alert alert = new Alert(Alert.AlertType.ERROR);
+                    alert.setTitle("Duplicate CIDR");
+                    alert.setHeaderText("This CIDR notation already exists");
+                    alert.setContentText(String.format("CIDR: %s\n\nPlease enter a different CIDR notation.", newValue));
+                    alert.showAndWait();
+
+                    // Apply error styling and revert to old value
+                    textField.setStyle("-fx-border-color: #dc3545; -fx-border-width: 2px; -fx-background-color: #fff5f5;");
+                    textField.setText(oldValue);
+                    cancelEdit();
+                    return;
+                }
+
+                super.commitEdit(newValue);
                 cidr.setCidr(newValue);
                 updateAdvancedIpCount();
             }
@@ -537,7 +658,7 @@ public class MainController {
         Button btnRemoveCidr = new Button("Remove Selected");
         btnRemoveCidr.setPrefWidth(120);
         btnRemoveCidr.setPrefHeight(30);
-        btnRemoveCidr.setStyle("-fx-background-color: #dc3545; -fx-text-fill: white; -fx-font-weight: bold;");
+        btnRemoveCidr.setStyle("-fx-background-color: #ffc107; -fx-text-fill: black; -fx-font-weight: bold;");
         btnRemoveCidr.setOnAction(e -> {
             CidrItem selected = tvCidrs.getSelectionModel().getSelectedItem();
             if (selected != null) {
@@ -570,7 +691,7 @@ public class MainController {
         Label lblTitle = new Label("2. Credentials");
         lblTitle.getStyleClass().add("section-title");
 
-        btnManageCredentials = new Button("Add/Manage Credentials");
+        btnManageCredentials = new Button("Set Credentials");
         btnManageCredentials.setMaxWidth(Double.MAX_VALUE);
         btnManageCredentials.setPrefHeight(35);
         btnManageCredentials.setOnAction(e -> showCredentialManagementDialog());
@@ -790,6 +911,57 @@ public class MainController {
             }
         }
         return false;
+    }
+
+    /**
+     * Convert an IP address string to a long value for comparison
+     */
+    private long ipToLong(String ipAddress) {
+        String[] octets = ipAddress.split("\\.");
+        if (octets.length != 4) {
+            return 0;
+        }
+        long result = 0;
+        for (int i = 0; i < 4; i++) {
+            result |= (Long.parseLong(octets[i]) << (24 - (8 * i)));
+        }
+        return result;
+    }
+
+    /**
+     * Check if two IP ranges overlap
+     * @param start1 Start IP of first range
+     * @param end1 End IP of first range
+     * @param start2 Start IP of second range
+     * @param end2 End IP of second range
+     * @return true if ranges overlap
+     */
+    private boolean isOverlappingIpRange(String start1, String end1, String start2, String end2) {
+        // Validate all IPs first
+        if (!NetworkUtils.isValidIP(start1) || !NetworkUtils.isValidIP(end1) ||
+            !NetworkUtils.isValidIP(start2) || !NetworkUtils.isValidIP(end2)) {
+            return false;
+        }
+
+        long s1 = ipToLong(start1);
+        long e1 = ipToLong(end1);
+        long s2 = ipToLong(start2);
+        long e2 = ipToLong(end2);
+
+        // Ensure start <= end for both ranges
+        if (s1 > e1) {
+            long temp = s1;
+            s1 = e1;
+            e1 = temp;
+        }
+        if (s2 > e2) {
+            long temp = s2;
+            s2 = e2;
+            e2 = temp;
+        }
+
+        // Check for overlap: ranges overlap if one starts before the other ends
+        return (s1 <= e2 && e1 >= s2);
     }
 
     private void updateAdvancedIpCount() {
@@ -1083,7 +1255,26 @@ public class MainController {
             lblProgress.setText("Discovery complete! Found " + finalDevices.size() + " devices.");
             enableInputs();
             btnExport.setDisable(finalDevices.isEmpty());
+            updateExportButtonColor();
         });
+    }
+
+    /**
+     * Update export button color based on discovery results:
+     * - Green if any devices succeeded
+     * - Amber if all devices failed
+     */
+    private void updateExportButtonColor() {
+        boolean anySuccess = devices.stream()
+                .anyMatch(d -> !d.getRtspStreams().isEmpty());
+
+        if (anySuccess) {
+            // Green if any devices have streams
+            btnExport.setStyle("-fx-background-color: #28a745; -fx-text-fill: white; -fx-font-weight: bold;");
+        } else {
+            // Amber if all devices failed
+            btnExport.setStyle("-fx-background-color: #ffc107; -fx-text-fill: black; -fx-font-weight: bold;");
+        }
     }
 
     private void authenticateAndDiscoverStreams(Device device) {
@@ -1224,6 +1415,19 @@ public class MainController {
         dialog.setTitle("Retry Authentication");
         dialog.setHeaderText("Retry authentication for " + device.getIpAddress());
 
+        // Set window icon
+        dialog.setOnShown(e -> {
+            try {
+                javafx.stage.Stage stage = (javafx.stage.Stage) dialog.getDialogPane().getScene().getWindow();
+                java.io.InputStream iconStream = getClass().getResourceAsStream("/icon.png");
+                if (iconStream != null) {
+                    stage.getIcons().add(new javafx.scene.image.Image(iconStream));
+                }
+            } catch (Exception ex) {
+                logger.debug("Could not load icon for retry authentication dialog", ex);
+            }
+        });
+
         GridPane grid = new GridPane();
         grid.setHgap(10);
         grid.setVgap(10);
@@ -1243,7 +1447,21 @@ public class MainController {
         dialog.getDialogPane().setContent(grid);
 
         ButtonType retryButton = new ButtonType("Retry", ButtonBar.ButtonData.OK_DONE);
-        dialog.getDialogPane().getButtonTypes().addAll(retryButton, ButtonType.CANCEL);
+        ButtonType cancelButton = ButtonType.CANCEL;
+        dialog.getDialogPane().getButtonTypes().addAll(retryButton, cancelButton);
+
+        // Style buttons
+        dialog.setOnShowing(dialogEvent -> {
+            Button retryBtn = (Button) dialog.getDialogPane().lookupButton(retryButton);
+            Button cancelBtn = (Button) dialog.getDialogPane().lookupButton(cancelButton);
+
+            if (retryBtn != null) {
+                retryBtn.setStyle("-fx-background-color: #28a745; -fx-text-fill: white; -fx-font-weight: bold; -fx-pref-width: 80px; -fx-pref-height: 30px;");
+            }
+            if (cancelBtn != null) {
+                cancelBtn.setStyle("-fx-background-color: #6c757d; -fx-text-fill: white; -fx-font-weight: bold; -fx-pref-width: 80px; -fx-pref-height: 30px;");
+            }
+        });
 
         Optional<ButtonType> result = dialog.showAndWait();
 
@@ -1367,6 +1585,32 @@ public class MainController {
         siteDialog.setHeaderText("Enter Report Details");
         siteDialog.setContentText("Site ID (required):");
 
+        // Set window icon
+        siteDialog.setOnShown(e -> {
+            try {
+                javafx.stage.Stage stage = (javafx.stage.Stage) siteDialog.getDialogPane().getScene().getWindow();
+                java.io.InputStream iconStream = getClass().getResourceAsStream("/icon.png");
+                if (iconStream != null) {
+                    stage.getIcons().add(new javafx.scene.image.Image(iconStream));
+                }
+            } catch (Exception ex) {
+                logger.debug("Could not load icon for export dialog", ex);
+            }
+        });
+
+        // Style buttons
+        siteDialog.setOnShowing(dialogEvent -> {
+            Button okBtn = (Button) siteDialog.getDialogPane().lookupButton(ButtonType.OK);
+            Button cancelBtn = (Button) siteDialog.getDialogPane().lookupButton(ButtonType.CANCEL);
+
+            if (okBtn != null) {
+                okBtn.setStyle("-fx-background-color: #28a745; -fx-text-fill: white; -fx-font-weight: bold; -fx-pref-width: 80px; -fx-pref-height: 30px;");
+            }
+            if (cancelBtn != null) {
+                cancelBtn.setStyle("-fx-background-color: #6c757d; -fx-text-fill: white; -fx-font-weight: bold; -fx-pref-width: 80px; -fx-pref-height: 30px;");
+            }
+        });
+
         Optional<String> siteId = siteDialog.showAndWait();
         if (!siteId.isPresent() || siteId.get().trim().isEmpty()) {
             return;
@@ -1387,7 +1631,10 @@ public class MainController {
         // Step 3: Choose file location with default from config
         FileChooser fileChooser = new FileChooser();
         fileChooser.setTitle("Save Excel Report");
-        fileChooser.setInitialFileName("CCTV_Audit_" + siteId.get() + ".xlsx");
+
+        // Format: cctv-discovery-report-{SITE ID}-YYYYMMDD-HHMM.xlsx
+        String timestamp = new java.text.SimpleDateFormat("yyyyMMdd-HHmm").format(new java.util.Date());
+        fileChooser.setInitialFileName("cctv-discovery-report-" + siteId.get() + "-" + timestamp + ".xlsx");
 
         // Set initial directory from config
         String exportDir = config.getExportDefaultDirectory();
@@ -1436,6 +1683,19 @@ public class MainController {
         dialog.setTitle("Help");
         dialog.setHeaderText("CCTV Discovery Tool - Quick Guide");
 
+        // Set window icon
+        dialog.setOnShown(e -> {
+            try {
+                javafx.stage.Stage stage = (javafx.stage.Stage) dialog.getDialogPane().getScene().getWindow();
+                java.io.InputStream iconStream = getClass().getResourceAsStream("/icon.png");
+                if (iconStream != null) {
+                    stage.getIcons().add(new javafx.scene.image.Image(iconStream));
+                }
+            } catch (Exception ex) {
+                logger.debug("Could not load icon for help dialog", ex);
+            }
+        });
+
         // Content
         VBox content = new VBox(15);
         content.setPadding(new Insets(20));
@@ -1478,6 +1738,14 @@ public class MainController {
         // Close button
         ButtonType closeButton = new ButtonType("Close", ButtonBar.ButtonData.OK_DONE);
         dialog.getDialogPane().getButtonTypes().add(closeButton);
+
+        // Style close button
+        dialog.setOnShowing(dialogEvent -> {
+            Button closeBtn = (Button) dialog.getDialogPane().lookupButton(closeButton);
+            if (closeBtn != null) {
+                closeBtn.setStyle("-fx-background-color: #28a745; -fx-text-fill: white; -fx-font-weight: bold; -fx-pref-width: 80px; -fx-pref-height: 30px;");
+            }
+        });
 
         dialog.showAndWait();
     }
@@ -1583,6 +1851,19 @@ public class MainController {
         dialog.setTitle("Network Configuration");
         dialog.setHeaderText("Configure Network Selection");
         dialog.getDialogPane().setPrefWidth(600);
+
+        // Set window icon
+        dialog.setOnShown(e -> {
+            try {
+                javafx.stage.Stage stage = (javafx.stage.Stage) dialog.getDialogPane().getScene().getWindow();
+                java.io.InputStream iconStream = getClass().getResourceAsStream("/icon.png");
+                if (iconStream != null) {
+                    stage.getIcons().add(new javafx.scene.image.Image(iconStream));
+                }
+            } catch (Exception ex) {
+                logger.debug("Could not load icon for network config dialog", ex);
+            }
+        });
 
         // Create tab pane
         TabPane tabPane = new TabPane();
@@ -1728,6 +2009,19 @@ public class MainController {
         dialog.getDialogPane().setPrefWidth(500);
         dialog.getDialogPane().setPrefHeight(400);
 
+        // Set window icon
+        dialog.setOnShown(e -> {
+            try {
+                javafx.stage.Stage stage = (javafx.stage.Stage) dialog.getDialogPane().getScene().getWindow();
+                java.io.InputStream iconStream = getClass().getResourceAsStream("/icon.png");
+                if (iconStream != null) {
+                    stage.getIcons().add(new javafx.scene.image.Image(iconStream));
+                }
+            } catch (Exception ex) {
+                logger.debug("Could not load icon for credential management dialog", ex);
+            }
+        });
+
         VBox content = new VBox(10);
         content.setPadding(new Insets(15));
 
@@ -1743,7 +2037,7 @@ public class MainController {
         btnAddCredential = new Button("Add Credential");
         btnAddCredential.setMaxWidth(Double.MAX_VALUE);
         btnAddCredential.setPrefHeight(30);
-        btnAddCredential.setStyle("-fx-background-color: #28a745; -fx-text-fill: white; -fx-font-weight: bold;");
+        btnAddCredential.setStyle("-fx-background-color: #0078d4; -fx-text-fill: white; -fx-font-weight: bold;");
         btnAddCredential.setOnAction(e -> addCredential());
 
         // Credentials list
@@ -1771,7 +2065,7 @@ public class MainController {
         dialog.setOnShowing(dialogEvent -> {
             Button okBtn = (Button) dialog.getDialogPane().lookupButton(okButton);
             if (okBtn != null) {
-                okBtn.setStyle("-fx-background-color: #28a745; -fx-text-fill: white; -fx-font-weight: bold; -fx-pref-width: 80px; -fx-pref-height: 30px;");
+                okBtn.setStyle("-fx-background-color: #0078d4; -fx-text-fill: white; -fx-font-weight: bold; -fx-pref-width: 80px; -fx-pref-height: 30px;");
             }
         });
 
