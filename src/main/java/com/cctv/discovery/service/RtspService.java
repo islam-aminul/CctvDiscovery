@@ -241,6 +241,7 @@ public class RtspService {
             String request = "DESCRIBE " + rtspUrl + " RTSP/1.0\r\n" +
                     "CSeq: 1\r\n" +
                     "User-Agent: CCTV-Discovery/1.0\r\n" +
+                    "Accept: application/sdp\r\n" +
                     "\r\n";
 
             out.write(request.getBytes());
@@ -249,22 +250,67 @@ public class RtspService {
             // Read response
             String line = in.readLine();
             if (line == null) {
+                logger.debug("No response from RTSP URL: {}", rtspUrl);
                 return null;
             }
 
             if (line.contains("401")) {
                 // Unauthorized - need authentication
+                logger.debug("RTSP URL requires authentication: {}", rtspUrl);
                 return testRtspUrlWithAuth(rtspUrl, username, password, socket, in, out);
             } else if (line.contains("200")) {
-                // Success without auth (rare)
-                RTSPStream stream = new RTSPStream("Main", rtspUrl);
-                return stream;
+                // Success - validate SDP content
+                logger.debug("Got 200 OK from RTSP URL, validating SDP: {}", rtspUrl);
+
+                // Read headers to get Content-Length
+                int contentLength = 0;
+                String headerLine;
+                while ((headerLine = in.readLine()) != null) {
+                    if (headerLine.isEmpty()) {
+                        break; // End of headers
+                    }
+                    if (headerLine.startsWith("Content-Length:")) {
+                        try {
+                            contentLength = Integer.parseInt(headerLine.substring(15).trim());
+                        } catch (NumberFormatException e) {
+                            logger.debug("Invalid Content-Length header");
+                        }
+                    }
+                }
+
+                // Read SDP body
+                StringBuilder sdpBody = new StringBuilder();
+                if (contentLength > 0) {
+                    char[] buffer = new char[contentLength];
+                    int read = in.read(buffer, 0, contentLength);
+                    if (read > 0) {
+                        sdpBody.append(buffer, 0, read);
+                    }
+                } else {
+                    // Read until connection closes or timeout
+                    String sdpLine;
+                    while ((sdpLine = in.readLine()) != null && !sdpLine.isEmpty()) {
+                        sdpBody.append(sdpLine).append("\n");
+                    }
+                }
+
+                // Validate SDP content
+                if (validateSdp(sdpBody.toString(), rtspUrl)) {
+                    logger.info("RTSP URL validated with SDP: {}", rtspUrl);
+                    RTSPStream stream = new RTSPStream("Main", rtspUrl);
+                    return stream;
+                } else {
+                    logger.warn("RTSP URL returned 200 OK but invalid/missing SDP: {}", rtspUrl);
+                    return null;
+                }
+            } else {
+                logger.debug("RTSP URL returned non-success code: {} - {}", line, rtspUrl);
             }
 
         } catch (SocketTimeoutException e) {
             logger.debug("Timeout testing RTSP URL: {}", rtspUrl);
         } catch (Exception e) {
-            logger.debug("Error testing RTSP URL: {}", rtspUrl);
+            logger.debug("Error testing RTSP URL {}: {}", rtspUrl, e.getMessage());
         } finally {
             if (socket != null && !socket.isClosed()) {
                 try {
@@ -302,6 +348,7 @@ public class RtspService {
             }
 
             if (realm == null || nonce == null) {
+                logger.debug("Missing realm or nonce in authentication challenge");
                 return null;
             }
 
@@ -313,6 +360,7 @@ public class RtspService {
                     "CSeq: 2\r\n" +
                     "User-Agent: CCTV-Discovery/1.0\r\n" +
                     "Authorization: " + authHeader + "\r\n" +
+                    "Accept: application/sdp\r\n" +
                     "\r\n";
 
             out.write(authRequest.getBytes());
@@ -320,14 +368,137 @@ public class RtspService {
 
             String responseLine = in.readLine();
             if (responseLine != null && responseLine.contains("200")) {
-                RTSPStream stream = new RTSPStream("Main", rtspUrl);
-                return stream;
+                logger.debug("Got 200 OK with authentication, validating SDP: {}", rtspUrl);
+
+                // Read headers to get Content-Length
+                int contentLength = 0;
+                String headerLine;
+                while ((headerLine = in.readLine()) != null) {
+                    if (headerLine.isEmpty()) {
+                        break; // End of headers
+                    }
+                    if (headerLine.startsWith("Content-Length:")) {
+                        try {
+                            contentLength = Integer.parseInt(headerLine.substring(15).trim());
+                        } catch (NumberFormatException e) {
+                            logger.debug("Invalid Content-Length header");
+                        }
+                    }
+                }
+
+                // Read SDP body
+                StringBuilder sdpBody = new StringBuilder();
+                if (contentLength > 0) {
+                    char[] buffer = new char[contentLength];
+                    int read = in.read(buffer, 0, contentLength);
+                    if (read > 0) {
+                        sdpBody.append(buffer, 0, read);
+                    }
+                } else {
+                    // Read until connection closes or timeout
+                    String sdpLine;
+                    while ((sdpLine = in.readLine()) != null && !sdpLine.isEmpty()) {
+                        sdpBody.append(sdpLine).append("\n");
+                    }
+                }
+
+                // Validate SDP content
+                if (validateSdp(sdpBody.toString(), rtspUrl)) {
+                    logger.info("RTSP URL authenticated and validated with SDP: {}", rtspUrl);
+                    RTSPStream stream = new RTSPStream("Main", rtspUrl);
+                    return stream;
+                } else {
+                    logger.warn("RTSP URL authenticated but invalid/missing SDP: {}", rtspUrl);
+                    return null;
+                }
+            } else {
+                logger.debug("Authentication failed for RTSP URL: {}", rtspUrl);
             }
 
         } catch (Exception e) {
-            logger.debug("Error during RTSP authentication", e);
+            logger.debug("Error during RTSP authentication for {}: {}", rtspUrl, e.getMessage());
         }
         return null;
+    }
+
+    /**
+     * Validate SDP (Session Description Protocol) content from RTSP DESCRIBE response.
+     * Checks for presence of video media track to confirm stream is actually available.
+     *
+     * SDP format (RFC 4566):
+     * v=0                               (version)
+     * o=- 1234567890 1234567890 IN IP4 192.168.1.100  (origin)
+     * s=Session                         (session name)
+     * c=IN IP4 192.168.1.100           (connection info)
+     * t=0 0                            (time)
+     * m=video 0 RTP/AVP 96             (media - THIS IS CRITICAL)
+     * a=rtpmap:96 H264/90000           (codec)
+     * a=control:track1                 (control URL)
+     *
+     * @param sdpContent The SDP body from RTSP response
+     * @param rtspUrl The RTSP URL being tested (for logging)
+     * @return true if SDP contains valid video stream, false otherwise
+     */
+    private boolean validateSdp(String sdpContent, String rtspUrl) {
+        if (sdpContent == null || sdpContent.trim().isEmpty()) {
+            logger.debug("Empty SDP content for {}", rtspUrl);
+            return false;
+        }
+
+        logger.debug("Validating SDP content for {} - Length: {} bytes", rtspUrl, sdpContent.length());
+
+        // Basic SDP validation
+        boolean hasVersion = false;
+        boolean hasVideoMedia = false;
+        boolean hasCodecInfo = false;
+
+        String[] lines = sdpContent.split("\r?\n");
+
+        for (String line : lines) {
+            line = line.trim();
+
+            // Check for SDP version (required - RFC 4566)
+            if (line.startsWith("v=")) {
+                hasVersion = true;
+                logger.debug("SDP version line found: {}", line);
+            }
+
+            // Check for video media track (critical - proves video stream exists)
+            if (line.startsWith("m=video")) {
+                hasVideoMedia = true;
+                logger.debug("SDP video media track found: {}", line);
+            }
+
+            // Check for codec info (nice to have - indicates proper stream configuration)
+            if (line.startsWith("a=rtpmap:") &&
+                (line.contains("H264") || line.contains("H265") || line.contains("HEVC") ||
+                 line.contains("MPEG4") || line.contains("MJPEG") || line.contains("MP4V"))) {
+                hasCodecInfo = true;
+                logger.debug("SDP codec info found: {}", line);
+            }
+        }
+
+        // Version is required by RFC 4566
+        if (!hasVersion) {
+            logger.warn("SDP missing version line (v=) for {}", rtspUrl);
+            return false;
+        }
+
+        // Video media track is critical - without it, there's no video stream
+        if (!hasVideoMedia) {
+            logger.warn("SDP missing video media track (m=video) for {} - May be audio-only or invalid stream", rtspUrl);
+            return false;
+        }
+
+        // Log codec info status (informational only - not required for validation)
+        if (!hasCodecInfo) {
+            logger.debug("SDP missing explicit codec info (a=rtpmap) for {} - Stream may still work", rtspUrl);
+        }
+
+        logger.info("SDP validation PASSED for {} - Version: {}, Video: {}, Codec: {}",
+                    rtspUrl, hasVersion, hasVideoMedia, hasCodecInfo);
+
+        return true;
     }
 
     /**
