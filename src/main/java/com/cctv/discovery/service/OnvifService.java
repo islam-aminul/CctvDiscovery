@@ -9,6 +9,10 @@ import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.NodeList;
 
+import javax.net.ssl.HttpsURLConnection;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.X509TrustManager;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.soap.*;
@@ -21,6 +25,7 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -34,6 +39,38 @@ public class OnvifService {
     private static final String WS_DISCOVERY_ADDRESS = "239.255.255.250";
     private static final int WS_DISCOVERY_PORT = 3702;
     private static final int DISCOVERY_TIMEOUT_MS = 5000;
+
+    // Static block to disable SSL certificate validation for self-signed camera certificates
+    static {
+        try {
+            // Create a trust manager that trusts all certificates
+            TrustManager[] trustAllCerts = new TrustManager[]{
+                new X509TrustManager() {
+                    public X509Certificate[] getAcceptedIssuers() {
+                        return null;
+                    }
+                    public void checkClientTrusted(X509Certificate[] certs, String authType) {
+                        // Trust all client certificates
+                    }
+                    public void checkServerTrusted(X509Certificate[] certs, String authType) {
+                        // Trust all server certificates (cameras with self-signed certs)
+                    }
+                }
+            };
+
+            // Install the all-trusting trust manager
+            SSLContext sc = SSLContext.getInstance("TLS");
+            sc.init(null, trustAllCerts, new java.security.SecureRandom());
+            HttpsURLConnection.setDefaultSSLSocketFactory(sc.getSocketFactory());
+
+            // Disable hostname verification (cameras often use IP addresses)
+            HttpsURLConnection.setDefaultHostnameVerifier((hostname, session) -> true);
+
+            logger.info("SSL certificate validation disabled for ONVIF HTTPS connections");
+        } catch (Exception e) {
+            logger.error("Failed to disable SSL certificate validation", e);
+        }
+    }
 
     /**
      * Send WS-Discovery probe and collect ONVIF device responses.
