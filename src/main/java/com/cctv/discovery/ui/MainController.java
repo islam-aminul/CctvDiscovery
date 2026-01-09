@@ -241,7 +241,7 @@ public class MainController {
         Label lblTitle = new Label("1. Network Selection");
         lblTitle.getStyleClass().add("section-title");
 
-        btnConfigureNetwork = new Button("Configure Network");
+        btnConfigureNetwork = new Button("Select Network");
         btnConfigureNetwork.setMaxWidth(Double.MAX_VALUE);
         btnConfigureNetwork.setPrefHeight(35);
         btnConfigureNetwork.setOnAction(e -> showNetworkConfigDialog());
@@ -691,7 +691,7 @@ public class MainController {
         Label lblTitle = new Label("2. Credentials");
         lblTitle.getStyleClass().add("section-title");
 
-        btnManageCredentials = new Button("Add/Manage Credentials");
+        btnManageCredentials = new Button("Set Credentials");
         btnManageCredentials.setMaxWidth(Double.MAX_VALUE);
         btnManageCredentials.setPrefHeight(35);
         btnManageCredentials.setOnAction(e -> showCredentialManagementDialog());
@@ -1255,7 +1255,26 @@ public class MainController {
             lblProgress.setText("Discovery complete! Found " + finalDevices.size() + " devices.");
             enableInputs();
             btnExport.setDisable(finalDevices.isEmpty());
+            updateExportButtonColor();
         });
+    }
+
+    /**
+     * Update export button color based on discovery results:
+     * - Green if any devices succeeded
+     * - Amber if all devices failed
+     */
+    private void updateExportButtonColor() {
+        boolean anySuccess = devices.stream()
+                .anyMatch(d -> !d.getRtspStreams().isEmpty());
+
+        if (anySuccess) {
+            // Green if any devices have streams
+            btnExport.setStyle("-fx-background-color: #28a745; -fx-text-fill: white; -fx-font-weight: bold;");
+        } else {
+            // Amber if all devices failed
+            btnExport.setStyle("-fx-background-color: #ffc107; -fx-text-fill: black; -fx-font-weight: bold;");
+        }
     }
 
     private void authenticateAndDiscoverStreams(Device device) {
@@ -1396,6 +1415,19 @@ public class MainController {
         dialog.setTitle("Retry Authentication");
         dialog.setHeaderText("Retry authentication for " + device.getIpAddress());
 
+        // Set window icon
+        dialog.setOnShown(e -> {
+            try {
+                javafx.stage.Stage stage = (javafx.stage.Stage) dialog.getDialogPane().getScene().getWindow();
+                java.io.InputStream iconStream = getClass().getResourceAsStream("/icon.png");
+                if (iconStream != null) {
+                    stage.getIcons().add(new javafx.scene.image.Image(iconStream));
+                }
+            } catch (Exception ex) {
+                logger.debug("Could not load icon for retry authentication dialog", ex);
+            }
+        });
+
         GridPane grid = new GridPane();
         grid.setHgap(10);
         grid.setVgap(10);
@@ -1415,7 +1447,21 @@ public class MainController {
         dialog.getDialogPane().setContent(grid);
 
         ButtonType retryButton = new ButtonType("Retry", ButtonBar.ButtonData.OK_DONE);
-        dialog.getDialogPane().getButtonTypes().addAll(retryButton, ButtonType.CANCEL);
+        ButtonType cancelButton = ButtonType.CANCEL;
+        dialog.getDialogPane().getButtonTypes().addAll(retryButton, cancelButton);
+
+        // Style buttons
+        dialog.setOnShowing(dialogEvent -> {
+            Button retryBtn = (Button) dialog.getDialogPane().lookupButton(retryButton);
+            Button cancelBtn = (Button) dialog.getDialogPane().lookupButton(cancelButton);
+
+            if (retryBtn != null) {
+                retryBtn.setStyle("-fx-background-color: #28a745; -fx-text-fill: white; -fx-font-weight: bold; -fx-pref-width: 80px; -fx-pref-height: 30px;");
+            }
+            if (cancelBtn != null) {
+                cancelBtn.setStyle("-fx-background-color: #6c757d; -fx-text-fill: white; -fx-font-weight: bold; -fx-pref-width: 80px; -fx-pref-height: 30px;");
+            }
+        });
 
         Optional<ButtonType> result = dialog.showAndWait();
 
@@ -1539,6 +1585,32 @@ public class MainController {
         siteDialog.setHeaderText("Enter Report Details");
         siteDialog.setContentText("Site ID (required):");
 
+        // Set window icon
+        siteDialog.setOnShown(e -> {
+            try {
+                javafx.stage.Stage stage = (javafx.stage.Stage) siteDialog.getDialogPane().getScene().getWindow();
+                java.io.InputStream iconStream = getClass().getResourceAsStream("/icon.png");
+                if (iconStream != null) {
+                    stage.getIcons().add(new javafx.scene.image.Image(iconStream));
+                }
+            } catch (Exception ex) {
+                logger.debug("Could not load icon for export dialog", ex);
+            }
+        });
+
+        // Style buttons
+        siteDialog.setOnShowing(dialogEvent -> {
+            Button okBtn = (Button) siteDialog.getDialogPane().lookupButton(ButtonType.OK);
+            Button cancelBtn = (Button) siteDialog.getDialogPane().lookupButton(ButtonType.CANCEL);
+
+            if (okBtn != null) {
+                okBtn.setStyle("-fx-background-color: #28a745; -fx-text-fill: white; -fx-font-weight: bold; -fx-pref-width: 80px; -fx-pref-height: 30px;");
+            }
+            if (cancelBtn != null) {
+                cancelBtn.setStyle("-fx-background-color: #6c757d; -fx-text-fill: white; -fx-font-weight: bold; -fx-pref-width: 80px; -fx-pref-height: 30px;");
+            }
+        });
+
         Optional<String> siteId = siteDialog.showAndWait();
         if (!siteId.isPresent() || siteId.get().trim().isEmpty()) {
             return;
@@ -1559,7 +1631,10 @@ public class MainController {
         // Step 3: Choose file location with default from config
         FileChooser fileChooser = new FileChooser();
         fileChooser.setTitle("Save Excel Report");
-        fileChooser.setInitialFileName("CCTV_Audit_" + siteId.get() + ".xlsx");
+
+        // Format: cctv-discovery-report-{SITE ID}-YYYYMMDD-HHMM.xlsx
+        String timestamp = new java.text.SimpleDateFormat("yyyyMMdd-HHmm").format(new java.util.Date());
+        fileChooser.setInitialFileName("cctv-discovery-report-" + siteId.get() + "-" + timestamp + ".xlsx");
 
         // Set initial directory from config
         String exportDir = config.getExportDefaultDirectory();
@@ -1608,6 +1683,19 @@ public class MainController {
         dialog.setTitle("Help");
         dialog.setHeaderText("CCTV Discovery Tool - Quick Guide");
 
+        // Set window icon
+        dialog.setOnShown(e -> {
+            try {
+                javafx.stage.Stage stage = (javafx.stage.Stage) dialog.getDialogPane().getScene().getWindow();
+                java.io.InputStream iconStream = getClass().getResourceAsStream("/icon.png");
+                if (iconStream != null) {
+                    stage.getIcons().add(new javafx.scene.image.Image(iconStream));
+                }
+            } catch (Exception ex) {
+                logger.debug("Could not load icon for help dialog", ex);
+            }
+        });
+
         // Content
         VBox content = new VBox(15);
         content.setPadding(new Insets(20));
@@ -1650,6 +1738,14 @@ public class MainController {
         // Close button
         ButtonType closeButton = new ButtonType("Close", ButtonBar.ButtonData.OK_DONE);
         dialog.getDialogPane().getButtonTypes().add(closeButton);
+
+        // Style close button
+        dialog.setOnShowing(dialogEvent -> {
+            Button closeBtn = (Button) dialog.getDialogPane().lookupButton(closeButton);
+            if (closeBtn != null) {
+                closeBtn.setStyle("-fx-background-color: #28a745; -fx-text-fill: white; -fx-font-weight: bold; -fx-pref-width: 80px; -fx-pref-height: 30px;");
+            }
+        });
 
         dialog.showAndWait();
     }
@@ -1755,6 +1851,19 @@ public class MainController {
         dialog.setTitle("Network Configuration");
         dialog.setHeaderText("Configure Network Selection");
         dialog.getDialogPane().setPrefWidth(600);
+
+        // Set window icon
+        dialog.setOnShown(e -> {
+            try {
+                javafx.stage.Stage stage = (javafx.stage.Stage) dialog.getDialogPane().getScene().getWindow();
+                java.io.InputStream iconStream = getClass().getResourceAsStream("/icon.png");
+                if (iconStream != null) {
+                    stage.getIcons().add(new javafx.scene.image.Image(iconStream));
+                }
+            } catch (Exception ex) {
+                logger.debug("Could not load icon for network config dialog", ex);
+            }
+        });
 
         // Create tab pane
         TabPane tabPane = new TabPane();
@@ -1900,6 +2009,19 @@ public class MainController {
         dialog.getDialogPane().setPrefWidth(500);
         dialog.getDialogPane().setPrefHeight(400);
 
+        // Set window icon
+        dialog.setOnShown(e -> {
+            try {
+                javafx.stage.Stage stage = (javafx.stage.Stage) dialog.getDialogPane().getScene().getWindow();
+                java.io.InputStream iconStream = getClass().getResourceAsStream("/icon.png");
+                if (iconStream != null) {
+                    stage.getIcons().add(new javafx.scene.image.Image(iconStream));
+                }
+            } catch (Exception ex) {
+                logger.debug("Could not load icon for credential management dialog", ex);
+            }
+        });
+
         VBox content = new VBox(10);
         content.setPadding(new Insets(15));
 
@@ -1915,7 +2037,7 @@ public class MainController {
         btnAddCredential = new Button("Add Credential");
         btnAddCredential.setMaxWidth(Double.MAX_VALUE);
         btnAddCredential.setPrefHeight(30);
-        btnAddCredential.setStyle("-fx-background-color: #28a745; -fx-text-fill: white; -fx-font-weight: bold;");
+        btnAddCredential.setStyle("-fx-background-color: #0078d4; -fx-text-fill: white; -fx-font-weight: bold;");
         btnAddCredential.setOnAction(e -> addCredential());
 
         // Credentials list
@@ -1943,7 +2065,7 @@ public class MainController {
         dialog.setOnShowing(dialogEvent -> {
             Button okBtn = (Button) dialog.getDialogPane().lookupButton(okButton);
             if (okBtn != null) {
-                okBtn.setStyle("-fx-background-color: #28a745; -fx-text-fill: white; -fx-font-weight: bold; -fx-pref-width: 80px; -fx-pref-height: 30px;");
+                okBtn.setStyle("-fx-background-color: #0078d4; -fx-text-fill: white; -fx-font-weight: bold; -fx-pref-width: 80px; -fx-pref-height: 30px;");
             }
         });
 
