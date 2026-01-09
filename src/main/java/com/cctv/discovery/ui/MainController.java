@@ -396,8 +396,54 @@ public class MainController {
 
             @Override
             public void commitEdit(String newValue) {
-                super.commitEdit(newValue);
                 IpRangeItem range = getTableView().getItems().get(getIndex());
+                String oldValue = range.getStartIp();
+
+                // Validate for duplicates (excluding current item)
+                boolean isDuplicate = false;
+                for (int i = 0; i < getTableView().getItems().size(); i++) {
+                    if (i != getIndex()) {
+                        IpRangeItem other = getTableView().getItems().get(i);
+                        if (other.getStartIp().equals(newValue) && other.getEndIp().equals(range.getEndIp())) {
+                            isDuplicate = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (isDuplicate) {
+                    // Show error alert
+                    Alert alert = new Alert(Alert.AlertType.ERROR);
+                    alert.setTitle("Duplicate IP Range");
+                    alert.setHeaderText("This IP range already exists");
+                    alert.setContentText(String.format("IP Range: %s - %s\n\nPlease enter a different IP range.",
+                                                       newValue, range.getEndIp()));
+                    alert.showAndWait();
+
+                    // Apply error styling and revert to old value
+                    textField.setStyle("-fx-border-color: #dc3545; -fx-border-width: 2px; -fx-background-color: #fff5f5;");
+                    textField.setText(oldValue);
+                    cancelEdit();
+                    return;
+                }
+
+                // Check for overlapping ranges (warn but allow)
+                for (int i = 0; i < getTableView().getItems().size(); i++) {
+                    if (i != getIndex()) {
+                        IpRangeItem other = getTableView().getItems().get(i);
+                        if (isOverlappingIpRange(newValue, range.getEndIp(), other.getStartIp(), other.getEndIp())) {
+                            Alert warning = new Alert(Alert.AlertType.WARNING);
+                            warning.setTitle("Overlapping IP Range");
+                            warning.setHeaderText("This IP range overlaps with an existing range");
+                            warning.setContentText(String.format("New Range: %s - %s\nExisting Range: %s - %s\n\nThis is allowed but may cause redundant scanning.",
+                                                                 newValue, range.getEndIp(), other.getStartIp(), other.getEndIp()));
+                            warning.showAndWait();
+                            break; // Only show warning once
+                        }
+                    }
+                }
+
+                super.commitEdit(newValue);
                 range.setStartIp(newValue);
                 updateAdvancedIpCount();
             }
@@ -443,8 +489,54 @@ public class MainController {
 
             @Override
             public void commitEdit(String newValue) {
-                super.commitEdit(newValue);
                 IpRangeItem range = getTableView().getItems().get(getIndex());
+                String oldValue = range.getEndIp();
+
+                // Validate for duplicates (excluding current item)
+                boolean isDuplicate = false;
+                for (int i = 0; i < getTableView().getItems().size(); i++) {
+                    if (i != getIndex()) {
+                        IpRangeItem other = getTableView().getItems().get(i);
+                        if (other.getStartIp().equals(range.getStartIp()) && other.getEndIp().equals(newValue)) {
+                            isDuplicate = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (isDuplicate) {
+                    // Show error alert
+                    Alert alert = new Alert(Alert.AlertType.ERROR);
+                    alert.setTitle("Duplicate IP Range");
+                    alert.setHeaderText("This IP range already exists");
+                    alert.setContentText(String.format("IP Range: %s - %s\n\nPlease enter a different IP range.",
+                                                       range.getStartIp(), newValue));
+                    alert.showAndWait();
+
+                    // Apply error styling and revert to old value
+                    textField.setStyle("-fx-border-color: #dc3545; -fx-border-width: 2px; -fx-background-color: #fff5f5;");
+                    textField.setText(oldValue);
+                    cancelEdit();
+                    return;
+                }
+
+                // Check for overlapping ranges (warn but allow)
+                for (int i = 0; i < getTableView().getItems().size(); i++) {
+                    if (i != getIndex()) {
+                        IpRangeItem other = getTableView().getItems().get(i);
+                        if (isOverlappingIpRange(range.getStartIp(), newValue, other.getStartIp(), other.getEndIp())) {
+                            Alert warning = new Alert(Alert.AlertType.WARNING);
+                            warning.setTitle("Overlapping IP Range");
+                            warning.setHeaderText("This IP range overlaps with an existing range");
+                            warning.setContentText(String.format("New Range: %s - %s\nExisting Range: %s - %s\n\nThis is allowed but may cause redundant scanning.",
+                                                                 range.getStartIp(), newValue, other.getStartIp(), other.getEndIp()));
+                            warning.showAndWait();
+                            break; // Only show warning once
+                        }
+                    }
+                }
+
+                super.commitEdit(newValue);
                 range.setEndIp(newValue);
                 updateAdvancedIpCount();
             }
@@ -519,8 +611,37 @@ public class MainController {
 
             @Override
             public void commitEdit(String newValue) {
-                super.commitEdit(newValue);
                 CidrItem cidr = getTableView().getItems().get(getIndex());
+                String oldValue = cidr.getCidr();
+
+                // Validate for duplicates (excluding current item)
+                boolean isDuplicate = false;
+                for (int i = 0; i < getTableView().getItems().size(); i++) {
+                    if (i != getIndex()) {
+                        CidrItem other = getTableView().getItems().get(i);
+                        if (other.getCidr().equals(newValue)) {
+                            isDuplicate = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (isDuplicate) {
+                    // Show error alert
+                    Alert alert = new Alert(Alert.AlertType.ERROR);
+                    alert.setTitle("Duplicate CIDR");
+                    alert.setHeaderText("This CIDR notation already exists");
+                    alert.setContentText(String.format("CIDR: %s\n\nPlease enter a different CIDR notation.", newValue));
+                    alert.showAndWait();
+
+                    // Apply error styling and revert to old value
+                    textField.setStyle("-fx-border-color: #dc3545; -fx-border-width: 2px; -fx-background-color: #fff5f5;");
+                    textField.setText(oldValue);
+                    cancelEdit();
+                    return;
+                }
+
+                super.commitEdit(newValue);
                 cidr.setCidr(newValue);
                 updateAdvancedIpCount();
             }
@@ -790,6 +911,57 @@ public class MainController {
             }
         }
         return false;
+    }
+
+    /**
+     * Convert an IP address string to a long value for comparison
+     */
+    private long ipToLong(String ipAddress) {
+        String[] octets = ipAddress.split("\\.");
+        if (octets.length != 4) {
+            return 0;
+        }
+        long result = 0;
+        for (int i = 0; i < 4; i++) {
+            result |= (Long.parseLong(octets[i]) << (24 - (8 * i)));
+        }
+        return result;
+    }
+
+    /**
+     * Check if two IP ranges overlap
+     * @param start1 Start IP of first range
+     * @param end1 End IP of first range
+     * @param start2 Start IP of second range
+     * @param end2 End IP of second range
+     * @return true if ranges overlap
+     */
+    private boolean isOverlappingIpRange(String start1, String end1, String start2, String end2) {
+        // Validate all IPs first
+        if (!NetworkUtils.isValidIP(start1) || !NetworkUtils.isValidIP(end1) ||
+            !NetworkUtils.isValidIP(start2) || !NetworkUtils.isValidIP(end2)) {
+            return false;
+        }
+
+        long s1 = ipToLong(start1);
+        long e1 = ipToLong(end1);
+        long s2 = ipToLong(start2);
+        long e2 = ipToLong(end2);
+
+        // Ensure start <= end for both ranges
+        if (s1 > e1) {
+            long temp = s1;
+            s1 = e1;
+            e1 = temp;
+        }
+        if (s2 > e2) {
+            long temp = s2;
+            s2 = e2;
+            e2 = temp;
+        }
+
+        // Check for overlap: ranges overlap if one starts before the other ends
+        return (s1 <= e2 && e1 >= s2);
     }
 
     private void updateAdvancedIpCount() {

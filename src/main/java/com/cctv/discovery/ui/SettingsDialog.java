@@ -228,8 +228,23 @@ public class SettingsDialog extends Stage {
             return;
         }
 
-        // Add to list (display format: "Main: /path | Sub: /path")
+        // Case 1: Warn if main path equals sub path
+        if (mainPath.equals(subPath)) {
+            Alert warn = new Alert(Alert.AlertType.WARNING);
+            warn.setTitle("Same Paths");
+            warn.setHeaderText("Main and Sub paths are identical");
+            warn.setContentText("Main: " + mainPath + "\nSub: " + subPath + "\n\nThis is unusual but will be allowed.");
+            warn.showAndWait();
+        }
+
+        // Case 2: Check for duplicate (main, sub) pair
         String pairDisplay = String.format("Main: %s | Sub: %s", mainPath, subPath);
+        if (pathPairs.contains(pairDisplay)) {
+            showError("Duplicate Path Pair", "This exact path pair already exists:\n\nMain: " + mainPath + "\nSub: " + subPath);
+            return;
+        }
+
+        // Add to list (display format: "Main: /path | Sub: /path")
         pathPairs.add(pairDisplay);
 
         // Clear input fields
@@ -310,9 +325,39 @@ public class SettingsDialog extends Stage {
                 return;
             }
 
+            // Deduplicate ports
+            String[] httpResult = deduplicatePorts(httpPorts);
+            String deduplicatedHttpPorts = httpResult[0];
+            boolean httpHadDuplicates = Boolean.parseBoolean(httpResult[1]);
+
+            String[] rtspResult = deduplicatePorts(rtspPorts);
+            String deduplicatedRtspPorts = rtspResult[0];
+            boolean rtspHadDuplicates = Boolean.parseBoolean(rtspResult[1]);
+
+            // Show info message if duplicates were found
+            if (httpHadDuplicates || rtspHadDuplicates) {
+                StringBuilder message = new StringBuilder("Duplicate ports were automatically removed:\n\n");
+                if (httpHadDuplicates) {
+                    message.append("HTTP Ports: ").append(httpPorts).append(" → ").append(deduplicatedHttpPorts).append("\n");
+                }
+                if (rtspHadDuplicates) {
+                    message.append("RTSP Ports: ").append(rtspPorts).append(" → ").append(deduplicatedRtspPorts).append("\n");
+                }
+
+                Alert info = new Alert(Alert.AlertType.INFORMATION);
+                info.setTitle("Ports Deduplicated");
+                info.setHeaderText("Duplicate ports removed");
+                info.setContentText(message.toString());
+                info.showAndWait();
+
+                // Update text fields to show deduplicated values
+                tfHttpPorts.setText(deduplicatedHttpPorts);
+                tfRtspPorts.setText(deduplicatedRtspPorts);
+            }
+
             // Save ports
-            config.setProperty("discovery.http.ports", httpPorts);
-            config.setProperty("discovery.rtsp.ports", rtspPorts);
+            config.setProperty("discovery.http.ports", deduplicatedHttpPorts);
+            config.setProperty("discovery.rtsp.ports", deduplicatedRtspPorts);
 
             // Save custom RTSP path pairs
             if (!pathPairs.isEmpty()) {
@@ -416,5 +461,32 @@ public class SettingsDialog extends Stage {
             }
         }
         return sb.toString();
+    }
+
+    /**
+     * Deduplicates a comma-separated list of ports while preserving order
+     * @param portList comma-separated port list
+     * @return String array: [0] = deduplicated ports, [1] = "true" if duplicates found, "false" otherwise
+     */
+    private String[] deduplicatePorts(String portList) {
+        String[] parts = portList.split(",");
+        java.util.LinkedHashSet<String> uniquePorts = new java.util.LinkedHashSet<>();
+
+        int originalCount = parts.length;
+        for (String part : parts) {
+            uniquePorts.add(part.trim());
+        }
+
+        boolean hadDuplicates = uniquePorts.size() < originalCount;
+
+        StringBuilder result = new StringBuilder();
+        for (String port : uniquePorts) {
+            if (result.length() > 0) {
+                result.append(",");
+            }
+            result.append(port);
+        }
+
+        return new String[]{result.toString(), String.valueOf(hadDuplicates)};
     }
 }
