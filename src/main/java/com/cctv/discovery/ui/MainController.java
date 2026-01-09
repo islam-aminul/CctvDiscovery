@@ -461,7 +461,7 @@ public class MainController {
         Button btnRemoveRange = new Button("Remove Selected");
         btnRemoveRange.setPrefWidth(120);
         btnRemoveRange.setPrefHeight(30);
-        btnRemoveRange.setStyle("-fx-background-color: #dc3545; -fx-text-fill: white; -fx-font-weight: bold;");
+        btnRemoveRange.setStyle("-fx-background-color: #ffc107; -fx-text-fill: black; -fx-font-weight: bold;");
         btnRemoveRange.setOnAction(e -> {
             IpRangeItem selected = tvIpRanges.getSelectionModel().getSelectedItem();
             if (selected != null) {
@@ -537,7 +537,7 @@ public class MainController {
         Button btnRemoveCidr = new Button("Remove Selected");
         btnRemoveCidr.setPrefWidth(120);
         btnRemoveCidr.setPrefHeight(30);
-        btnRemoveCidr.setStyle("-fx-background-color: #dc3545; -fx-text-fill: white; -fx-font-weight: bold;");
+        btnRemoveCidr.setStyle("-fx-background-color: #ffc107; -fx-text-fill: black; -fx-font-weight: bold;");
         btnRemoveCidr.setOnAction(e -> {
             CidrItem selected = tvCidrs.getSelectionModel().getSelectedItem();
             if (selected != null) {
