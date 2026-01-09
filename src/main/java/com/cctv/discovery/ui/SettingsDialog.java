@@ -193,6 +193,7 @@ public class SettingsDialog extends Stage {
         // Remove button - center aligned
         Button btnRemove = new Button("Remove Selected");
         btnRemove.setPrefWidth(150);
+        btnRemove.setStyle("-fx-background-color: #ffc107; -fx-text-fill: black; -fx-font-weight: bold;");
         btnRemove.setOnAction(e -> removeSelectedPair());
 
         HBox removeBox = new HBox(8);
