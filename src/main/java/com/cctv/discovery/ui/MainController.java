@@ -69,12 +69,18 @@ public class MainController {
     private ObservableList<CidrItem> cidrs;
     private Label lblAdvancedIpCount;
 
+    // Network summary in left panel
+    private Label lblNetworkSummary;
+
     // Credentials
     private TextField tfUsername;
     private TextField tfPassword;
     private Button btnAddCredential;
     private ListView<Credential> lvCredentials;
     private ObservableList<Credential> credentials;
+
+    // Credential summary in left panel
+    private Label lblCredentialSummary;
 
     // Actions
     private Button btnStart;
@@ -106,6 +112,10 @@ public class MainController {
         this.networkInterfaces = FXCollections.observableArrayList();
         this.ipRanges = FXCollections.observableArrayList();
         this.cidrs = FXCollections.observableArrayList();
+
+        // Initialize advanced mode checkbox (used in modals)
+        this.cbAdvancedMode = new CheckBox();
+        this.cbAdvancedMode.setSelected(false);
 
         // Initialize services
         this.networkScanner = new NetworkScanner();
@@ -195,6 +205,9 @@ public class MainController {
         vbox.setPadding(new Insets(10));
         vbox.getStyleClass().add("left-panel");
 
+        // Progress Section - AT TOP
+        VBox progressSection = createProgressSection();
+
         // Network Section
         VBox networkSection = createNetworkSection();
 
@@ -204,18 +217,15 @@ public class MainController {
         // Action Section
         VBox actionSection = createActionSection();
 
-        // Progress Section
-        VBox progressSection = createProgressSection();
-
         // Export Section
         VBox exportSection = createExportSection();
 
-        // Add all sections without separators
+        // Add all sections in numbered order
         vbox.getChildren().addAll(
+                progressSection,
                 networkSection,
                 credentialSection,
                 actionSection,
-                progressSection,
                 exportSection
         );
 
@@ -225,24 +235,20 @@ public class MainController {
     private VBox createNetworkSection() {
         VBox vbox = new VBox(6);
 
-        Label lblTitle = new Label("Network Selection");
+        Label lblTitle = new Label("1. Network Selection");
         lblTitle.getStyleClass().add("section-title");
 
-        // Advanced mode toggle
-        cbAdvancedMode = new CheckBox("Advanced Mode (Multiple Networks)");
-        cbAdvancedMode.setOnAction(e -> toggleNetworkMode());
+        Button btnConfigureNetwork = new Button("Configure Network");
+        btnConfigureNetwork.setMaxWidth(Double.MAX_VALUE);
+        btnConfigureNetwork.setPrefHeight(35);
+        btnConfigureNetwork.setOnAction(e -> showNetworkConfigDialog());
 
-        // Simple network box
-        simpleNetworkBox = createSimpleNetworkBox();
+        lblNetworkSummary = new Label("Not configured");
+        lblNetworkSummary.getStyleClass().add("label-info");
+        lblNetworkSummary.setStyle("-fx-font-style: italic; -fx-text-fill: #666;");
+        lblNetworkSummary.setWrapText(true);
 
-        // Advanced network box
-        advancedNetworkBox = createAdvancedNetworkBox();
-        advancedNetworkBox.setVisible(false);
-        advancedNetworkBox.setManaged(false);
-
-        vbox.getChildren().addAll(lblTitle, cbAdvancedMode, simpleNetworkBox, advancedNetworkBox);
-
-        updateIpCount();
+        vbox.getChildren().addAll(lblTitle, btnConfigureNetwork, lblNetworkSummary);
         return vbox;
     }
 
@@ -353,6 +359,19 @@ public class MainController {
             private final TextField textField = new TextField();
 
             {
+                textField.setPromptText("e.g., 192.168.1.1");
+
+                // Real-time validation
+                textField.textProperty().addListener((obs, oldVal, newVal) -> {
+                    if (newVal == null || newVal.trim().isEmpty()) {
+                        textField.setStyle("");
+                    } else if (NetworkUtils.isValidIP(newVal.trim())) {
+                        textField.setStyle("");
+                    } else {
+                        textField.setStyle("-fx-border-color: #dc3545; -fx-border-width: 2px; -fx-background-color: #fff5f5;");
+                    }
+                });
+
                 textField.setOnAction(e -> commitEdit(textField.getText()));
                 textField.focusedProperty().addListener((obs, wasFocused, isNowFocused) -> {
                     if (!isNowFocused) {
@@ -387,6 +406,19 @@ public class MainController {
             private final TextField textField = new TextField();
 
             {
+                textField.setPromptText("e.g., 192.168.1.254");
+
+                // Real-time validation
+                textField.textProperty().addListener((obs, oldVal, newVal) -> {
+                    if (newVal == null || newVal.trim().isEmpty()) {
+                        textField.setStyle("");
+                    } else if (NetworkUtils.isValidIP(newVal.trim())) {
+                        textField.setStyle("");
+                    } else {
+                        textField.setStyle("-fx-border-color: #dc3545; -fx-border-width: 2px; -fx-background-color: #fff5f5;");
+                    }
+                });
+
                 textField.setOnAction(e -> commitEdit(textField.getText()));
                 textField.focusedProperty().addListener((obs, wasFocused, isNowFocused) -> {
                     if (!isNowFocused) {
@@ -443,6 +475,19 @@ public class MainController {
             private final TextField textField = new TextField();
 
             {
+                textField.setPromptText("e.g., 192.168.1.0/24");
+
+                // Real-time validation
+                textField.textProperty().addListener((obs, oldVal, newVal) -> {
+                    if (newVal == null || newVal.trim().isEmpty()) {
+                        textField.setStyle("");
+                    } else if (NetworkUtils.isValidCIDR(newVal.trim())) {
+                        textField.setStyle("");
+                    } else {
+                        textField.setStyle("-fx-border-color: #dc3545; -fx-border-width: 2px; -fx-background-color: #fff5f5;");
+                    }
+                });
+
                 textField.setOnAction(e -> commitEdit(textField.getText()));
                 textField.focusedProperty().addListener((obs, wasFocused, isNowFocused) -> {
                     if (!isNowFocused) {
@@ -505,48 +550,20 @@ public class MainController {
     private VBox createCredentialSection() {
         VBox vbox = new VBox(6);
 
-        Label lblTitle = new Label("Credentials (Max 4)");
+        Label lblTitle = new Label("2. Credentials");
         lblTitle.getStyleClass().add("section-title");
 
-        // Username and Password side by side
-        tfUsername = new TextField("admin");
-        tfUsername.setPromptText("Username");
+        Button btnManageCredentials = new Button("Add/Manage Credentials");
+        btnManageCredentials.setMaxWidth(Double.MAX_VALUE);
+        btnManageCredentials.setPrefHeight(35);
+        btnManageCredentials.setOnAction(e -> showCredentialManagementDialog());
 
-        tfPassword = new TextField();
-        tfPassword.setPromptText("Password");
+        lblCredentialSummary = new Label("No credentials added");
+        lblCredentialSummary.getStyleClass().add("label-info");
+        lblCredentialSummary.setStyle("-fx-font-style: italic; -fx-text-fill: #666;");
+        lblCredentialSummary.setWrapText(true);
 
-        HBox credentialBox = new HBox(8, tfUsername, tfPassword);
-        HBox.setHgrow(tfUsername, Priority.ALWAYS);
-        HBox.setHgrow(tfPassword, Priority.ALWAYS);
-
-        btnAddCredential = new Button("Add Credential");
-        btnAddCredential.setMaxWidth(Double.MAX_VALUE);
-        btnAddCredential.setOnAction(e -> addCredential());
-
-        lvCredentials = new ListView<>(credentials);
-        lvCredentials.setPrefHeight(100);
-        lvCredentials.setCellFactory(param -> new CredentialListCell());
-        lvCredentials.setContextMenu(createCredentialContextMenu());
-
-        vbox.getChildren().addAll(lblTitle, credentialBox, btnAddCredential, lvCredentials);
-        return vbox;
-    }
-
-    private VBox createActionSection() {
-        VBox vbox = new VBox(6);
-
-        Label lblTitle = new Label("Discovery");
-        lblTitle.getStyleClass().add("section-title");
-
-        btnStart = new Button("Start Discovery");
-        btnStart.getStyleClass().add("button-success");
-        btnStart.setMaxWidth(Double.MAX_VALUE);
-        btnStart.setPrefHeight(35);
-        btnStart.setDisable(true);
-        btnStart.setOnAction(e -> startDiscovery());
-
-        vbox.getChildren().addAll(lblTitle, btnStart);
-        updateStartButtonState();
+        vbox.getChildren().addAll(lblTitle, btnManageCredentials, lblCredentialSummary);
         return vbox;
     }
 
@@ -571,10 +588,28 @@ public class MainController {
         return vbox;
     }
 
+    private VBox createActionSection() {
+        VBox vbox = new VBox(6);
+
+        Label lblTitle = new Label("3. Discovery");
+        lblTitle.getStyleClass().add("section-title");
+
+        btnStart = new Button("Start Discovery");
+        btnStart.getStyleClass().add("button-success");
+        btnStart.setMaxWidth(Double.MAX_VALUE);
+        btnStart.setPrefHeight(35);
+        btnStart.setDisable(true);
+        btnStart.setOnAction(e -> startDiscovery());
+
+        vbox.getChildren().addAll(lblTitle, btnStart);
+        updateStartButtonState();
+        return vbox;
+    }
+
     private VBox createExportSection() {
         VBox vbox = new VBox(6);
 
-        Label lblTitle = new Label("Export");
+        Label lblTitle = new Label("4. Export");
         lblTitle.getStyleClass().add("section-title");
 
         btnExport = new Button("Export to Excel");
@@ -1480,49 +1515,13 @@ public class MainController {
     }
 
     private void disableInputs() {
-        // Simple mode controls
-        rbInterface.setDisable(true);
-        rbManualRange.setDisable(true);
-        rbCIDR.setDisable(true);
-        cbInterfaces.setDisable(true);
-        tfStartIP.setDisable(true);
-        tfEndIP.setDisable(true);
-        tfCIDR.setDisable(true);
-
-        // Advanced mode controls
-        cbAdvancedMode.setDisable(true);
-        lvNetworkInterfaces.setDisable(true);
-        tvIpRanges.setDisable(true);
-        tvCidrs.setDisable(true);
-
-        // Credential controls
-        tfUsername.setDisable(true);
-        tfPassword.setDisable(true);
-        btnAddCredential.setDisable(true);
+        // Network and credential configuration is now in modals
+        // These are disabled during discovery
         btnStart.setDisable(true);
     }
 
     private void enableInputs() {
         discoveryInProgress = false;
-
-        // Advanced mode toggle
-        cbAdvancedMode.setDisable(false);
-
-        // Enable appropriate mode controls
-        if (cbAdvancedMode.isSelected()) {
-            lvNetworkInterfaces.setDisable(false);
-            tvIpRanges.setDisable(false);
-            tvCidrs.setDisable(false);
-        } else {
-            updateNetworkMode();
-        }
-
-        // Credential controls
-        if (credentials.size() < 4) {
-            tfUsername.setDisable(false);
-            tfPassword.setDisable(false);
-            btnAddCredential.setDisable(false);
-        }
         updateStartButtonState();
     }
 
@@ -1532,6 +1531,186 @@ public class MainController {
         alert.setHeaderText(null);
         alert.setContentText(content);
         alert.showAndWait();
+    }
+
+    private void showNetworkConfigDialog() {
+        Dialog<ButtonType> dialog = new Dialog<>();
+        dialog.setTitle("Network Configuration");
+        dialog.setHeaderText("Configure Network Selection");
+        dialog.getDialogPane().setPrefWidth(600);
+
+        // Create tab pane
+        TabPane tabPane = new TabPane();
+        tabPane.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
+
+        // Tab 1: Simple Mode
+        Tab simpleTab = new Tab("Simple Mode");
+        VBox simpleContent = createSimpleNetworkBox();
+        simpleContent.setPadding(new Insets(15));
+        simpleTab.setContent(simpleContent);
+
+        // Tab 2: Advanced Mode
+        Tab advancedTab = new Tab("Advanced Mode");
+        VBox advancedContent = createAdvancedNetworkBox();
+        advancedContent.setPadding(new Insets(15));
+        advancedTab.setContent(advancedContent);
+
+        // Add tabs
+        tabPane.getTabs().addAll(simpleTab, advancedTab);
+
+        // Set active tab based on current mode
+        if (cbAdvancedMode != null && cbAdvancedMode.isSelected()) {
+            tabPane.getSelectionModel().select(advancedTab);
+        }
+
+        dialog.getDialogPane().setContent(tabPane);
+
+        // Buttons
+        ButtonType okButton = new ButtonType("OK", ButtonBar.ButtonData.OK_DONE);
+        ButtonType cancelButton = new ButtonType("Cancel", ButtonBar.ButtonData.CANCEL_CLOSE);
+        dialog.getDialogPane().getButtonTypes().addAll(okButton, cancelButton);
+
+        Optional<ButtonType> result = dialog.showAndWait();
+
+        if (result.isPresent() && result.get() == okButton) {
+            // User clicked OK - determine which tab was active
+            boolean isAdvanced = tabPane.getSelectionModel().getSelectedItem() == advancedTab;
+
+            if (cbAdvancedMode == null) {
+                cbAdvancedMode = new CheckBox();
+            }
+            cbAdvancedMode.setSelected(isAdvanced);
+
+            // Update network summary
+            updateNetworkSummary();
+            updateStartButtonState();
+        }
+    }
+
+    private void updateNetworkSummary() {
+        if (cbAdvancedMode != null && cbAdvancedMode.isSelected()) {
+            // Advanced mode summary
+            int sourceCount = 0;
+            int totalIps = 0;
+
+            long selectedInterfaces = networkInterfaces.stream().filter(NetworkInterfaceItem::isSelected).count();
+            if (selectedInterfaces > 0) {
+                sourceCount++;
+                totalIps += selectedInterfaces * 254;
+            }
+
+            long validRanges = ipRanges.stream()
+                    .filter(r -> NetworkUtils.isValidIP(r.getStartIp()) && NetworkUtils.isValidIP(r.getEndIp()))
+                    .count();
+            if (validRanges > 0) {
+                sourceCount++;
+                for (IpRangeItem range : ipRanges) {
+                    if (NetworkUtils.isValidIP(range.getStartIp()) && NetworkUtils.isValidIP(range.getEndIp())) {
+                        totalIps += NetworkUtils.countIPsInRange(range.getStartIp(), range.getEndIp());
+                    }
+                }
+            }
+
+            long validCidrs = cidrs.stream()
+                    .filter(c -> NetworkUtils.isValidCIDR(c.getCidr()))
+                    .count();
+            if (validCidrs > 0) {
+                sourceCount++;
+                for (CidrItem cidr : cidrs) {
+                    if (NetworkUtils.isValidCIDR(cidr.getCidr())) {
+                        totalIps += NetworkUtils.countIPsInCIDR(cidr.getCidr());
+                    }
+                }
+            }
+
+            if (sourceCount > 0) {
+                lblNetworkSummary.setText(String.format("Advanced: %d source(s), %d possible IPs", sourceCount, totalIps));
+                lblNetworkSummary.setStyle("-fx-font-style: italic; -fx-text-fill: #28a745;");
+            } else {
+                lblNetworkSummary.setText("Advanced mode: No sources configured");
+                lblNetworkSummary.setStyle("-fx-font-style: italic; -fx-text-fill: #dc3545;");
+            }
+        } else {
+            // Simple mode summary
+            if (rbInterface != null && rbInterface.isSelected() && cbInterfaces.getValue() != null) {
+                lblNetworkSummary.setText("Interface: " + cbInterfaces.getValue());
+                lblNetworkSummary.setStyle("-fx-font-style: italic; -fx-text-fill: #28a745;");
+            } else if (rbManualRange != null && rbManualRange.isSelected() &&
+                    NetworkUtils.isValidIP(tfStartIP.getText()) && NetworkUtils.isValidIP(tfEndIP.getText())) {
+                int count = NetworkUtils.countIPsInRange(tfStartIP.getText(), tfEndIP.getText());
+                lblNetworkSummary.setText(String.format("Range: %s - %s (%d IPs)", tfStartIP.getText(), tfEndIP.getText(), count));
+                lblNetworkSummary.setStyle("-fx-font-style: italic; -fx-text-fill: #28a745;");
+            } else if (rbCIDR != null && rbCIDR.isSelected() && NetworkUtils.isValidCIDR(tfCIDR.getText())) {
+                int count = NetworkUtils.countIPsInCIDR(tfCIDR.getText());
+                lblNetworkSummary.setText(String.format("CIDR: %s (%d IPs)", tfCIDR.getText(), count));
+                lblNetworkSummary.setStyle("-fx-font-style: italic; -fx-text-fill: #28a745;");
+            } else {
+                lblNetworkSummary.setText("Not configured");
+                lblNetworkSummary.setStyle("-fx-font-style: italic; -fx-text-fill: #666;");
+            }
+        }
+    }
+
+    private void showCredentialManagementDialog() {
+        Dialog<ButtonType> dialog = new Dialog<>();
+        dialog.setTitle("Credential Management");
+        dialog.setHeaderText("Add and Manage Credentials (Max 4)");
+        dialog.getDialogPane().setPrefWidth(500);
+        dialog.getDialogPane().setPrefHeight(400);
+
+        VBox content = new VBox(10);
+        content.setPadding(new Insets(15));
+
+        // Username and Password fields
+        Label lblUsername = new Label("Username:");
+        tfUsername = new TextField("admin");
+        tfUsername.setPromptText("Username");
+
+        Label lblPassword = new Label("Password:");
+        tfPassword = new TextField();
+        tfPassword.setPromptText("Password");
+
+        btnAddCredential = new Button("Add Credential");
+        btnAddCredential.setMaxWidth(Double.MAX_VALUE);
+        btnAddCredential.setOnAction(e -> addCredential());
+
+        // Credentials list
+        Label lblList = new Label("Added Credentials:");
+        lvCredentials = new ListView<>(credentials);
+        lvCredentials.setPrefHeight(150);
+        lvCredentials.setCellFactory(param -> new CredentialListCell());
+        lvCredentials.setContextMenu(createCredentialContextMenu());
+
+        content.getChildren().addAll(
+                lblUsername, tfUsername,
+                lblPassword, tfPassword,
+                btnAddCredential,
+                new Separator(),
+                lblList, lvCredentials
+        );
+
+        dialog.getDialogPane().setContent(content);
+
+        // Close button
+        ButtonType closeButton = new ButtonType("Close", ButtonBar.ButtonData.OK_DONE);
+        dialog.getDialogPane().getButtonTypes().add(closeButton);
+
+        dialog.showAndWait();
+
+        // Update summary after dialog closes
+        updateCredentialSummary();
+        updateStartButtonState();
+    }
+
+    private void updateCredentialSummary() {
+        int count = credentials.size();
+        if (count == 0) {
+            lblCredentialSummary.setText("No credentials added");
+            lblCredentialSummary.setStyle("-fx-font-style: italic; -fx-text-fill: #666;");
+        } else {
+            lblCredentialSummary.setText(String.format("%d credential%s added", count, count > 1 ? "s" : ""));
+            lblCredentialSummary.setStyle("-fx-font-style: italic; -fx-text-fill: #28a745;");
+        }
     }
 
     public void shutdown() {
