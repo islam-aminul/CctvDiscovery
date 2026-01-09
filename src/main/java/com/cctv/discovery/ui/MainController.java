@@ -293,12 +293,12 @@ public class MainController {
         tfCIDR.setPromptText("CIDR (e.g., 192.168.1.0/24)");
         tfCIDR.setDisable(true);
 
-        // IP count label - center aligned and italic
+        // IP count label - center aligned, bold and colored
         lblIpCount = new Label("Possible IPs: 0");
         lblIpCount.getStyleClass().add("label-info");
         lblIpCount.setAlignment(Pos.CENTER);
         lblIpCount.setMaxWidth(Double.MAX_VALUE);
-        lblIpCount.setStyle("-fx-font-style: italic;");
+        lblIpCount.setStyle("-fx-font-weight: bold; -fx-text-fill: #0078d4;");
 
         // Event handlers
         rbInterface.setOnAction(e -> updateNetworkMode());
@@ -547,12 +547,12 @@ public class MainController {
         });
         HBox cidrButtons = new HBox(8, btnAddCidr, btnRemoveCidr);
 
-        // IP count label
+        // IP count label - bold and colored
         lblAdvancedIpCount = new Label("Total Possible IPs: 0");
         lblAdvancedIpCount.getStyleClass().add("label-info");
         lblAdvancedIpCount.setAlignment(Pos.CENTER);
         lblAdvancedIpCount.setMaxWidth(Double.MAX_VALUE);
-        lblAdvancedIpCount.setStyle("-fx-font-style: italic;");
+        lblAdvancedIpCount.setStyle("-fx-font-weight: bold; -fx-text-fill: #0078d4;");
 
         vbox.getChildren().addAll(
                 lblInterfaces, lvNetworkInterfaces,
@@ -705,7 +705,7 @@ public class MainController {
                 for (InterfaceAddress addr : ni.getInterfaceAddresses()) {
                     InetAddress inetAddr = addr.getAddress();
                     if (inetAddr instanceof java.net.Inet4Address) {
-                        String display = ni.getDisplayName() + " - " + inetAddr.getHostAddress();
+                        String display = inetAddr.getHostAddress() + " - " + ni.getDisplayName();
                         cbInterfaces.getItems().add(display);
                     }
                 }
@@ -772,6 +772,24 @@ public class MainController {
     private void addCidr() {
         cidrs.add(new CidrItem(""));
         updateAdvancedIpCount();
+    }
+
+    private boolean isDuplicateIpRange(String startIp, String endIp) {
+        for (IpRangeItem existing : ipRanges) {
+            if (existing.getStartIp().equals(startIp) && existing.getEndIp().equals(endIp)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean isDuplicateCidr(String cidr) {
+        for (CidrItem existing : cidrs) {
+            if (existing.getCidr().equals(cidr)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private void updateAdvancedIpCount() {
@@ -1321,14 +1339,17 @@ public class MainController {
                     ips = NetworkUtils.parseIPRange(tfStartIP.getText(), tfEndIP.getText());
                 } else if (rbInterface != null && rbInterface.isSelected() && cbInterfaces != null) {
                     // Extract CIDR from interface - simplified to /24
+                    // Format is now: IP - DisplayName (e.g., "192.168.1.5 - Ethernet")
                     String selected = cbInterfaces.getValue();
                     if (selected != null) {
                         String[] parts = selected.split(" - ");
-                        if (parts.length == 2) {
-                            String ip = parts[1];
+                        if (parts.length >= 1) {
+                            String ip = parts[0];  // IP is now first part
                             String[] octets = ip.split("\\.");
-                            String network = octets[0] + "." + octets[1] + "." + octets[2] + ".0/24";
-                            ips = NetworkUtils.parseCIDR(network);
+                            if (octets.length == 4) {
+                                String network = octets[0] + "." + octets[1] + "." + octets[2] + ".0/24";
+                                ips = NetworkUtils.parseCIDR(network);
+                            }
                         }
                     }
                 }
@@ -1587,12 +1608,31 @@ public class MainController {
             tabPane.getSelectionModel().select(advancedTab);
         }
 
+        // Update IP counts after modal is shown
+        Platform.runLater(() -> {
+            updateIpCount();
+            updateAdvancedIpCount();
+        });
+
         dialog.getDialogPane().setContent(tabPane);
 
         // Buttons
         ButtonType okButton = new ButtonType("OK", ButtonBar.ButtonData.OK_DONE);
         ButtonType cancelButton = new ButtonType("Cancel", ButtonBar.ButtonData.CANCEL_CLOSE);
         dialog.getDialogPane().getButtonTypes().addAll(okButton, cancelButton);
+
+        // Style buttons
+        dialog.setOnShowing(dialogEvent -> {
+            Button okBtn = (Button) dialog.getDialogPane().lookupButton(okButton);
+            Button cancelBtn = (Button) dialog.getDialogPane().lookupButton(cancelButton);
+
+            if (okBtn != null) {
+                okBtn.setStyle("-fx-background-color: #28a745; -fx-text-fill: white; -fx-font-weight: bold; -fx-pref-width: 80px; -fx-pref-height: 30px;");
+            }
+            if (cancelBtn != null) {
+                cancelBtn.setStyle("-fx-background-color: #6c757d; -fx-text-fill: white; -fx-font-weight: bold; -fx-pref-width: 80px; -fx-pref-height: 30px;");
+            }
+        });
 
         Optional<ButtonType> result = dialog.showAndWait();
 
@@ -1723,9 +1763,17 @@ public class MainController {
 
         dialog.getDialogPane().setContent(content);
 
-        // Close button
-        ButtonType closeButton = new ButtonType("Close", ButtonBar.ButtonData.OK_DONE);
-        dialog.getDialogPane().getButtonTypes().add(closeButton);
+        // OK button
+        ButtonType okButton = new ButtonType("OK", ButtonBar.ButtonData.OK_DONE);
+        dialog.getDialogPane().getButtonTypes().add(okButton);
+
+        // Style button
+        dialog.setOnShowing(dialogEvent -> {
+            Button okBtn = (Button) dialog.getDialogPane().lookupButton(okButton);
+            if (okBtn != null) {
+                okBtn.setStyle("-fx-background-color: #28a745; -fx-text-fill: white; -fx-font-weight: bold; -fx-pref-width: 80px; -fx-pref-height: 30px;");
+            }
+        });
 
         dialog.showAndWait();
 
@@ -1800,7 +1848,7 @@ public class MainController {
 
         @Override
         public String toString() {
-            return displayName + " - " + ipAddress;
+            return ipAddress + " - " + displayName;
         }
     }
 
