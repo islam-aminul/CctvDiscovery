@@ -454,15 +454,18 @@ public class MainController {
 
         Button btnAddRange = new Button("Add IP Range");
         btnAddRange.setPrefWidth(120);
+        btnAddRange.setPrefHeight(30);
+        btnAddRange.setStyle("-fx-background-color: #28a745; -fx-text-fill: white; -fx-font-weight: bold;");
         btnAddRange.setOnAction(e -> addIpRange());
 
         Button btnRemoveRange = new Button("Remove Selected");
         btnRemoveRange.setPrefWidth(120);
+        btnRemoveRange.setPrefHeight(30);
+        btnRemoveRange.setStyle("-fx-background-color: #dc3545; -fx-text-fill: white; -fx-font-weight: bold;");
         btnRemoveRange.setOnAction(e -> {
             IpRangeItem selected = tvIpRanges.getSelectionModel().getSelectedItem();
             if (selected != null) {
                 ipRanges.remove(selected);
-                tvIpRanges.refresh();
                 updateAdvancedIpCount();
             }
         });
@@ -527,15 +530,18 @@ public class MainController {
 
         Button btnAddCidr = new Button("Add CIDR");
         btnAddCidr.setPrefWidth(120);
+        btnAddCidr.setPrefHeight(30);
+        btnAddCidr.setStyle("-fx-background-color: #28a745; -fx-text-fill: white; -fx-font-weight: bold;");
         btnAddCidr.setOnAction(e -> addCidr());
 
         Button btnRemoveCidr = new Button("Remove Selected");
         btnRemoveCidr.setPrefWidth(120);
+        btnRemoveCidr.setPrefHeight(30);
+        btnRemoveCidr.setStyle("-fx-background-color: #dc3545; -fx-text-fill: white; -fx-font-weight: bold;");
         btnRemoveCidr.setOnAction(e -> {
             CidrItem selected = tvCidrs.getSelectionModel().getSelectedItem();
             if (selected != null) {
                 cidrs.remove(selected);
-                tvCidrs.refresh();
                 updateAdvancedIpCount();
             }
         });
@@ -713,6 +719,14 @@ public class MainController {
     }
 
     private void populateAdvancedNetworkInterfaces() {
+        // Preserve previously selected interfaces
+        List<String> selectedIps = new ArrayList<>();
+        for (NetworkInterfaceItem item : networkInterfaces) {
+            if (item.isSelected()) {
+                selectedIps.add(item.getIpAddress());
+            }
+        }
+
         // Clear existing items to prevent duplication on repeated modal opens
         networkInterfaces.clear();
 
@@ -724,7 +738,9 @@ public class MainController {
                     if (inetAddr instanceof java.net.Inet4Address) {
                         String display = ni.getDisplayName();
                         String ip = inetAddr.getHostAddress();
-                        networkInterfaces.add(new NetworkInterfaceItem(display, ip, false));
+                        // Restore selection state if this IP was previously selected
+                        boolean wasSelected = selectedIps.contains(ip);
+                        networkInterfaces.add(new NetworkInterfaceItem(display, ip, wasSelected));
                     }
                 }
             } catch (Exception e) {
@@ -849,6 +865,14 @@ public class MainController {
             return;
         }
 
+        // Check for duplicate credentials
+        for (Credential existing : credentials) {
+            if (existing.getUsername().equals(username) && existing.getPassword().equals(password)) {
+                showAlert("Duplicate Credential", "This credential already exists.", Alert.AlertType.WARNING);
+                return;
+            }
+        }
+
         Credential cred = new Credential(username, password);
         credentials.add(cred);
         tfPassword.clear();
@@ -860,6 +884,7 @@ public class MainController {
         }
 
         updateStartButtonState();
+        updateCredentialSummary();
     }
 
     private ContextMenu createCredentialContextMenu() {
@@ -1678,6 +1703,7 @@ public class MainController {
         btnAddCredential = new Button("Add Credential");
         btnAddCredential.setMaxWidth(Double.MAX_VALUE);
         btnAddCredential.setPrefHeight(30);
+        btnAddCredential.setStyle("-fx-background-color: #28a745; -fx-text-fill: white; -fx-font-weight: bold;");
         btnAddCredential.setOnAction(e -> addCredential());
 
         // Credentials list
