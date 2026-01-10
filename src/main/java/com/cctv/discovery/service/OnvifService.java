@@ -452,7 +452,20 @@ public class OnvifService {
                 return null;
             }
 
+        } catch (javax.net.ssl.SSLException e) {
+            // SSL errors are common for non-ONVIF devices or incompatible SSL configs
+            logger.debug("SSL error for {}: {}", serviceUrl, e.getMessage());
+            return null;
+        } catch (java.net.SocketException e) {
+            // Connection refused/reset - device doesn't support ONVIF on this port
+            logger.debug("Connection error for {}: {}", serviceUrl, e.getMessage());
+            return null;
+        } catch (java.net.SocketTimeoutException e) {
+            // Timeout - device not responding
+            logger.debug("Timeout for {}: {}", serviceUrl, e.getMessage());
+            return null;
         } catch (Exception e) {
+            // Other unexpected errors - log with stack trace
             logger.error("Error sending ONVIF request to {}", serviceUrl, e);
             return null;
         } finally {
