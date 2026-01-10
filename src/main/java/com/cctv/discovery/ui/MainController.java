@@ -791,7 +791,10 @@ public class MainController {
         colIp.setCellValueFactory(new PropertyValueFactory<>("ipAddress"));
 
         TableColumn<Device, String> colStatus = new TableColumn<>("Status");
-        colStatus.setCellValueFactory(new PropertyValueFactory<>("status"));
+        colStatus.setCellValueFactory(cellData -> {
+            Device.DeviceStatus status = cellData.getValue().getStatus();
+            return new javafx.beans.property.SimpleStringProperty(status != null ? status.toString() : "");
+        });
         // Custom cell factory for Status column with icons
         colStatus.setCellFactory(column -> new TableCell<Device, String>() {
             @Override
