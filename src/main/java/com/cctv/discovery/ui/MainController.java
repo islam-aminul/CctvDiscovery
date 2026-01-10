@@ -147,7 +147,7 @@ public class MainController {
 
         // Create split pane for left and right panels
         SplitPane splitPane = new SplitPane();
-        splitPane.setDividerPositions(0.35);
+        splitPane.setDividerPositions(0.25); // Left panel occupies 1/4 of horizontal span
 
         // Left panel - Controls
         VBox leftPanel = createLeftPanel();
@@ -166,7 +166,7 @@ public class MainController {
         mainLayout.setTop(header);
         mainLayout.setCenter(splitPane);
 
-        scene = new Scene(mainLayout, 1400, 800);
+        scene = new Scene(mainLayout, 1024, 768);
 
         // Load CSS with null check to prevent startup crashes
         try {
@@ -220,9 +220,6 @@ public class MainController {
         vbox.setPadding(new Insets(10));
         vbox.getStyleClass().add("left-panel");
 
-        // Progress Section - AT TOP
-        VBox progressSection = createProgressSection();
-
         // Network Section
         VBox networkSection = createNetworkSection();
 
@@ -235,13 +232,16 @@ public class MainController {
         // Export Section
         VBox exportSection = createExportSection();
 
-        // Add all sections in numbered order
+        // Progress Section - AT BOTTOM
+        VBox progressSection = createProgressSection();
+
+        // Add all sections in numbered order (Progress at bottom)
         vbox.getChildren().addAll(
-                progressSection,
                 networkSection,
                 credentialSection,
                 actionSection,
-                exportSection
+                exportSection,
+                progressSection
         );
 
         return vbox;
@@ -719,20 +719,23 @@ public class MainController {
 
     private VBox createProgressSection() {
         VBox vbox = new VBox(6);
+        vbox.setPadding(new Insets(10));
+        vbox.setStyle("-fx-background-color: #008080; -fx-background-radius: 5; -fx-border-color: #006666; -fx-border-width: 1; -fx-border-radius: 5;");
 
         Label lblTitle = new Label("Progress");
         lblTitle.getStyleClass().add("section-title");
+        lblTitle.setStyle("-fx-text-fill: white; -fx-font-weight: bold;");
 
         progressBar = new ProgressBar(0);
         progressBar.setMaxWidth(Double.MAX_VALUE);
         progressBar.setPrefHeight(18);
 
-        // Progress label - center aligned and italic
+        // Progress label - center aligned and italic with white text
         lblProgress = new Label("Ready");
         lblProgress.getStyleClass().add("label-info");
         lblProgress.setAlignment(Pos.CENTER);
         lblProgress.setMaxWidth(Double.MAX_VALUE);
-        lblProgress.setStyle("-fx-font-style: italic;");
+        lblProgress.setStyle("-fx-font-style: italic; -fx-text-fill: white;");
 
         vbox.getChildren().addAll(lblTitle, progressBar, lblProgress);
         return vbox;
@@ -1318,10 +1321,24 @@ public class MainController {
             logger.info("=== Device {} authentication COMPLETED - {} streams found ===",
                     device.getIpAddress(), device.getRtspStreams().size());
         } else {
-            device.setStatus(Device.DeviceStatus.AUTH_FAILED);
-            device.setAuthFailed(true);
-            device.setErrorMessage("Authentication failed with all credentials");
-            logger.warn("=== Device {} authentication FAILED ===", device.getIpAddress());
+            // Check if this is likely NOT a camera (router, printer, NAS, web server, etc.)
+            boolean hasWsDiscovery = device.getOnvifServiceUrl() != null;
+            boolean hasRtspPorts = device.getOpenRtspPorts() != null && !device.getOpenRtspPorts().isEmpty();
+            boolean hasOnvifPorts = device.getOpenOnvifPorts() != null && !device.getOpenOnvifPorts().isEmpty();
+
+            boolean isLikelyNotCamera = !hasWsDiscovery && !hasRtspPorts && !hasOnvifPorts;
+
+            if (isLikelyNotCamera) {
+                device.setStatus(Device.DeviceStatus.AUTH_FAILED);
+                device.setAuthFailed(false); // Not an auth failure - just not a camera
+                device.setErrorMessage("Unknown device type");
+                logger.info("=== Device {} marked as UNKNOWN DEVICE TYPE (not a camera) ===", device.getIpAddress());
+            } else {
+                device.setStatus(Device.DeviceStatus.AUTH_FAILED);
+                device.setAuthFailed(true);
+                device.setErrorMessage("Authentication failed with all credentials");
+                logger.warn("=== Device {} authentication FAILED ===", device.getIpAddress());
+            }
         }
     }
 
@@ -1445,7 +1462,7 @@ public class MainController {
         grid.setVgap(10);
         grid.setPadding(new Insets(20));
 
-        TextField tfRetryUsername = new TextField();
+        TextField tfRetryUsername = new TextField("admin");
         tfRetryUsername.setPromptText("Username");
 
         TextField tfRetryPassword = new TextField();
@@ -1482,15 +1499,21 @@ public class MainController {
             String password = tfRetryPassword.getText().trim();
 
             if (!username.isEmpty() && !password.isEmpty()) {
-                // Add to credentials list if not already present
-                Credential newCred = new Credential(username, password);
-                boolean exists = credentials.stream()
+                // Check if this credential was already used in discovery
+                boolean alreadyUsed = credentials.stream()
                         .anyMatch(c -> c.getUsername().equals(username) && c.getPassword().equals(password));
 
-                if (!exists) {
-                    credentials.add(newCred);
-                    logger.info("Added new credential to list: {}", username);
+                if (alreadyUsed) {
+                    showAlert("Credential Already Used",
+                        "This credential was already tried during discovery and failed.\nPlease enter a different username or password.",
+                        Alert.AlertType.WARNING);
+                    return;
                 }
+
+                // Add to credentials list
+                Credential newCred = new Credential(username, password);
+                credentials.add(newCred);
+                logger.info("Added new credential to list: {}", username);
 
                 // Retry authentication in background
                 executorService.submit(() -> {
