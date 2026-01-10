@@ -1,6 +1,7 @@
 package com.cctv.discovery.export;
 
 import com.cctv.discovery.model.Device;
+import com.cctv.discovery.model.HostAuditData;
 import com.cctv.discovery.model.RTSPStream;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.ss.util.CellRangeAddress;
@@ -23,7 +24,7 @@ public class ExcelExporter {
      * Export devices to Excel file with password protection.
      */
     public void exportToExcel(List<Device> devices, String siteId, String premiseName,
-                               String operatorName, File outputFile, String password) throws Exception {
+                               String operatorName, File outputFile, String password, HostAuditData hostAudit) throws Exception {
         Workbook workbook = new XSSFWorkbook();
         Sheet sheet = workbook.createSheet("CCTV Audit Report");
 
@@ -86,10 +87,22 @@ public class ExcelExporter {
             sheet.autoSizeColumn(i);
         }
 
-        // Apply worksheet protection
+        // Apply worksheet protection to CCTV sheet
         if (password != null && !password.isEmpty()) {
             protectSheet(sheet, password);
-            logger.info("Worksheet protected with password");
+            logger.info("CCTV Audit sheet protected with password");
+        }
+
+        // Create Host Audit sheet
+        if (hostAudit != null) {
+            Sheet hostSheet = workbook.createSheet("Host Audit");
+            createHostAuditSheet(hostSheet, hostAudit, headerStyle, dataStyle);
+
+            // Protect host audit sheet too
+            if (password != null && !password.isEmpty()) {
+                protectSheet(hostSheet, password);
+                logger.info("Host Audit sheet protected with password");
+            }
         }
 
         // Write to file
@@ -235,5 +248,185 @@ public class ExcelExporter {
         style.setBorderLeft(BorderStyle.THIN);
         style.setBorderRight(BorderStyle.THIN);
         return style;
+    }
+
+    /**
+     * Create Host Audit sheet with system information.
+     */
+    private void createHostAuditSheet(Sheet sheet, HostAuditData data, CellStyle headerStyle, CellStyle dataStyle) {
+        int rowNum = 0;
+
+        // Title
+        Row titleRow = sheet.createRow(rowNum++);
+        Cell titleCell = titleRow.createCell(0);
+        titleCell.setCellValue("HOST AUDIT REPORT");
+        titleCell.setCellStyle(headerStyle);
+        sheet.addMergedRegion(new CellRangeAddress(0, 0, 0, 1));
+        rowNum++; // Blank row
+
+        // System Information Section
+        rowNum = addSectionHeader(sheet, rowNum, "SYSTEM INFORMATION", headerStyle);
+        rowNum = addInfoRow(sheet, rowNum, "Computer Name", data.getComputerName(), dataStyle);
+        rowNum = addInfoRow(sheet, rowNum, "Domain", data.getDomain(), dataStyle);
+        rowNum = addInfoRow(sheet, rowNum, "Username", data.getUsername(), dataStyle);
+        rowNum = addInfoRow(sheet, rowNum, "Operating System", data.getOperatingSystem(), dataStyle);
+        rowNum = addInfoRow(sheet, rowNum, "OS Version", data.getOsVersion(), dataStyle);
+        rowNum = addInfoRow(sheet, rowNum, "OS Architecture", data.getOsArchitecture(), dataStyle);
+        rowNum = addInfoRow(sheet, rowNum, "OS Build", data.getOsBuild(), dataStyle);
+        rowNum++; // Blank row
+
+        // Hardware Information Section
+        rowNum = addSectionHeader(sheet, rowNum, "HARDWARE INFORMATION", headerStyle);
+        rowNum = addInfoRow(sheet, rowNum, "Make", data.getMake(), dataStyle);
+        rowNum = addInfoRow(sheet, rowNum, "Model", data.getModel(), dataStyle);
+        rowNum = addInfoRow(sheet, rowNum, "CPU Name", data.getCpuName(), dataStyle);
+        rowNum = addInfoRow(sheet, rowNum, "CPU Cores", String.valueOf(data.getCpuCores()), dataStyle);
+        rowNum = addInfoRow(sheet, rowNum, "CPU Threads", String.valueOf(data.getCpuThreads()), dataStyle);
+        rowNum = addInfoRow(sheet, rowNum, "CPU Speed", data.getCpuSpeed(), dataStyle);
+        rowNum = addInfoRow(sheet, rowNum, "Total Memory", data.getTotalMemory(), dataStyle);
+        rowNum = addInfoRow(sheet, rowNum, "Available Memory", data.getAvailableMemory(), dataStyle);
+        rowNum = addInfoRow(sheet, rowNum, "Memory Usage", data.getMemoryUsage(), dataStyle);
+        rowNum++; // Blank row
+
+        // BIOS and Motherboard
+        rowNum = addSectionHeader(sheet, rowNum, "BIOS & MOTHERBOARD", headerStyle);
+        rowNum = addInfoRow(sheet, rowNum, "BIOS Information", data.getBiosInformation(), dataStyle);
+        rowNum = addInfoRow(sheet, rowNum, "Motherboard", data.getMotherboard(), dataStyle);
+        rowNum++; // Blank row
+
+        // Disk Information
+        if (!data.getDisks().isEmpty()) {
+            rowNum = addSectionHeader(sheet, rowNum, "DISK INFORMATION", headerStyle);
+            Row diskHeaderRow = sheet.createRow(rowNum++);
+            createCell(diskHeaderRow, 0, "Name", headerStyle);
+            createCell(diskHeaderRow, 1, "Model", headerStyle);
+            createCell(diskHeaderRow, 2, "Size", headerStyle);
+            createCell(diskHeaderRow, 3, "Type", headerStyle);
+
+            for (HostAuditData.DiskInfo disk : data.getDisks()) {
+                Row diskRow = sheet.createRow(rowNum++);
+                createCell(diskRow, 0, disk.getName(), dataStyle);
+                createCell(diskRow, 1, disk.getModel(), dataStyle);
+                createCell(diskRow, 2, disk.getSize(), dataStyle);
+                createCell(diskRow, 3, disk.getType(), dataStyle);
+            }
+            rowNum++; // Blank row
+        }
+
+        // Network Adapters
+        if (!data.getNetworkAdapters().isEmpty()) {
+            rowNum = addSectionHeader(sheet, rowNum, "NETWORK ADAPTERS", headerStyle);
+            Row netHeaderRow = sheet.createRow(rowNum++);
+            createCell(netHeaderRow, 0, "Name", headerStyle);
+            createCell(netHeaderRow, 1, "MAC Address", headerStyle);
+            createCell(netHeaderRow, 2, "IP Address", headerStyle);
+            createCell(netHeaderRow, 3, "Status", headerStyle);
+            createCell(netHeaderRow, 4, "Speed", headerStyle);
+
+            for (HostAuditData.NetworkAdapterInfo adapter : data.getNetworkAdapters()) {
+                Row netRow = sheet.createRow(rowNum++);
+                createCell(netRow, 0, adapter.getName(), dataStyle);
+                createCell(netRow, 1, adapter.getMacAddress(), dataStyle);
+                createCell(netRow, 2, adapter.getIpAddress(), dataStyle);
+                createCell(netRow, 3, adapter.getStatus(), dataStyle);
+                createCell(netRow, 4, adapter.getSpeed(), dataStyle);
+            }
+            rowNum++; // Blank row
+        }
+
+        // System Status
+        rowNum = addSectionHeader(sheet, rowNum, "SYSTEM STATUS", headerStyle);
+        rowNum = addInfoRow(sheet, rowNum, "System Uptime", data.getSystemUptime(), dataStyle);
+        rowNum = addInfoRow(sheet, rowNum, "Current Time", data.getCurrentTime(), dataStyle);
+        rowNum = addInfoRow(sheet, rowNum, "Time Zone", data.getTimeZone(), dataStyle);
+        rowNum = addInfoRow(sheet, rowNum, "Time Server Sync", data.getTimeServerSync(), dataStyle);
+
+        // NTP Time Drift with alert
+        if (data.getNtpTimeDrift() != null) {
+            String driftValue = String.format("%.3f seconds", data.getNtpTimeDrift());
+            if (data.isNtpTimeDriftAlert()) {
+                driftValue += " ⚠ ALERT: Drift > 1 second!";
+            }
+            rowNum = addInfoRow(sheet, rowNum, "NTP Time Drift", driftValue,
+                data.isNtpTimeDriftAlert() ? createRedHighlightStyle(sheet.getWorkbook()) : dataStyle);
+        }
+        rowNum++; // Blank row
+
+        // Top Processes - CPU
+        if (!data.getTopCpuProcesses().isEmpty()) {
+            rowNum = addSectionHeader(sheet, rowNum, "TOP 5 PROCESSES BY CPU", headerStyle);
+            Row cpuHeaderRow = sheet.createRow(rowNum++);
+            createCell(cpuHeaderRow, 0, "Process Name", headerStyle);
+            createCell(cpuHeaderRow, 1, "PID", headerStyle);
+            createCell(cpuHeaderRow, 2, "CPU Usage", headerStyle);
+
+            for (HostAuditData.ProcessInfo proc : data.getTopCpuProcesses()) {
+                Row procRow = sheet.createRow(rowNum++);
+                createCell(procRow, 0, proc.getName(), dataStyle);
+                createCell(procRow, 1, String.valueOf(proc.getPid()), dataStyle);
+                createCell(procRow, 2, proc.getValue(), dataStyle);
+            }
+            rowNum++; // Blank row
+        }
+
+        // Top Processes - Memory
+        if (!data.getTopMemoryProcesses().isEmpty()) {
+            rowNum = addSectionHeader(sheet, rowNum, "TOP 5 PROCESSES BY MEMORY", headerStyle);
+            Row memHeaderRow = sheet.createRow(rowNum++);
+            createCell(memHeaderRow, 0, "Process Name", headerStyle);
+            createCell(memHeaderRow, 1, "PID", headerStyle);
+            createCell(memHeaderRow, 2, "Memory Usage", headerStyle);
+
+            for (HostAuditData.ProcessInfo proc : data.getTopMemoryProcesses()) {
+                Row procRow = sheet.createRow(rowNum++);
+                createCell(procRow, 0, proc.getName(), dataStyle);
+                createCell(procRow, 1, String.valueOf(proc.getPid()), dataStyle);
+                createCell(procRow, 2, proc.getValue(), dataStyle);
+            }
+            rowNum++; // Blank row
+        }
+
+        // Top Processes - Disk IO
+        if (!data.getTopDiskIOProcesses().isEmpty()) {
+            rowNum = addSectionHeader(sheet, rowNum, "TOP 5 PROCESSES BY DISK I/O", headerStyle);
+            Row ioHeaderRow = sheet.createRow(rowNum++);
+            createCell(ioHeaderRow, 0, "Process Name", headerStyle);
+            createCell(ioHeaderRow, 1, "PID", headerStyle);
+            createCell(ioHeaderRow, 2, "Disk I/O", headerStyle);
+
+            for (HostAuditData.ProcessInfo proc : data.getTopDiskIOProcesses()) {
+                Row procRow = sheet.createRow(rowNum++);
+                createCell(procRow, 0, proc.getName(), dataStyle);
+                createCell(procRow, 1, String.valueOf(proc.getPid()), dataStyle);
+                createCell(procRow, 2, proc.getValue(), dataStyle);
+            }
+        }
+
+        // Auto-size columns
+        for (int i = 0; i < 5; i++) {
+            sheet.autoSizeColumn(i);
+        }
+    }
+
+    private int addSectionHeader(Sheet sheet, int rowNum, String title, CellStyle headerStyle) {
+        Row row = sheet.createRow(rowNum);
+        Cell cell = row.createCell(0);
+        cell.setCellValue(title);
+        cell.setCellStyle(headerStyle);
+        sheet.addMergedRegion(new CellRangeAddress(rowNum, rowNum, 0, 1));
+        return rowNum + 1;
+    }
+
+    private int addInfoRow(Sheet sheet, int rowNum, String label, String value, CellStyle style) {
+        Row row = sheet.createRow(rowNum);
+        Cell labelCell = row.createCell(0);
+        labelCell.setCellValue(label);
+        labelCell.setCellStyle(style);
+
+        Cell valueCell = row.createCell(1);
+        valueCell.setCellValue(value != null ? value : "N/A");
+        valueCell.setCellStyle(style);
+
+        return rowNum + 1;
     }
 }

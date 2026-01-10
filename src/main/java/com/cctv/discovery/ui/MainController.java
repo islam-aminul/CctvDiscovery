@@ -6,7 +6,9 @@ import com.cctv.discovery.discovery.StreamAnalyzer;
 import com.cctv.discovery.export.ExcelExporter;
 import com.cctv.discovery.model.Credential;
 import com.cctv.discovery.model.Device;
+import com.cctv.discovery.model.HostAuditData;
 import com.cctv.discovery.model.RTSPStream;
+import com.cctv.discovery.service.HostAuditService;
 import com.cctv.discovery.service.OnvifService;
 import com.cctv.discovery.service.RtspService;
 import com.cctv.discovery.util.NetworkUtils;
@@ -102,11 +104,13 @@ public class MainController {
     private RtspService rtspService;
     private StreamAnalyzer streamAnalyzer;
     private ExcelExporter excelExporter;
+    private HostAuditService hostAuditService;
     private ExecutorService executorService;
 
     // State
     private boolean discoveryInProgress = false;
     private boolean networkConfigured = false;
+    private HostAuditData hostAuditData; // Collected at startup
 
     public MainController(Stage primaryStage) {
         this.primaryStage = primaryStage;
@@ -126,7 +130,15 @@ public class MainController {
         this.rtspService = new RtspService();
         this.streamAnalyzer = new StreamAnalyzer();
         this.excelExporter = new ExcelExporter();
+        this.hostAuditService = new HostAuditService();
         this.executorService = Executors.newSingleThreadExecutor();
+
+        // Collect host audit data in background (don't block UI startup)
+        executorService.submit(() -> {
+            logger.info("Collecting host audit data in background...");
+            hostAuditData = hostAuditService.collectHostAudit();
+            logger.info("Host audit data collection completed");
+        });
     }
 
     public Scene createScene() {
@@ -1652,8 +1664,8 @@ public class MainController {
         File file = fileChooser.showSaveDialog(primaryStage);
         if (file != null) {
             try {
-                // Export with auto-generated password protection
-                excelExporter.exportToExcel(new ArrayList<>(devices), siteId.get(), null, null, file, generatedPassword);
+                // Export with auto-generated password protection and host audit data
+                excelExporter.exportToExcel(new ArrayList<>(devices), siteId.get(), null, null, file, generatedPassword, hostAuditData);
 
                 // Show success WITHOUT password (authority will derive it)
                 showAlert("Export Complete",
