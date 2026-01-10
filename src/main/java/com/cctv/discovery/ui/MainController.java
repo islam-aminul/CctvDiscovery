@@ -720,22 +720,24 @@ public class MainController {
     private VBox createProgressSection() {
         VBox vbox = new VBox(6);
         vbox.setPadding(new Insets(10));
-        vbox.setStyle("-fx-background-color: #008080; -fx-background-radius: 5; -fx-border-color: #006666; -fx-border-width: 1; -fx-border-radius: 5;");
 
         Label lblTitle = new Label("Progress");
         lblTitle.getStyleClass().add("section-title");
-        lblTitle.setStyle("-fx-text-fill: white; -fx-font-weight: bold;");
+        lblTitle.setAlignment(Pos.CENTER);
+        lblTitle.setMaxWidth(Double.MAX_VALUE);
+        lblTitle.setStyle("-fx-font-weight: bold;");
 
         progressBar = new ProgressBar(0);
         progressBar.setMaxWidth(Double.MAX_VALUE);
         progressBar.setPrefHeight(18);
+        progressBar.setStyle("-fx-accent: #008080;");
 
-        // Progress label - center aligned and italic with white text
+        // Progress label - center aligned and italic with teal text
         lblProgress = new Label("Ready");
         lblProgress.getStyleClass().add("label-info");
         lblProgress.setAlignment(Pos.CENTER);
         lblProgress.setMaxWidth(Double.MAX_VALUE);
-        lblProgress.setStyle("-fx-font-style: italic; -fx-text-fill: white;");
+        lblProgress.setStyle("-fx-font-style: italic; -fx-text-fill: #008080;");
 
         vbox.getChildren().addAll(lblTitle, progressBar, lblProgress);
         return vbox;
@@ -1301,9 +1303,10 @@ public class MainController {
         boolean onvifSuccess = attemptOnvifAuthentication(device);
 
         // PRIORITY 2: Try RTSP URL Guessing (if ONVIF failed or no streams found)
+        boolean rtspSuccess = false;
         if (!onvifSuccess || device.getRtspStreams().isEmpty()) {
             logger.info("Falling back to RTSP URL guessing for {}", device.getIpAddress());
-            attemptRtspAuthentication(device);
+            rtspSuccess = attemptRtspAuthentication(device);
         }
 
         // PRIORITY 3: NVR/DVR Channel Iteration (if applicable and authenticated)
@@ -1322,11 +1325,15 @@ public class MainController {
                     device.getIpAddress(), device.getRtspStreams().size());
         } else {
             // Check if this is likely NOT a camera (router, printer, NAS, web server, etc.)
+            // Use actual success indicators, not just port detection
             boolean hasWsDiscovery = device.getOnvifServiceUrl() != null;
             boolean hasRtspPorts = device.getOpenRtspPorts() != null && !device.getOpenRtspPorts().isEmpty();
-            boolean hasOnvifPorts = device.getOpenOnvifPorts() != null && !device.getOpenOnvifPorts().isEmpty();
 
-            boolean isLikelyNotCamera = !hasWsDiscovery && !hasRtspPorts && !hasOnvifPorts;
+            // Device is likely not a camera if:
+            // - No WS-Discovery announcement AND
+            // - No RTSP ports detected AND
+            // - ONVIF didn't actually work (even if ports were detected)
+            boolean isLikelyNotCamera = !hasWsDiscovery && !hasRtspPorts && !onvifSuccess;
 
             if (isLikelyNotCamera) {
                 device.setStatus(Device.DeviceStatus.AUTH_FAILED);
@@ -1412,8 +1419,10 @@ public class MainController {
     private boolean attemptRtspAuthentication(Device device) {
         logger.info("--- Attempting RTSP URL guessing for {} ---", device.getIpAddress());
 
-        if (device.getOpenRtspPorts().isEmpty()) {
-            logger.warn("No RTSP ports detected for {}, using default 554", device.getIpAddress());
+        // Check if RTSP ports exist - if not, skip entirely
+        if (device.getOpenRtspPorts() == null || device.getOpenRtspPorts().isEmpty()) {
+            logger.info("No RTSP ports detected for {} - skipping RTSP authentication", device.getIpAddress());
+            return false;
         }
 
         for (Credential cred : credentials) {
