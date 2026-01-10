@@ -792,6 +792,22 @@ public class MainController {
 
         TableColumn<Device, String> colStatus = new TableColumn<>("Status");
         colStatus.setCellValueFactory(new PropertyValueFactory<>("status"));
+        // Custom cell factory for Status column with icons
+        colStatus.setCellFactory(column -> new TableCell<Device, String>() {
+            @Override
+            protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) {
+                    setText(null);
+                    setStyle("");
+                } else {
+                    Device device = getTableView().getItems().get(getIndex());
+                    String icon = getStatusIcon(device);
+                    setText(icon + " " + item);
+                    setStyle("-fx-font-weight: bold;");
+                }
+            }
+        });
 
         TableColumn<Device, String> colName = new TableColumn<>("Device Name");
         colName.setCellValueFactory(new PropertyValueFactory<>("deviceName"));
@@ -804,11 +820,80 @@ public class MainController {
             int count = cellData.getValue().getRtspStreams().size();
             return new javafx.beans.property.SimpleStringProperty(String.valueOf(count));
         });
+        // Custom cell factory for Streams column with color coding
+        colStreams.setCellFactory(column -> new TableCell<Device, String>() {
+            @Override
+            protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) {
+                    setText(null);
+                    setStyle("");
+                } else {
+                    setText(item);
+                    int count = Integer.parseInt(item);
+                    if (count > 0) {
+                        setStyle("-fx-text-fill: #28a745; -fx-font-weight: bold;");
+                    } else {
+                        setStyle("-fx-text-fill: #6c757d;");
+                    }
+                }
+            }
+        });
 
         TableColumn<Device, String> colError = new TableColumn<>("Error");
         colError.setCellValueFactory(new PropertyValueFactory<>("errorMessage"));
+        // Custom cell factory for Error column with color coding
+        colError.setCellFactory(column -> new TableCell<Device, String>() {
+            @Override
+            protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null || item.isEmpty()) {
+                    setText(null);
+                    setStyle("");
+                } else {
+                    setText(item);
+                    if (item.contains("Authentication failed")) {
+                        setStyle("-fx-text-fill: #dc3545; -fx-font-weight: bold;");
+                    } else if (item.contains("Unknown device type")) {
+                        setStyle("-fx-text-fill: #fd7e14; -fx-font-weight: bold;");
+                    } else {
+                        setStyle("-fx-text-fill: #6c757d;");
+                    }
+                }
+            }
+        });
 
         tvResults.getColumns().addAll(colIp, colStatus, colName, colManufacturer, colStreams, colError);
+
+        // Add row factory for color-coded backgrounds
+        tvResults.setRowFactory(tv -> {
+            TableRow<Device> row = new TableRow<Device>() {
+                @Override
+                protected void updateItem(Device device, boolean empty) {
+                    super.updateItem(device, empty);
+
+                    if (empty || device == null) {
+                        setStyle("");
+                    } else {
+                        String backgroundColor = getRowBackgroundColor(device);
+                        String baseStyle = "-fx-background-color: " + backgroundColor + "; -fx-padding: 4px;";
+
+                        // Add hover and selection styles
+                        setStyle(baseStyle);
+
+                        // Listen for selection changes
+                        selectedProperty().addListener((obs, wasSelected, isNowSelected) -> {
+                            if (isNowSelected) {
+                                setStyle(baseStyle + " -fx-border-color: #0078d4; -fx-border-width: 2px;");
+                            } else {
+                                setStyle(baseStyle);
+                            }
+                        });
+                    }
+                }
+            };
+            return row;
+        });
 
         // Add context menu for device retry
         ContextMenu deviceContextMenu = new ContextMenu();
@@ -834,6 +919,44 @@ public class MainController {
 
         vbox.getChildren().addAll(lblTitle, tvResults);
         return vbox;
+    }
+
+    /**
+     * Get background color for table row based on device status
+     */
+    private String getRowBackgroundColor(Device device) {
+        if (device.getStatus() == Device.DeviceStatus.COMPLETED) {
+            return "#d4edda"; // Light green - success
+        } else if (device.getStatus() == Device.DeviceStatus.AUTHENTICATING) {
+            return "#d1ecf1"; // Light blue - in progress
+        } else if (device.getStatus() == Device.DeviceStatus.AUTH_FAILED) {
+            if (device.isAuthFailed()) {
+                return "#f8d7da"; // Light red - authentication failure
+            } else {
+                return "#fff3cd"; // Light yellow - unknown device type
+            }
+        } else {
+            return "white"; // Default - discovered but not processed
+        }
+    }
+
+    /**
+     * Get status icon based on device status
+     */
+    private String getStatusIcon(Device device) {
+        if (device.getStatus() == Device.DeviceStatus.COMPLETED) {
+            return "✓"; // Success
+        } else if (device.getStatus() == Device.DeviceStatus.AUTHENTICATING) {
+            return "⏳"; // In progress
+        } else if (device.getStatus() == Device.DeviceStatus.AUTH_FAILED) {
+            if (device.isAuthFailed()) {
+                return "✗"; // Authentication failed
+            } else {
+                return "⚠"; // Unknown device type
+            }
+        } else {
+            return "○"; // Discovered
+        }
     }
 
     private void populateNetworkInterfaces() {
