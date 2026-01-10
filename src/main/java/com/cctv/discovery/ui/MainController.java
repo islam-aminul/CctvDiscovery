@@ -720,22 +720,24 @@ public class MainController {
     private VBox createProgressSection() {
         VBox vbox = new VBox(6);
         vbox.setPadding(new Insets(10));
-        vbox.setStyle("-fx-background-color: #008080; -fx-background-radius: 5; -fx-border-color: #006666; -fx-border-width: 1; -fx-border-radius: 5;");
 
         Label lblTitle = new Label("Progress");
         lblTitle.getStyleClass().add("section-title");
-        lblTitle.setStyle("-fx-text-fill: white; -fx-font-weight: bold;");
+        lblTitle.setAlignment(Pos.CENTER);
+        lblTitle.setMaxWidth(Double.MAX_VALUE);
+        lblTitle.setStyle("-fx-font-weight: bold;");
 
         progressBar = new ProgressBar(0);
         progressBar.setMaxWidth(Double.MAX_VALUE);
         progressBar.setPrefHeight(18);
+        progressBar.setStyle("-fx-accent: #008080;");
 
-        // Progress label - center aligned and italic with white text
+        // Progress label - center aligned and italic with teal text
         lblProgress = new Label("Ready");
         lblProgress.getStyleClass().add("label-info");
         lblProgress.setAlignment(Pos.CENTER);
         lblProgress.setMaxWidth(Double.MAX_VALUE);
-        lblProgress.setStyle("-fx-font-style: italic; -fx-text-fill: white;");
+        lblProgress.setStyle("-fx-font-style: italic; -fx-text-fill: #008080;");
 
         vbox.getChildren().addAll(lblTitle, progressBar, lblProgress);
         return vbox;
