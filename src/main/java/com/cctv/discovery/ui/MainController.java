@@ -147,7 +147,7 @@ public class MainController {
 
         // Create split pane for left and right panels
         SplitPane splitPane = new SplitPane();
-        splitPane.setDividerPositions(0.35);
+        splitPane.setDividerPositions(0.25); // Left panel occupies 1/4 of horizontal span
 
         // Left panel - Controls
         VBox leftPanel = createLeftPanel();
@@ -166,7 +166,7 @@ public class MainController {
         mainLayout.setTop(header);
         mainLayout.setCenter(splitPane);
 
-        scene = new Scene(mainLayout, 1400, 800);
+        scene = new Scene(mainLayout, 1024, 768);
 
         // Load CSS with null check to prevent startup crashes
         try {
