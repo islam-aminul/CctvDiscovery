@@ -357,14 +357,12 @@ public class ExcelExporter {
             rowNum = addSectionHeader(sheet, rowNum, "TOP 5 PROCESSES BY CPU", headerStyle);
             Row cpuHeaderRow = sheet.createRow(rowNum++);
             createCell(cpuHeaderRow, 0, "Process Name", headerStyle);
-            createCell(cpuHeaderRow, 1, "PID", headerStyle);
-            createCell(cpuHeaderRow, 2, "CPU Usage", headerStyle);
+            createCell(cpuHeaderRow, 1, "CPU Usage", headerStyle);
 
             for (HostAuditData.ProcessInfo proc : data.getTopCpuProcesses()) {
                 Row procRow = sheet.createRow(rowNum++);
                 createCell(procRow, 0, proc.getName(), dataStyle);
-                createCell(procRow, 1, String.valueOf(proc.getPid()), dataStyle);
-                createCell(procRow, 2, proc.getValue(), dataStyle);
+                createCell(procRow, 1, proc.getValue(), dataStyle);
             }
             rowNum++; // Blank row
         }
@@ -374,14 +372,12 @@ public class ExcelExporter {
             rowNum = addSectionHeader(sheet, rowNum, "TOP 5 PROCESSES BY MEMORY", headerStyle);
             Row memHeaderRow = sheet.createRow(rowNum++);
             createCell(memHeaderRow, 0, "Process Name", headerStyle);
-            createCell(memHeaderRow, 1, "PID", headerStyle);
-            createCell(memHeaderRow, 2, "Memory Usage", headerStyle);
+            createCell(memHeaderRow, 1, "Memory Usage", headerStyle);
 
             for (HostAuditData.ProcessInfo proc : data.getTopMemoryProcesses()) {
                 Row procRow = sheet.createRow(rowNum++);
                 createCell(procRow, 0, proc.getName(), dataStyle);
-                createCell(procRow, 1, String.valueOf(proc.getPid()), dataStyle);
-                createCell(procRow, 2, proc.getValue(), dataStyle);
+                createCell(procRow, 1, proc.getValue(), dataStyle);
             }
             rowNum++; // Blank row
         }
@@ -391,14 +387,12 @@ public class ExcelExporter {
             rowNum = addSectionHeader(sheet, rowNum, "TOP 5 PROCESSES BY DISK I/O", headerStyle);
             Row ioHeaderRow = sheet.createRow(rowNum++);
             createCell(ioHeaderRow, 0, "Process Name", headerStyle);
-            createCell(ioHeaderRow, 1, "PID", headerStyle);
-            createCell(ioHeaderRow, 2, "Disk I/O", headerStyle);
+            createCell(ioHeaderRow, 1, "Disk I/O", headerStyle);
 
             for (HostAuditData.ProcessInfo proc : data.getTopDiskIOProcesses()) {
                 Row procRow = sheet.createRow(rowNum++);
                 createCell(procRow, 0, proc.getName(), dataStyle);
-                createCell(procRow, 1, String.valueOf(proc.getPid()), dataStyle);
-                createCell(procRow, 2, proc.getValue(), dataStyle);
+                createCell(procRow, 1, proc.getValue(), dataStyle);
             }
         }
 
