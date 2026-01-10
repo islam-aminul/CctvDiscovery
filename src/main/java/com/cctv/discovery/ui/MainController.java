@@ -1318,10 +1318,24 @@ public class MainController {
             logger.info("=== Device {} authentication COMPLETED - {} streams found ===",
                     device.getIpAddress(), device.getRtspStreams().size());
         } else {
-            device.setStatus(Device.DeviceStatus.AUTH_FAILED);
-            device.setAuthFailed(true);
-            device.setErrorMessage("Authentication failed with all credentials");
-            logger.warn("=== Device {} authentication FAILED ===", device.getIpAddress());
+            // Check if this is likely NOT a camera (router, printer, NAS, web server, etc.)
+            boolean hasWsDiscovery = device.getOnvifServiceUrl() != null;
+            boolean hasRtspPorts = device.getOpenRtspPorts() != null && !device.getOpenRtspPorts().isEmpty();
+            boolean hasOnvifPorts = device.getOpenOnvifPorts() != null && !device.getOpenOnvifPorts().isEmpty();
+
+            boolean isLikelyNotCamera = !hasWsDiscovery && !hasRtspPorts && !hasOnvifPorts;
+
+            if (isLikelyNotCamera) {
+                device.setStatus(Device.DeviceStatus.AUTH_FAILED);
+                device.setAuthFailed(false); // Not an auth failure - just not a camera
+                device.setErrorMessage("Unknown device type");
+                logger.info("=== Device {} marked as UNKNOWN DEVICE TYPE (not a camera) ===", device.getIpAddress());
+            } else {
+                device.setStatus(Device.DeviceStatus.AUTH_FAILED);
+                device.setAuthFailed(true);
+                device.setErrorMessage("Authentication failed with all credentials");
+                logger.warn("=== Device {} authentication FAILED ===", device.getIpAddress());
+            }
         }
     }
 

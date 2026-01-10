@@ -87,9 +87,15 @@ public class RtspService {
         String manufacturer = device.getManufacturer();
         String macPrefix = getMacPrefix(device.getMacAddress());
 
-        // Get detected RTSP ports, default to [554] if none found
+        // Get detected RTSP ports - do NOT test if none found
         List<Integer> rtspPorts = getDetectedRtspPorts(device);
         logger.debug("Device {} - Detected RTSP ports: {}", device.getIpAddress(), rtspPorts);
+
+        // Skip RTSP testing if no ports detected
+        if (rtspPorts.isEmpty()) {
+            logger.info("Skipping RTSP stream discovery for {} - no RTSP ports detected", device.getIpAddress());
+            return streams; // Return empty list
+        }
 
         List<String> pathsToTry = new ArrayList<>();
 
@@ -202,7 +208,7 @@ public class RtspService {
 
     /**
      * Get detected RTSP ports from device port scan results.
-     * Defaults to [554] if no RTSP ports were detected.
+     * Returns empty list if no RTSP ports were detected (do NOT fallback to 554).
      */
     private List<Integer> getDetectedRtspPorts(Device device) {
         List<Integer> ports = new ArrayList<>();
@@ -211,12 +217,8 @@ public class RtspService {
         if (device.getOpenRtspPorts() != null && !device.getOpenRtspPorts().isEmpty()) {
             ports.addAll(device.getOpenRtspPorts());
             logger.info("Using detected RTSP ports for {}: {}", device.getIpAddress(), ports);
-        }
-
-        // If no RTSP ports detected, default to standard port 554
-        if (ports.isEmpty()) {
-            ports.add(554);
-            logger.info("No RTSP ports detected for {}, using default port 554", device.getIpAddress());
+        } else {
+            logger.info("No RTSP ports detected for {} - will skip RTSP testing", device.getIpAddress());
         }
 
         return ports;
@@ -512,6 +514,13 @@ public class RtspService {
 
         // Get detected RTSP ports - NVR/DVR typically uses same port for all channels
         List<Integer> rtspPorts = getDetectedRtspPorts(device);
+
+        // Skip if no RTSP ports detected
+        if (rtspPorts.isEmpty()) {
+            logger.info("Skipping NVR channel iteration for {} - no RTSP ports detected", device.getIpAddress());
+            return streams;
+        }
+
         int rtspPort = rtspPorts.get(0); // Use first detected port
         logger.debug("Using RTSP port {} for NVR channel iteration", rtspPort);
 
