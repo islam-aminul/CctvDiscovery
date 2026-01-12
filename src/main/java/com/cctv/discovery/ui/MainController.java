@@ -789,29 +789,134 @@ public class MainController {
 
         TableColumn<Device, String> colIp = new TableColumn<>("IP Address");
         colIp.setCellValueFactory(new PropertyValueFactory<>("ipAddress"));
+        colIp.setCellFactory(column -> new TableCell<Device, String>() {
+            @Override
+            protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) {
+                    setText(null);
+                    setStyle("");
+                } else {
+                    setText(item);
+                    Device device = getTableView().getItems().get(getIndex());
+                    String textColor = getRowTextColor(device);
+                    setStyle("-fx-text-fill: " + textColor + ";");
+                }
+            }
+        });
 
         TableColumn<Device, String> colStatus = new TableColumn<>("Status");
         colStatus.setCellValueFactory(cellData -> {
             Device.DeviceStatus status = cellData.getValue().getStatus();
             return new javafx.beans.property.SimpleStringProperty(status != null ? status.toString() : "");
         });
+        colStatus.setCellFactory(column -> new TableCell<Device, String>() {
+            @Override
+            protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) {
+                    setText(null);
+                    setStyle("");
+                } else {
+                    setText(item);
+                    Device device = getTableView().getItems().get(getIndex());
+                    String textColor = getRowTextColor(device);
+                    setStyle("-fx-text-fill: " + textColor + ";");
+                }
+            }
+        });
 
         TableColumn<Device, String> colName = new TableColumn<>("Device Name");
         colName.setCellValueFactory(new PropertyValueFactory<>("deviceName"));
+        colName.setCellFactory(column -> new TableCell<Device, String>() {
+            @Override
+            protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) {
+                    setText(null);
+                    setStyle("");
+                } else {
+                    setText(item);
+                    Device device = getTableView().getItems().get(getIndex());
+                    String textColor = getRowTextColor(device);
+                    setStyle("-fx-text-fill: " + textColor + ";");
+                }
+            }
+        });
 
         TableColumn<Device, String> colManufacturer = new TableColumn<>("Manufacturer");
         colManufacturer.setCellValueFactory(new PropertyValueFactory<>("manufacturer"));
+        colManufacturer.setCellFactory(column -> new TableCell<Device, String>() {
+            @Override
+            protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) {
+                    setText(null);
+                    setStyle("");
+                } else {
+                    setText(item);
+                    Device device = getTableView().getItems().get(getIndex());
+                    String textColor = getRowTextColor(device);
+                    setStyle("-fx-text-fill: " + textColor + ";");
+                }
+            }
+        });
 
         TableColumn<Device, String> colStreams = new TableColumn<>("Streams");
         colStreams.setCellValueFactory(cellData -> {
             int count = cellData.getValue().getRtspStreams().size();
             return new javafx.beans.property.SimpleStringProperty(String.valueOf(count));
         });
+        colStreams.setCellFactory(column -> new TableCell<Device, String>() {
+            @Override
+            protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) {
+                    setText(null);
+                    setStyle("");
+                } else {
+                    setText(item);
+                    int count = Integer.parseInt(item);
+                    // Streams > 0: green, Streams = 0: red
+                    String textColor = count > 0 ? "#155724" : "#A94442";
+                    setStyle("-fx-text-fill: " + textColor + ";");
+                }
+            }
+        });
 
         TableColumn<Device, String> colError = new TableColumn<>("Error");
         colError.setCellValueFactory(new PropertyValueFactory<>("errorMessage"));
+        colError.setCellFactory(column -> new TableCell<Device, String>() {
+            @Override
+            protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null || item.isEmpty()) {
+                    setText(null);
+                    setStyle("");
+                } else {
+                    setText(item);
+                    Device device = getTableView().getItems().get(getIndex());
+                    String textColor = getRowTextColor(device);
+                    setStyle("-fx-text-fill: " + textColor + ";");
+                }
+            }
+        });
 
         tvResults.getColumns().addAll(colIp, colStatus, colName, colManufacturer, colStreams, colError);
+
+        // Add row factory for background colors only
+        tvResults.setRowFactory(tv -> new TableRow<Device>() {
+            @Override
+            protected void updateItem(Device device, boolean empty) {
+                super.updateItem(device, empty);
+                if (empty || device == null) {
+                    setStyle("");
+                } else {
+                    String backgroundColor = getRowBackgroundColor(device);
+                    setStyle("-fx-background-color: " + backgroundColor + ";");
+                }
+            }
+        });
 
         // Add context menu for device retry
         ContextMenu deviceContextMenu = new ContextMenu();
@@ -837,6 +942,44 @@ public class MainController {
 
         vbox.getChildren().addAll(lblTitle, tvResults);
         return vbox;
+    }
+
+    /**
+     * Get background color for table row based on device status
+     */
+    private String getRowBackgroundColor(Device device) {
+        if (device.getStatus() == Device.DeviceStatus.COMPLETED) {
+            return "#D4EDDA"; // Green - success
+        } else if (device.getStatus() == Device.DeviceStatus.AUTHENTICATING) {
+            return "#FFF3CD"; // Yellow - in progress
+        } else if (device.getStatus() == Device.DeviceStatus.AUTH_FAILED) {
+            if (device.isAuthFailed()) {
+                return "#F8D7DA"; // Red - authentication failure
+            } else {
+                return "#E7E8EA"; // Gray - unknown device type
+            }
+        } else {
+            return "#D1ECF1"; // Blue - discovered but not processed
+        }
+    }
+
+    /**
+     * Get text color for table row based on device status
+     */
+    private String getRowTextColor(Device device) {
+        if (device.getStatus() == Device.DeviceStatus.COMPLETED) {
+            return "#155724"; // Dark green
+        } else if (device.getStatus() == Device.DeviceStatus.AUTHENTICATING) {
+            return "#856404"; // Dark amber
+        } else if (device.getStatus() == Device.DeviceStatus.AUTH_FAILED) {
+            if (device.isAuthFailed()) {
+                return "#A94442"; // Dark red
+            } else {
+                return "#383D41"; // Dark gray
+            }
+        } else {
+            return "#0C5460"; // Dark blue
+        }
     }
 
     private void populateNetworkInterfaces() {
