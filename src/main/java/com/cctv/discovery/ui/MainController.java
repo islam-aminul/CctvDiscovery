@@ -260,7 +260,7 @@ public class MainController {
 
         lblNetworkSummary = new Label("Not configured");
         lblNetworkSummary.getStyleClass().add("label-info");
-        lblNetworkSummary.setStyle("-fx-font-style: italic; -fx-text-fill: #666;");
+        lblNetworkSummary.setStyle("-fx-font-style: italic; -fx-text-fill: #0078d4;");
         lblNetworkSummary.setWrapText(true);
 
         vbox.getChildren().addAll(lblTitle, btnConfigureNetwork, lblNetworkSummary);
@@ -710,7 +710,7 @@ public class MainController {
 
         lblCredentialSummary = new Label("No credentials added");
         lblCredentialSummary.getStyleClass().add("label-info");
-        lblCredentialSummary.setStyle("-fx-font-style: italic; -fx-text-fill: #666;");
+        lblCredentialSummary.setStyle("-fx-font-style: italic; -fx-text-fill: #0078d4;");
         lblCredentialSummary.setWrapText(true);
 
         vbox.getChildren().addAll(lblTitle, btnManageCredentials, lblCredentialSummary);
@@ -789,6 +789,14 @@ public class MainController {
 
         TableColumn<Device, String> colIp = new TableColumn<>("IP Address");
         colIp.setCellValueFactory(new PropertyValueFactory<>("ipAddress"));
+        colIp.setCellFactory(column -> new TableCell<Device, String>() {
+            @Override
+            protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                setText(empty ? null : item);
+                setStyle("-fx-padding: 8px;");
+            }
+        });
 
         TableColumn<Device, String> colStatus = new TableColumn<>("Status");
         colStatus.setCellValueFactory(cellData -> {
@@ -807,16 +815,32 @@ public class MainController {
                     Device device = getTableView().getItems().get(getIndex());
                     String icon = getStatusIcon(device);
                     setText(icon + " " + item);
-                    setStyle("-fx-font-weight: bold;");
+                    setStyle("-fx-padding: 8px;");
                 }
             }
         });
 
         TableColumn<Device, String> colName = new TableColumn<>("Device Name");
         colName.setCellValueFactory(new PropertyValueFactory<>("deviceName"));
+        colName.setCellFactory(column -> new TableCell<Device, String>() {
+            @Override
+            protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                setText(empty ? null : item);
+                setStyle("-fx-padding: 8px;");
+            }
+        });
 
         TableColumn<Device, String> colManufacturer = new TableColumn<>("Manufacturer");
         colManufacturer.setCellValueFactory(new PropertyValueFactory<>("manufacturer"));
+        colManufacturer.setCellFactory(column -> new TableCell<Device, String>() {
+            @Override
+            protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                setText(empty ? null : item);
+                setStyle("-fx-padding: 8px;");
+            }
+        });
 
         TableColumn<Device, String> colStreams = new TableColumn<>("Streams");
         colStreams.setCellValueFactory(cellData -> {
@@ -835,9 +859,9 @@ public class MainController {
                     setText(item);
                     int count = Integer.parseInt(item);
                     if (count > 0) {
-                        setStyle("-fx-text-fill: #28a745; -fx-font-weight: bold;");
+                        setStyle("-fx-text-fill: #28a745; -fx-padding: 8px;");
                     } else {
-                        setStyle("-fx-text-fill: #6c757d;");
+                        setStyle("-fx-text-fill: #6c757d; -fx-padding: 8px;");
                     }
                 }
             }
@@ -856,11 +880,11 @@ public class MainController {
                 } else {
                     setText(item);
                     if (item.contains("Authentication failed")) {
-                        setStyle("-fx-text-fill: #dc3545; -fx-font-weight: bold;");
+                        setStyle("-fx-text-fill: #dc3545; -fx-padding: 8px;");
                     } else if (item.contains("Unknown device type")) {
-                        setStyle("-fx-text-fill: #fd7e14; -fx-font-weight: bold;");
+                        setStyle("-fx-text-fill: #fd7e14; -fx-padding: 8px;");
                     } else {
-                        setStyle("-fx-text-fill: #6c757d;");
+                        setStyle("-fx-text-fill: #6c757d; -fx-padding: 8px;");
                     }
                 }
             }
@@ -879,7 +903,7 @@ public class MainController {
                         setStyle("");
                     } else {
                         String backgroundColor = getRowBackgroundColor(device);
-                        String baseStyle = "-fx-background-color: " + backgroundColor + "; -fx-padding: 4px;";
+                        String baseStyle = "-fx-background-color: " + backgroundColor + "; -fx-padding: 8px; -fx-cell-size: 32px;";
 
                         // Add hover and selection styles
                         setStyle(baseStyle);
@@ -887,7 +911,8 @@ public class MainController {
                         // Listen for selection changes
                         selectedProperty().addListener((obs, wasSelected, isNowSelected) -> {
                             if (isNowSelected) {
-                                setStyle(baseStyle + " -fx-border-color: #0078d4; -fx-border-width: 2px;");
+                                // Selected: add blue border and ensure text is dark for readability
+                                setStyle(baseStyle + " -fx-border-color: #0078d4; -fx-border-width: 2px; -fx-text-fill: black;");
                             } else {
                                 setStyle(baseStyle);
                             }
@@ -2140,33 +2165,33 @@ public class MainController {
 
             if (sourceCount > 0) {
                 lblNetworkSummary.setText(String.format("Advanced: %d source(s), %d possible IPs", sourceCount, totalIps));
-                lblNetworkSummary.setStyle("-fx-font-style: italic; -fx-text-fill: #28a745;");
+                lblNetworkSummary.setStyle("-fx-font-style: italic; -fx-text-fill: #0078d4;");
                 networkConfigured = true;
             } else {
                 lblNetworkSummary.setText("Advanced mode: No sources configured");
-                lblNetworkSummary.setStyle("-fx-font-style: italic; -fx-text-fill: #dc3545;");
+                lblNetworkSummary.setStyle("-fx-font-style: italic; -fx-text-fill: #0078d4;");
                 networkConfigured = false;
             }
         } else {
             // Simple mode summary
             if (rbInterface != null && rbInterface.isSelected() && cbInterfaces.getValue() != null) {
                 lblNetworkSummary.setText("Interface: " + cbInterfaces.getValue());
-                lblNetworkSummary.setStyle("-fx-font-style: italic; -fx-text-fill: #28a745;");
+                lblNetworkSummary.setStyle("-fx-font-style: italic; -fx-text-fill: #0078d4;");
                 networkConfigured = true;
             } else if (rbManualRange != null && rbManualRange.isSelected() &&
                     NetworkUtils.isValidIP(tfStartIP.getText()) && NetworkUtils.isValidIP(tfEndIP.getText())) {
                 int count = NetworkUtils.countIPsInRange(tfStartIP.getText(), tfEndIP.getText());
                 lblNetworkSummary.setText(String.format("Range: %s - %s (%d IPs)", tfStartIP.getText(), tfEndIP.getText(), count));
-                lblNetworkSummary.setStyle("-fx-font-style: italic; -fx-text-fill: #28a745;");
+                lblNetworkSummary.setStyle("-fx-font-style: italic; -fx-text-fill: #0078d4;");
                 networkConfigured = true;
             } else if (rbCIDR != null && rbCIDR.isSelected() && NetworkUtils.isValidCIDR(tfCIDR.getText())) {
                 int count = NetworkUtils.countIPsInCIDR(tfCIDR.getText());
                 lblNetworkSummary.setText(String.format("CIDR: %s (%d IPs)", tfCIDR.getText(), count));
-                lblNetworkSummary.setStyle("-fx-font-style: italic; -fx-text-fill: #28a745;");
+                lblNetworkSummary.setStyle("-fx-font-style: italic; -fx-text-fill: #0078d4;");
                 networkConfigured = true;
             } else {
                 lblNetworkSummary.setText("Not configured");
-                lblNetworkSummary.setStyle("-fx-font-style: italic; -fx-text-fill: #666;");
+                lblNetworkSummary.setStyle("-fx-font-style: italic; -fx-text-fill: #0078d4;");
                 networkConfigured = false;
             }
         }
@@ -2250,10 +2275,10 @@ public class MainController {
         int count = credentials.size();
         if (count == 0) {
             lblCredentialSummary.setText("No credentials added");
-            lblCredentialSummary.setStyle("-fx-font-style: italic; -fx-text-fill: #666;");
+            lblCredentialSummary.setStyle("-fx-font-style: italic; -fx-text-fill: #0078d4;");
         } else {
             lblCredentialSummary.setText(String.format("%d credential%s added", count, count > 1 ? "s" : ""));
-            lblCredentialSummary.setStyle("-fx-font-style: italic; -fx-text-fill: #28a745;");
+            lblCredentialSummary.setStyle("-fx-font-style: italic; -fx-text-fill: #0078d4;");
         }
     }
 
