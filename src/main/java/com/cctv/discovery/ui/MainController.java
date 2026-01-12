@@ -793,8 +793,15 @@ public class MainController {
             @Override
             protected void updateItem(String item, boolean empty) {
                 super.updateItem(item, empty);
-                setText(empty ? null : item);
-                setStyle("-fx-padding: 8px;");
+                if (empty || item == null) {
+                    setText(null);
+                    setStyle("");
+                } else {
+                    setText(item);
+                    Device device = getTableView().getItems().get(getIndex());
+                    String textColor = getRowTextColor(device);
+                    setStyle("-fx-padding: 8px; -fx-text-fill: " + textColor + ";");
+                }
             }
         });
 
@@ -814,8 +821,9 @@ public class MainController {
                 } else {
                     Device device = getTableView().getItems().get(getIndex());
                     String icon = getStatusIcon(device);
+                    String textColor = getRowTextColor(device);
                     setText(icon + " " + item);
-                    setStyle("-fx-padding: 8px;");
+                    setStyle("-fx-padding: 8px; -fx-text-fill: " + textColor + ";");
                 }
             }
         });
@@ -826,8 +834,15 @@ public class MainController {
             @Override
             protected void updateItem(String item, boolean empty) {
                 super.updateItem(item, empty);
-                setText(empty ? null : item);
-                setStyle("-fx-padding: 8px;");
+                if (empty || item == null) {
+                    setText(null);
+                    setStyle("");
+                } else {
+                    setText(item);
+                    Device device = getTableView().getItems().get(getIndex());
+                    String textColor = getRowTextColor(device);
+                    setStyle("-fx-padding: 8px; -fx-text-fill: " + textColor + ";");
+                }
             }
         });
 
@@ -837,8 +852,15 @@ public class MainController {
             @Override
             protected void updateItem(String item, boolean empty) {
                 super.updateItem(item, empty);
-                setText(empty ? null : item);
-                setStyle("-fx-padding: 8px;");
+                if (empty || item == null) {
+                    setText(null);
+                    setStyle("");
+                } else {
+                    setText(item);
+                    Device device = getTableView().getItems().get(getIndex());
+                    String textColor = getRowTextColor(device);
+                    setStyle("-fx-padding: 8px; -fx-text-fill: " + textColor + ";");
+                }
             }
         });
 
@@ -859,9 +881,11 @@ public class MainController {
                     setText(item);
                     int count = Integer.parseInt(item);
                     if (count > 0) {
-                        setStyle("-fx-text-fill: #28a745; -fx-padding: 8px;");
+                        // Streams found - use green colors
+                        setStyle("-fx-text-fill: #155724; -fx-padding: 8px;");
                     } else {
-                        setStyle("-fx-text-fill: #6c757d; -fx-padding: 8px;");
+                        // No streams - use red colors
+                        setStyle("-fx-text-fill: #A94442; -fx-padding: 8px;");
                     }
                 }
             }
@@ -880,11 +904,16 @@ public class MainController {
                 } else {
                     setText(item);
                     if (item.contains("Authentication failed")) {
-                        setStyle("-fx-text-fill: #dc3545; -fx-padding: 8px;");
+                        // Auth failed - use red colors
+                        setStyle("-fx-text-fill: #A94442; -fx-padding: 8px;");
                     } else if (item.contains("Unknown device type")) {
-                        setStyle("-fx-text-fill: #fd7e14; -fx-padding: 8px;");
+                        // Unknown device - use gray colors
+                        setStyle("-fx-text-fill: #383D41; -fx-padding: 8px;");
                     } else {
-                        setStyle("-fx-text-fill: #6c757d; -fx-padding: 8px;");
+                        // Other errors - use row text color
+                        Device device = getTableView().getItems().get(getIndex());
+                        String textColor = getRowTextColor(device);
+                        setStyle("-fx-text-fill: " + textColor + "; -fx-padding: 8px;");
                     }
                 }
             }
@@ -911,8 +940,8 @@ public class MainController {
                         // Listen for selection changes
                         selectedProperty().addListener((obs, wasSelected, isNowSelected) -> {
                             if (isNowSelected) {
-                                // Selected: add blue border and ensure text is dark for readability
-                                setStyle(baseStyle + " -fx-border-color: #0078d4; -fx-border-width: 2px; -fx-text-fill: black;");
+                                // Selected: add blue border
+                                setStyle(baseStyle + " -fx-border-color: #0078d4; -fx-border-width: 2px;");
                             } else {
                                 setStyle(baseStyle);
                             }
@@ -954,17 +983,36 @@ public class MainController {
      */
     private String getRowBackgroundColor(Device device) {
         if (device.getStatus() == Device.DeviceStatus.COMPLETED) {
-            return "#d4edda"; // Light green - success
+            return "#D4EDDA"; // Green - success
         } else if (device.getStatus() == Device.DeviceStatus.AUTHENTICATING) {
-            return "#d1ecf1"; // Light blue - in progress
+            return "#FFF3CD"; // Yellow - in progress
         } else if (device.getStatus() == Device.DeviceStatus.AUTH_FAILED) {
             if (device.isAuthFailed()) {
-                return "#f8d7da"; // Light red - authentication failure
+                return "#F8D7DA"; // Red - authentication failure
             } else {
-                return "#fff3cd"; // Light yellow - unknown device type
+                return "#E7E8EA"; // Gray - unknown device type
             }
         } else {
-            return "white"; // Default - discovered but not processed
+            return "#D1ECF1"; // Blue - discovered but not processed
+        }
+    }
+
+    /**
+     * Get text color for table row based on device status
+     */
+    private String getRowTextColor(Device device) {
+        if (device.getStatus() == Device.DeviceStatus.COMPLETED) {
+            return "#155724"; // Dark green
+        } else if (device.getStatus() == Device.DeviceStatus.AUTHENTICATING) {
+            return "#856404"; // Dark amber
+        } else if (device.getStatus() == Device.DeviceStatus.AUTH_FAILED) {
+            if (device.isAuthFailed()) {
+                return "#A94442"; // Dark red
+            } else {
+                return "#383D41"; // Dark gray
+            }
+        } else {
+            return "#0C5460"; // Dark blue
         }
     }
 
