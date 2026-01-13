@@ -1893,21 +1893,36 @@ public class MainController {
 
         Label quickGuide = new Label(
                 "Quick Start Guide:\n\n" +
-                "1. Select Network Range:\n" +
-                "   • Choose network interface, manual IP range, or CIDR notation\n\n" +
+                "1. Network Selection:\n" +
+                "   • Simple Mode: Choose network interface, manual IP range, or CIDR notation\n" +
+                "   • Advanced Mode: Enable to select multiple sources (interfaces, ranges, CIDRs)\n" +
+                "   • Summary shows selected configuration in blue text\n\n" +
                 "2. Add Credentials (Required - Max 4):\n" +
-                "   • Enter username and password\n" +
-                "   • Click 'Add Credential'\n" +
-                "   • Right-click to Edit or Delete credentials\n\n" +
+                "   • Default username 'admin' is pre-filled\n" +
+                "   • Enter password and click 'Add Credential'\n" +
+                "   • Right-click credentials to Edit or Delete\n" +
+                "   • Summary shows credential count in blue text\n\n" +
                 "3. Configure Settings (Optional):\n" +
-                "   • Click 'Settings' button to configure custom ports and RTSP paths\n\n" +
+                "   • Click 'Settings' button to configure custom ports\n" +
+                "   • Add custom RTSP paths for specific camera models\n" +
+                "   • Settings persist across application restarts\n\n" +
                 "4. Start Discovery:\n" +
-                "   • Click 'Start Discovery' button\n" +
-                "   • Monitor progress in the progress section\n\n" +
-                "5. Export Results:\n" +
-                "   • After discovery completes, enter Site ID\n" +
-                "   • Click 'Export to Excel'\n" +
-                "   • Password-protected Excel file will be generated"
+                "   • Click green 'Start Discovery' button\n" +
+                "   • Monitor progress in Progress section (bottom of left panel)\n" +
+                "   • Progress bar shows completion percentage\n\n" +
+                "5. View Results:\n" +
+                "   • Color-coded rows indicate device status:\n" +
+                "     - Green: Successfully discovered with streams\n" +
+                "     - Yellow: Currently authenticating\n" +
+                "     - Red: Authentication failed\n" +
+                "     - Gray: Unknown device type (not a camera)\n" +
+                "     - Blue: Discovered but not yet processed\n" +
+                "   • Right-click failed devices to retry with different credentials\n\n" +
+                "6. Export Results:\n" +
+                "   • Enter Site ID, Premise Name, and Operator Name\n" +
+                "   • Click 'Export to Excel' button\n" +
+                "   • Choose save location\n" +
+                "   • Excel file includes CCTV Audit and Host Audit sheets"
         );
         quickGuide.setWrapText(true);
         quickGuide.setStyle("-fx-font-size: 12px;");
@@ -1961,15 +1976,19 @@ public class MainController {
             String[] imageFiles = {
                 "main-window.png",
                 "header-buttons.png",
-                "network-selection.png",
-                "add-credentials.png",
-                "edit-credentials.png",
+                "network-simple-mode.png",
+                "network-advanced-mode.png",
+                "credentials-section.png",
+                "credentials-context-menu.png",
                 "settings-dialog.png",
-                "settings-ports.png",
+                "settings-onvif-ports.png",
+                "settings-rtsp-ports.png",
                 "settings-rtsp-paths.png",
                 "discovery-progress.png",
-                "results-table.png",
-                "export-dialog.png"
+                "results-table-colored.png",
+                "retry-authentication.png",
+                "export-dialog.png",
+                "host-audit-sheet.png"
             };
 
             for (String imageFile : imageFiles) {
