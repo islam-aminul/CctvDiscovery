@@ -1024,7 +1024,7 @@ public class MainController {
                         String ip = inetAddr.getHostAddress();
                         // Restore selection state if this IP was previously selected
                         boolean wasSelected = selectedIps.contains(ip);
-                        networkInterfaces.add(new NetworkInterfaceItem(display, ip, wasSelected));
+                        networkInterfaces.add(new NetworkInterfaceItem(display, ip, ni, wasSelected));
                     }
                 }
             } catch (Exception e) {
@@ -1133,7 +1133,12 @@ public class MainController {
         // Count selected network interfaces
         for (NetworkInterfaceItem item : networkInterfaces) {
             if (item.isSelected()) {
-                count += 254; // Assume /24 network
+                // Calculate actual subnet size based on network prefix length
+                int prefixLength = NetworkUtils.getNetworkPrefixLength(item.getNetworkInterface());
+                int subnetSize = NetworkUtils.countIPsFromPrefix(prefixLength);
+                count += subnetSize;
+                logger.debug("Interface {} has /{} prefix = {} usable IPs",
+                           item.getIpAddress(), prefixLength, subnetSize);
             }
         }
 
@@ -1186,8 +1191,9 @@ public class MainController {
     private void updateIpCount() {
         int count = 0;
         if (rbInterface.isSelected() && cbInterfaces.getValue() != null) {
-            // Estimate /24 network
-            count = 254;
+            // Calculate actual subnet size from selected interface
+            String selectedInterface = cbInterfaces.getValue();
+            count = getSelectedInterfaceIpCount(selectedInterface);
         } else if (rbManualRange.isSelected()) {
             String start = tfStartIP.getText();
             String end = tfEndIP.getText();
@@ -1202,6 +1208,43 @@ public class MainController {
         }
         lblIpCount.setText("Possible IPs: " + count);
         updateStartButtonState();
+    }
+
+    /**
+     * Get the IP count for a selected interface from the combo box.
+     * Parses the display string to extract IP, finds the NetworkInterface,
+     * and calculates actual subnet size based on prefix length.
+     */
+    private int getSelectedInterfaceIpCount(String displayString) {
+        try {
+            // Display format is "IP - Interface Name" (e.g., "192.168.1.100 - Ethernet")
+            String[] parts = displayString.split(" - ");
+            if (parts.length < 1) {
+                return 254; // Fallback to /24
+            }
+
+            String ipAddress = parts[0].trim();
+            List<NetworkInterface> interfaces = NetworkUtils.getActiveNetworkInterfaces();
+
+            for (NetworkInterface ni : interfaces) {
+                for (InterfaceAddress addr : ni.getInterfaceAddresses()) {
+                    InetAddress inetAddr = addr.getAddress();
+                    if (inetAddr instanceof java.net.Inet4Address &&
+                        inetAddr.getHostAddress().equals(ipAddress)) {
+                        int prefixLength = NetworkUtils.getNetworkPrefixLength(ni);
+                        int subnetSize = NetworkUtils.countIPsFromPrefix(prefixLength);
+                        logger.debug("Selected interface {} has /{} prefix = {} usable IPs",
+                                   ipAddress, prefixLength, subnetSize);
+                        return subnetSize;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            logger.warn("Error calculating IP count for selected interface, using /24 default", e);
+        }
+
+        // Fallback to /24 if unable to determine
+        return 254;
     }
 
     private void addCredential() {
@@ -1893,21 +1936,36 @@ public class MainController {
 
         Label quickGuide = new Label(
                 "Quick Start Guide:\n\n" +
-                "1. Select Network Range:\n" +
-                "   • Choose network interface, manual IP range, or CIDR notation\n\n" +
+                "1. Network Selection:\n" +
+                "   • Simple Mode: Choose network interface, manual IP range, or CIDR notation\n" +
+                "   • Advanced Mode: Enable to select multiple sources (interfaces, ranges, CIDRs)\n" +
+                "   • Summary shows selected configuration in blue text\n\n" +
                 "2. Add Credentials (Required - Max 4):\n" +
-                "   • Enter username and password\n" +
-                "   • Click 'Add Credential'\n" +
-                "   • Right-click to Edit or Delete credentials\n\n" +
+                "   • Default username 'admin' is pre-filled\n" +
+                "   • Enter password and click 'Add Credential'\n" +
+                "   • Right-click credentials to Edit or Delete\n" +
+                "   • Summary shows credential count in blue text\n\n" +
                 "3. Configure Settings (Optional):\n" +
-                "   • Click 'Settings' button to configure custom ports and RTSP paths\n\n" +
+                "   • Click 'Settings' button to configure custom ports\n" +
+                "   • Add custom RTSP paths for specific camera models\n" +
+                "   • Settings persist across application restarts\n\n" +
                 "4. Start Discovery:\n" +
-                "   • Click 'Start Discovery' button\n" +
-                "   • Monitor progress in the progress section\n\n" +
-                "5. Export Results:\n" +
-                "   • After discovery completes, enter Site ID\n" +
-                "   • Click 'Export to Excel'\n" +
-                "   • Password-protected Excel file will be generated"
+                "   • Click green 'Start Discovery' button\n" +
+                "   • Monitor progress in Progress section (bottom of left panel)\n" +
+                "   • Progress bar shows completion percentage\n\n" +
+                "5. View Results:\n" +
+                "   • Color-coded rows indicate device status:\n" +
+                "     - Green: Successfully discovered with streams\n" +
+                "     - Yellow: Currently authenticating\n" +
+                "     - Red: Authentication failed\n" +
+                "     - Gray: Unknown device type (not a camera)\n" +
+                "     - Blue: Discovered but not yet processed\n" +
+                "   • Right-click failed devices to retry with different credentials\n\n" +
+                "6. Export Results:\n" +
+                "   • Enter Site ID, Premise Name, and Operator Name\n" +
+                "   • Click 'Export to Excel' button\n" +
+                "   • Choose save location\n" +
+                "   • Excel file includes CCTV Audit and Host Audit sheets"
         );
         quickGuide.setWrapText(true);
         quickGuide.setStyle("-fx-font-size: 12px;");
@@ -1961,15 +2019,19 @@ public class MainController {
             String[] imageFiles = {
                 "main-window.png",
                 "header-buttons.png",
-                "network-selection.png",
-                "add-credentials.png",
-                "edit-credentials.png",
+                "network-simple-mode.png",
+                "network-advanced-mode.png",
+                "credentials-section.png",
+                "credentials-context-menu.png",
                 "settings-dialog.png",
-                "settings-ports.png",
+                "settings-onvif-ports.png",
+                "settings-rtsp-ports.png",
                 "settings-rtsp-paths.png",
                 "discovery-progress.png",
-                "results-table.png",
-                "export-dialog.png"
+                "results-table-colored.png",
+                "retry-authentication.png",
+                "export-dialog.png",
+                "host-audit-sheet.png"
             };
 
             for (String imageFile : imageFiles) {
@@ -2128,10 +2190,17 @@ public class MainController {
             int sourceCount = 0;
             int totalIps = 0;
 
-            long selectedInterfaces = networkInterfaces.stream().filter(NetworkInterfaceItem::isSelected).count();
-            if (selectedInterfaces > 0) {
+            long selectedInterfacesCount = networkInterfaces.stream().filter(NetworkInterfaceItem::isSelected).count();
+            if (selectedInterfacesCount > 0) {
                 sourceCount++;
-                totalIps += selectedInterfaces * 254;
+                // Calculate actual IP count based on each interface's subnet prefix
+                for (NetworkInterfaceItem item : networkInterfaces) {
+                    if (item.isSelected()) {
+                        int prefixLength = NetworkUtils.getNetworkPrefixLength(item.getNetworkInterface());
+                        int subnetSize = NetworkUtils.countIPsFromPrefix(prefixLength);
+                        totalIps += subnetSize;
+                    }
+                }
             }
 
             long validRanges = ipRanges.stream()
@@ -2306,11 +2375,13 @@ public class MainController {
     public static class NetworkInterfaceItem {
         private final String displayName;
         private final String ipAddress;
+        private final NetworkInterface networkInterface;
         private boolean selected;
 
-        public NetworkInterfaceItem(String displayName, String ipAddress, boolean selected) {
+        public NetworkInterfaceItem(String displayName, String ipAddress, NetworkInterface networkInterface, boolean selected) {
             this.displayName = displayName;
             this.ipAddress = ipAddress;
+            this.networkInterface = networkInterface;
             this.selected = selected;
         }
 
@@ -2320,6 +2391,10 @@ public class MainController {
 
         public String getIpAddress() {
             return ipAddress;
+        }
+
+        public NetworkInterface getNetworkInterface() {
+            return networkInterface;
         }
 
         public boolean isSelected() {
