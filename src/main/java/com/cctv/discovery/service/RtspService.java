@@ -8,14 +8,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /**
  * RTSP service for stream discovery, URL guessing, and authentication.
@@ -27,22 +25,79 @@ public class RtspService {
     // Smart cache: MAC prefix -> successful RTSP paths
     private static final Map<String, List<String>> SMART_CACHE = new HashMap<>();
 
-    // Manufacturer-specific RTSP path templates
+    // Manufacturer-specific RTSP path templates (loaded from resource file)
     private static final Map<String, String[]> MANUFACTURER_PATHS = new HashMap<>();
 
     static {
+        loadRtspTemplates();
+    }
+
+    /**
+     * Load RTSP path templates from rtsp-templates.properties resource file.
+     * Falls back to hardcoded defaults if file not found or parsing fails.
+     */
+    private static void loadRtspTemplates() {
+        try (InputStream input = RtspService.class.getClassLoader()
+                .getResourceAsStream("rtsp-templates.properties")) {
+
+            if (input == null) {
+                logger.warn("rtsp-templates.properties not found, using hardcoded defaults");
+                loadHardcodedDefaults();
+                return;
+            }
+
+            Properties props = new Properties();
+            props.load(input);
+
+            // Parse properties: manufacturer.<NAME>.paths=<comma-separated paths>
+            for (String key : props.stringPropertyNames()) {
+                if (key.startsWith("manufacturer.") && key.endsWith(".paths")) {
+                    String manufacturer = key.substring(13, key.length() - 6); // Extract manufacturer name
+                    String pathsStr = props.getProperty(key);
+
+                    if (pathsStr != null && !pathsStr.trim().isEmpty()) {
+                        String[] paths = pathsStr.split(",");
+                        // Trim whitespace from each path
+                        for (int i = 0; i < paths.length; i++) {
+                            paths[i] = paths[i].trim();
+                        }
+                        MANUFACTURER_PATHS.put(manufacturer.toUpperCase(), paths);
+                        logger.debug("Loaded {} RTSP paths for manufacturer: {}", paths.length, manufacturer);
+                    }
+                }
+            }
+
+            if (MANUFACTURER_PATHS.isEmpty()) {
+                logger.warn("No RTSP templates loaded from file, using hardcoded defaults");
+                loadHardcodedDefaults();
+            } else {
+                logger.info("Successfully loaded RTSP templates for {} manufacturers from resource file",
+                           MANUFACTURER_PATHS.size());
+            }
+
+        } catch (Exception e) {
+            logger.error("Error loading rtsp-templates.properties, falling back to hardcoded defaults", e);
+            loadHardcodedDefaults();
+        }
+    }
+
+    /**
+     * Load hardcoded default RTSP paths as fallback.
+     * Used when rtsp-templates.properties is not found or fails to load.
+     */
+    private static void loadHardcodedDefaults() {
         // Hikvision
         MANUFACTURER_PATHS.put("HIKVISION", new String[]{
-                "/Streaming/Channels/101", // Main stream
-                "/Streaming/Channels/102", // Sub stream
+                "/Streaming/Channels/101",
+                "/Streaming/Channels/102",
                 "/h264/ch1/main/av_stream",
                 "/h264/ch1/sub/av_stream"
         });
 
         // Dahua
         MANUFACTURER_PATHS.put("DAHUA", new String[]{
-                "/cam/realmonitor?channel=1&subtype=0", // Main
-                "/cam/realmonitor?channel=1&subtype=1", // Sub
+                "/cam/realmonitor?channel=1&subtype=0",
+                "/cam/realmonitor?channel=1&subtype=1",
                 "/live/ch00_0",
                 "/live/ch00_1"
         });
@@ -54,7 +109,7 @@ public class RtspService {
                 "/mpeg4/media.amp"
         });
 
-        // CP Plus (India)
+        // CP Plus
         MANUFACTURER_PATHS.put("CP PLUS", new String[]{
                 "/cam/realmonitor?channel=1&subtype=0",
                 "/cam/realmonitor?channel=1&subtype=1"
@@ -72,6 +127,8 @@ public class RtspService {
                 "/video.mjpg",
                 "/h264"
         });
+
+        logger.info("Loaded {} manufacturer RTSP templates from hardcoded defaults", MANUFACTURER_PATHS.size());
     }
 
     /**

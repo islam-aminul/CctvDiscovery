@@ -2,13 +2,16 @@ package com.cctv.discovery.util;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import oshi.SystemInfo;
+import oshi.hardware.HardwareAbstractionLayer;
+import oshi.hardware.NetworkIF;
 
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
 import java.net.*;
 import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
 
 /**
@@ -19,6 +22,11 @@ public class NetworkUtils {
     private static final Pattern IP_PATTERN = Pattern.compile(
             "^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$"
     );
+
+    // Cache for IP-to-MAC mappings using OSHI
+    private static final Map<String, String> ipToMacCache = new ConcurrentHashMap<>();
+    private static volatile long lastCacheUpdate = 0;
+    private static final long CACHE_VALIDITY_MS = 60000; // 1 minute
 
     /**
      * Get list of active physical network interfaces.
@@ -167,50 +175,95 @@ public class NetworkUtils {
     }
 
     /**
-     * Resolve MAC address for given IP using ARP (OS-specific).
+     * Resolve MAC address for given IP using OSHI (cross-platform, no CLI parsing).
+     * Uses a cache to avoid repeated OSHI calls within 1 minute.
+     *
+     * @param ipAddress The IP address to resolve
+     * @return MAC address in format XX:XX:XX:XX:XX:XX or null if not found
      */
     public static String resolveMacAddress(String ipAddress) {
         try {
-            String os = System.getProperty("os.name").toLowerCase();
-            Process process;
+            // Check cache first
+            long now = System.currentTimeMillis();
+            if (now - lastCacheUpdate < CACHE_VALIDITY_MS && ipToMacCache.containsKey(ipAddress)) {
+                logger.debug("MAC address for {} found in cache: {}", ipAddress, ipToMacCache.get(ipAddress));
+                return ipToMacCache.get(ipAddress);
+            }
 
-            if (os.contains("win")) {
-                process = Runtime.getRuntime().exec("arp -a " + ipAddress);
-            } else if (os.contains("nix") || os.contains("nux") || os.contains("mac")) {
-                process = Runtime.getRuntime().exec("arp -n " + ipAddress);
+            // Refresh cache if expired or IP not found
+            if (now - lastCacheUpdate >= CACHE_VALIDITY_MS) {
+                refreshMacCache();
+            }
+
+            // Return from refreshed cache
+            String mac = ipToMacCache.get(ipAddress);
+            if (mac != null) {
+                logger.debug("MAC address for {} resolved via OSHI: {}", ipAddress, mac);
             } else {
-                logger.warn("Unsupported OS for ARP resolution: " + os);
-                return null;
+                logger.debug("MAC address for {} not found in network interfaces", ipAddress);
             }
+            return mac;
 
-            BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
-            String line;
-            while ((line = reader.readLine()) != null) {
-                if (line.contains(ipAddress)) {
-                    String mac = extractMacFromArpLine(line);
-                    if (mac != null) {
-                        return mac;
-                    }
-                }
-            }
-            process.waitFor();
         } catch (Exception e) {
-            logger.error("Error resolving MAC address for IP: " + ipAddress, e);
+            logger.error("Error resolving MAC address for IP {} using OSHI", ipAddress, e);
+            return null;
         }
-        return null;
     }
 
     /**
-     * Extract MAC address from ARP output line.
+     * Refresh the IP-to-MAC cache using OSHI to query all network interfaces.
+     * This is more efficient than querying individual IPs via ARP CLI.
      */
-    private static String extractMacFromArpLine(String line) {
-        // Match patterns like: 00:11:22:33:44:55 or 00-11-22-33-44-55
-        Pattern macPattern = Pattern.compile("([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})");
-        java.util.regex.Matcher matcher = macPattern.matcher(line);
-        if (matcher.find()) {
-            return matcher.group().replace("-", ":").toUpperCase();
+    private static synchronized void refreshMacCache() {
+        try {
+            logger.debug("Refreshing MAC address cache using OSHI...");
+            ipToMacCache.clear();
+
+            SystemInfo systemInfo = new SystemInfo();
+            HardwareAbstractionLayer hardware = systemInfo.getHardware();
+            List<NetworkIF> networkIFs = hardware.getNetworkIFs();
+
+            int totalMappings = 0;
+            for (NetworkIF netIF : networkIFs) {
+                String macAddress = netIF.getMacaddr();
+
+                // Skip if MAC is empty or invalid
+                if (macAddress == null || macAddress.isEmpty() || macAddress.equals("00:00:00:00:00:00")) {
+                    continue;
+                }
+
+                // Normalize MAC address format
+                macAddress = normalizeMac(macAddress);
+
+                // Get all IPv4 addresses assigned to this interface
+                String[] ipv4Addresses = netIF.getIPv4addr();
+                if (ipv4Addresses != null) {
+                    for (String ip : ipv4Addresses) {
+                        if (ip != null && !ip.isEmpty() && !ip.equals("0.0.0.0")) {
+                            ipToMacCache.put(ip, macAddress);
+                            totalMappings++;
+                            logger.trace("Cached MAC mapping: {} -> {}", ip, macAddress);
+                        }
+                    }
+                }
+            }
+
+            lastCacheUpdate = System.currentTimeMillis();
+            logger.info("MAC address cache refreshed: {} IP-to-MAC mappings from {} network interfaces",
+                       totalMappings, networkIFs.size());
+
+        } catch (Exception e) {
+            logger.error("Error refreshing MAC address cache with OSHI", e);
         }
-        return null;
+    }
+
+    /**
+     * Clear the MAC address cache (useful for testing or forcing refresh).
+     */
+    public static void clearMacCache() {
+        ipToMacCache.clear();
+        lastCacheUpdate = 0;
+        logger.debug("MAC address cache cleared");
     }
 
     /**
@@ -260,5 +313,48 @@ public class NetworkUtils {
             return null;
         }
         return normalized.substring(0, 8); // XX:XX:XX
+    }
+
+    /**
+     * Calculate number of usable IPs in a subnet based on prefix length.
+     *
+     * @param prefixLength Network prefix length (0-32)
+     * @return Number of usable host IPs (excluding network and broadcast addresses)
+     */
+    public static int countIPsFromPrefix(int prefixLength) {
+        if (prefixLength < 0 || prefixLength > 32) {
+            return 0;
+        }
+        if (prefixLength == 31 || prefixLength == 32) {
+            // /31 (point-to-point) has 2 usable IPs, /32 (host) has 1
+            return (int) Math.pow(2, 32 - prefixLength);
+        }
+        // Subtract 2 for network and broadcast addresses
+        return (int) Math.pow(2, 32 - prefixLength) - 2;
+    }
+
+    /**
+     * Get the network prefix length (CIDR prefix) for a network interface address.
+     * Returns the actual prefix length or 24 as default if not available.
+     *
+     * @param ni NetworkInterface to query
+     * @return Network prefix length (typically 8, 16, 24, etc.)
+     */
+    public static int getNetworkPrefixLength(NetworkInterface ni) {
+        try {
+            for (InterfaceAddress addr : ni.getInterfaceAddresses()) {
+                InetAddress inetAddr = addr.getAddress();
+                if (inetAddr instanceof Inet4Address) {
+                    short prefix = addr.getNetworkPrefixLength();
+                    if (prefix > 0 && prefix <= 32) {
+                        return prefix;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            logger.debug("Error getting network prefix length for {}: {}", ni.getName(), e.getMessage());
+        }
+        // Default to /24 if unable to determine
+        return 24;
     }
 }
