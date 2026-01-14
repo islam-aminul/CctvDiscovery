@@ -175,39 +175,106 @@ public class NetworkUtils {
     }
 
     /**
-     * Resolve MAC address for given IP using OSHI (cross-platform, no CLI parsing).
-     * Uses a cache to avoid repeated OSHI calls within 1 minute.
+     * Resolve MAC address for given IP using hybrid approach:
+     * 1. Check OSHI cache for local interface IPs (fast, no CLI)
+     * 2. Fall back to ARP CLI for remote devices (requires OS ARP table)
      *
      * @param ipAddress The IP address to resolve
      * @return MAC address in format XX:XX:XX:XX:XX:XX or null if not found
      */
     public static String resolveMacAddress(String ipAddress) {
         try {
-            // Check cache first
+            // Check OSHI cache first (for local interface IPs)
             long now = System.currentTimeMillis();
             if (now - lastCacheUpdate < CACHE_VALIDITY_MS && ipToMacCache.containsKey(ipAddress)) {
-                logger.debug("MAC address for {} found in cache: {}", ipAddress, ipToMacCache.get(ipAddress));
+                logger.debug("MAC address for {} found in OSHI cache: {}", ipAddress, ipToMacCache.get(ipAddress));
                 return ipToMacCache.get(ipAddress);
             }
 
-            // Refresh cache if expired or IP not found
+            // Refresh OSHI cache if expired
             if (now - lastCacheUpdate >= CACHE_VALIDITY_MS) {
                 refreshMacCache();
             }
 
-            // Return from refreshed cache
+            // Check OSHI cache again after refresh
             String mac = ipToMacCache.get(ipAddress);
             if (mac != null) {
                 logger.debug("MAC address for {} resolved via OSHI: {}", ipAddress, mac);
-            } else {
-                logger.debug("MAC address for {} not found in network interfaces", ipAddress);
+                return mac;
             }
+
+            // Fall back to ARP CLI for remote devices (not in OSHI cache)
+            logger.debug("IP {} not in OSHI cache, querying OS ARP table", ipAddress);
+            mac = resolveMacViaArp(ipAddress);
+
+            if (mac != null) {
+                // Cache the ARP result for future lookups
+                ipToMacCache.put(ipAddress, mac);
+                logger.debug("MAC address for {} resolved via ARP: {}", ipAddress, mac);
+            } else {
+                logger.debug("MAC address for {} not found in ARP table", ipAddress);
+            }
+
             return mac;
 
         } catch (Exception e) {
-            logger.error("Error resolving MAC address for IP {} using OSHI", ipAddress, e);
+            logger.error("Error resolving MAC address for IP {}", ipAddress, e);
             return null;
         }
+    }
+
+    /**
+     * Resolve MAC address via OS ARP table (fallback for remote devices).
+     * This is used when OSHI cache doesn't have the IP (remote devices).
+     *
+     * @param ipAddress The IP address to resolve
+     * @return MAC address or null if not found
+     */
+    private static String resolveMacViaArp(String ipAddress) {
+        try {
+            String os = System.getProperty("os.name").toLowerCase();
+            Process process;
+
+            if (os.contains("win")) {
+                process = Runtime.getRuntime().exec("arp -a " + ipAddress);
+            } else if (os.contains("nix") || os.contains("nux") || os.contains("mac")) {
+                process = Runtime.getRuntime().exec(new String[]{"arp", "-n", ipAddress});
+            } else {
+                logger.debug("Unsupported OS for ARP resolution: {}", os);
+                return null;
+            }
+
+            try (java.io.BufferedReader reader = new java.io.BufferedReader(
+                    new java.io.InputStreamReader(process.getInputStream()))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    if (line.contains(ipAddress)) {
+                        String mac = extractMacFromArpLine(line);
+                        if (mac != null) {
+                            return mac;
+                        }
+                    }
+                }
+            }
+
+            process.waitFor();
+        } catch (Exception e) {
+            logger.debug("Error querying ARP for IP {}: {}", ipAddress, e.getMessage());
+        }
+        return null;
+    }
+
+    /**
+     * Extract MAC address from ARP output line.
+     */
+    private static String extractMacFromArpLine(String line) {
+        // Match patterns like: 00:11:22:33:44:55 or 00-11-22-33-44-55
+        Pattern macPattern = Pattern.compile("([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})");
+        java.util.regex.Matcher matcher = macPattern.matcher(line);
+        if (matcher.find()) {
+            return normalizeMac(matcher.group());
+        }
+        return null;
     }
 
     /**
