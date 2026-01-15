@@ -168,44 +168,262 @@ public class AuthUtils {
     }
 
     /**
-     * Parse WWW-Authenticate header to extract realm and nonce.
+     * Parse WWW-Authenticate header to extract authentication challenge.
+     * Supports both Digest and Basic authentication.
      */
-    public static DigestChallenge parseDigestChallenge(String wwwAuthenticate) {
-        if (wwwAuthenticate == null || !wwwAuthenticate.startsWith("Digest ")) {
+    public static AuthChallenge parseAuthChallenge(String wwwAuthenticate) {
+        if (wwwAuthenticate == null || wwwAuthenticate.trim().isEmpty()) {
             return null;
         }
 
-        DigestChallenge challenge = new DigestChallenge();
-        String[] parts = wwwAuthenticate.substring(7).split(",");
+        wwwAuthenticate = wwwAuthenticate.trim();
+
+        // Check for Basic authentication
+        if (wwwAuthenticate.toLowerCase().startsWith("basic")) {
+            return parseBasicChallenge(wwwAuthenticate);
+        }
+
+        // Check for Digest authentication
+        if (wwwAuthenticate.toLowerCase().startsWith("digest")) {
+            return parseDigestChallenge(wwwAuthenticate);
+        }
+
+        return null;
+    }
+
+    /**
+     * Parse Basic authentication challenge.
+     */
+    private static AuthChallenge parseBasicChallenge(String wwwAuthenticate) {
+        AuthChallenge challenge = new AuthChallenge();
+        challenge.type = AuthType.BASIC;
+
+        // Extract realm from Basic challenge
+        // Format: Basic realm="some realm"
+        String afterBasic = wwwAuthenticate.substring(5).trim();
+        if (afterBasic.toLowerCase().startsWith("realm=")) {
+            challenge.realm = extractValue(afterBasic.substring(6));
+        } else {
+            // Some servers send just "Basic" without realm
+            challenge.realm = "Camera";
+        }
+
+        return challenge;
+    }
+
+    /**
+     * Parse Digest authentication challenge with comprehensive format support.
+     */
+    private static AuthChallenge parseDigestChallenge(String wwwAuthenticate) {
+        AuthChallenge challenge = new AuthChallenge();
+        challenge.type = AuthType.DIGEST;
+
+        String afterDigest = wwwAuthenticate.substring(6).trim();
+
+        // Split by comma, but be careful about commas inside quoted values
+        String[] parts = splitRespectingQuotes(afterDigest);
 
         for (String part : parts) {
             part = part.trim();
-            if (part.startsWith("realm=")) {
-                challenge.realm = extractQuotedValue(part);
-            } else if (part.startsWith("nonce=")) {
-                challenge.nonce = extractQuotedValue(part);
-            } else if (part.startsWith("opaque=")) {
-                challenge.opaque = extractQuotedValue(part);
-            } else if (part.startsWith("qop=")) {
-                challenge.qop = extractQuotedValue(part);
+
+            if (part.toLowerCase().startsWith("realm=")) {
+                challenge.realm = extractValue(part.substring(6));
+            } else if (part.toLowerCase().startsWith("nonce=")) {
+                challenge.nonce = extractValue(part.substring(6));
+            } else if (part.toLowerCase().startsWith("opaque=")) {
+                challenge.opaque = extractValue(part.substring(7));
+            } else if (part.toLowerCase().startsWith("qop=")) {
+                challenge.qop = extractValue(part.substring(4));
+            } else if (part.toLowerCase().startsWith("algorithm=")) {
+                challenge.algorithm = extractValue(part.substring(10));
+            } else if (part.toLowerCase().startsWith("stale=")) {
+                challenge.stale = extractValue(part.substring(6));
             }
         }
 
         return challenge;
     }
 
-    private static String extractQuotedValue(String part) {
-        int start = part.indexOf('"');
-        int end = part.lastIndexOf('"');
-        if (start != -1 && end != -1 && end > start) {
-            return part.substring(start + 1, end);
+    /**
+     * Split authentication header by comma while respecting quoted values.
+     * Example: realm="test,value", nonce="123" -> ["realm=\"test,value\"", "nonce=\"123\""]
+     */
+    private static String[] splitRespectingQuotes(String input) {
+        java.util.List<String> parts = new java.util.ArrayList<>();
+        StringBuilder current = new StringBuilder();
+        boolean inQuotes = false;
+        boolean escaped = false;
+
+        for (int i = 0; i < input.length(); i++) {
+            char c = input.charAt(i);
+
+            if (escaped) {
+                current.append(c);
+                escaped = false;
+                continue;
+            }
+
+            if (c == '\\') {
+                escaped = true;
+                current.append(c);
+                continue;
+            }
+
+            if (c == '"') {
+                inQuotes = !inQuotes;
+                current.append(c);
+                continue;
+            }
+
+            if (c == ',' && !inQuotes) {
+                // Split here
+                if (current.length() > 0) {
+                    parts.add(current.toString());
+                    current = new StringBuilder();
+                }
+                continue;
+            }
+
+            current.append(c);
         }
-        return "";
+
+        // Add the last part
+        if (current.length() > 0) {
+            parts.add(current.toString());
+        }
+
+        return parts.toArray(new String[0]);
+    }
+
+    /**
+     * Extract value from authentication parameter.
+     * Handles both quoted and unquoted values.
+     * Examples:
+     *   "value"    -> value
+     *   value      -> value
+     *   \"value\"  -> value (escaped quotes)
+     */
+    private static String extractValue(String part) {
+        if (part == null || part.isEmpty()) {
+            return null;
+        }
+
+        part = part.trim();
+
+        // Handle quoted values
+        if (part.startsWith("\"") && part.endsWith("\"") && part.length() > 1) {
+            return part.substring(1, part.length() - 1);
+        }
+
+        // Handle escaped quotes: \"value\"
+        if (part.startsWith("\\\"") && part.endsWith("\\\"") && part.length() > 3) {
+            return part.substring(2, part.length() - 2);
+        }
+
+        // Find first and last quote if they exist
+        int firstQuote = part.indexOf('"');
+        int lastQuote = part.lastIndexOf('"');
+
+        if (firstQuote != -1 && lastQuote != -1 && lastQuote > firstQuote) {
+            return part.substring(firstQuote + 1, lastQuote);
+        }
+
+        // Unquoted value - take until space, comma, or semicolon
+        int endIdx = part.length();
+        for (int i = 0; i < part.length(); i++) {
+            char c = part.charAt(i);
+            if (c == ' ' || c == ',' || c == ';') {
+                endIdx = i;
+                break;
+            }
+        }
+
+        String value = part.substring(0, endIdx).trim();
+        return value.isEmpty() ? null : value;
+    }
+
+    /**
+     * Legacy method for backward compatibility.
+     * @deprecated Use parseAuthChallenge instead
+     */
+    @Deprecated
+    public static DigestChallenge parseDigestChallenge(String wwwAuthenticate) {
+        AuthChallenge challenge = parseAuthChallenge(wwwAuthenticate);
+        if (challenge == null || challenge.type != AuthType.DIGEST) {
+            return null;
+        }
+
+        DigestChallenge digestChallenge = new DigestChallenge();
+        digestChallenge.realm = challenge.realm;
+        digestChallenge.nonce = challenge.nonce;
+        digestChallenge.opaque = challenge.opaque;
+        digestChallenge.qop = challenge.qop;
+        return digestChallenge;
+    }
+
+    /**
+     * Check if authentication challenge is valid.
+     */
+    public static boolean isValidChallenge(AuthChallenge challenge) {
+        if (challenge == null) {
+            return false;
+        }
+
+        if (challenge.type == AuthType.BASIC) {
+            // Basic auth is always valid if we have the type
+            return true;
+        }
+
+        if (challenge.type == AuthType.DIGEST) {
+            // Digest auth requires realm and nonce
+            return challenge.realm != null && !challenge.realm.isEmpty() &&
+                   challenge.nonce != null && !challenge.nonce.isEmpty();
+        }
+
+        return false;
+    }
+
+    /**
+     * Authentication type enum.
+     */
+    public enum AuthType {
+        BASIC,
+        DIGEST
+    }
+
+    /**
+     * Authentication challenge information.
+     * Supports both Basic and Digest authentication.
+     */
+    public static class AuthChallenge {
+        public AuthType type;
+        public String realm;
+        public String nonce;
+        public String opaque;
+        public String qop;
+        public String algorithm;
+        public String stale;
+
+        @Override
+        public String toString() {
+            if (type == AuthType.BASIC) {
+                return "AuthChallenge{type=BASIC, realm='" + realm + "'}";
+            } else if (type == AuthType.DIGEST) {
+                return "AuthChallenge{type=DIGEST, realm='" + realm + "', nonce='" + nonce + "', qop='" + qop + "'}";
+            }
+            return "AuthChallenge{type=" + type + "}";
+        }
+
+        public boolean isValid() {
+            return AuthUtils.isValidChallenge(this);
+        }
     }
 
     /**
      * Digest challenge information.
+     * @deprecated Use AuthChallenge instead
      */
+    @Deprecated
     public static class DigestChallenge {
         public String realm;
         public String nonce;
