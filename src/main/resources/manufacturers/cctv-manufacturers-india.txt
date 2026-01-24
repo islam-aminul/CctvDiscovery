@@ -198,6 +198,9 @@ A85B6C,Robert Bosch
 70F74F,Robert Bosch JuP1
 70C6AC,Bosch Automotive Aftermarket
 
+VIVOTEK (Taiwan - IP surveillance):
+0002D1,Vivotek
+
 HONEYWELL:
 00203D,Honeywell Environmental & Combustion Controls
 004084,Honeywell
@@ -212,10 +215,11 @@ Total Hikvision MACs: 82
 Total Dahua MACs: 31
 Total Uniview MACs: 4
 Total Axis MACs: 4
+Total Vivotek MACs: 1
 Indian Company MACs: 3 (Godrej, Matrix Comsec, Prama Hikvision India)
 CP PLUS MACs: 1
 
-Total CCTV MAC Codes: 124
+Total CCTV MAC Codes: 125
 
 Note: These MAC address codes (OUI - Organizationally Unique Identifiers) are used
 in the first 6 hexadecimal digits of MAC addresses for devices manufactured by these

@@ -383,14 +383,14 @@ public class RtspService {
     }
 
     /**
-     * Test RTSP URL with Digest authentication.
+     * Test RTSP URL with authentication (supports both Basic and Digest).
      */
     private RTSPStream testRtspUrlWithAuth(String rtspUrl, String username, String password,
                                            Socket socket, BufferedReader in, OutputStream out) {
         try {
-            // Read authentication challenge
-            String realm = null;
-            String nonce = null;
+            // Read authentication challenges from all WWW-Authenticate headers
+            java.util.List<AuthUtils.AuthChallenge> challenges = new java.util.ArrayList<>();
+            java.util.List<String> rawAuthHeaders = new java.util.ArrayList<>();
             String line;
 
             while ((line = in.readLine()) != null) {
@@ -398,22 +398,82 @@ public class RtspService {
                     break;
                 }
                 if (line.startsWith("WWW-Authenticate:")) {
-                    AuthUtils.DigestChallenge challenge = AuthUtils.parseDigestChallenge(line.substring(17));
+                    String authHeader = line.substring(17).trim();
+                    rawAuthHeaders.add(authHeader);
+                    logger.debug("Received WWW-Authenticate header: {}", authHeader);
+
+                    AuthUtils.AuthChallenge challenge = AuthUtils.parseAuthChallenge(authHeader);
                     if (challenge != null) {
-                        realm = challenge.realm;
-                        nonce = challenge.nonce;
+                        challenges.add(challenge);
+                        logger.debug("Parsed auth challenge: {}", challenge);
+                    } else {
+                        logger.warn("Failed to parse WWW-Authenticate header: {}", authHeader);
                     }
                 }
             }
 
-            if (realm == null || nonce == null) {
-                logger.debug("Missing realm or nonce in authentication challenge");
+            if (challenges.isEmpty()) {
+                logger.warn("No authentication challenges found. Raw headers: {}", rawAuthHeaders);
+                return null;
+            }
+
+            // Try authentication methods in order of preference: Digest first, then Basic
+            challenges.sort((a, b) -> {
+                if (a.type == AuthUtils.AuthType.DIGEST) return -1;
+                if (b.type == AuthUtils.AuthType.DIGEST) return 1;
+                return 0;
+            });
+
+            for (AuthUtils.AuthChallenge challenge : challenges) {
+                if (!AuthUtils.isValidChallenge(challenge)) {
+                    logger.debug("Skipping invalid challenge: {}", challenge);
+                    continue;
+                }
+
+                RTSPStream result = null;
+                if (challenge.type == AuthUtils.AuthType.DIGEST) {
+                    logger.debug("Attempting Digest authentication for: {}", rtspUrl);
+                    result = attemptDigestAuth(rtspUrl, username, password, challenge, socket, in, out);
+                } else if (challenge.type == AuthUtils.AuthType.BASIC) {
+                    logger.debug("Attempting Basic authentication for: {}", rtspUrl);
+                    result = attemptBasicAuth(rtspUrl, username, password, socket, in, out);
+                }
+
+                if (result != null) {
+                    logger.info("Authentication successful using {} for: {}", challenge.type, rtspUrl);
+                    return result;
+                }
+            }
+
+            logger.debug("All authentication attempts failed for: {}", rtspUrl);
+
+        } catch (Exception e) {
+            logger.debug("Error during RTSP authentication for {}: {}", rtspUrl, e.getMessage());
+        }
+        return null;
+    }
+
+    /**
+     * Attempt Digest authentication.
+     */
+    private RTSPStream attemptDigestAuth(String rtspUrl, String username, String password,
+                                         AuthUtils.AuthChallenge challenge,
+                                         Socket socket, BufferedReader in, OutputStream out) {
+        try {
+            if (challenge.realm == null || challenge.realm.isEmpty()) {
+                logger.debug("Digest challenge missing realm");
+                return null;
+            }
+            if (challenge.nonce == null || challenge.nonce.isEmpty()) {
+                logger.debug("Digest challenge missing nonce");
                 return null;
             }
 
             // Send authenticated request
             String uri = extractUri(rtspUrl);
-            String authHeader = AuthUtils.buildDigestAuthHeader(username, password, realm, nonce, uri, "DESCRIBE", null);
+            String authHeader = AuthUtils.buildDigestAuthHeader(
+                username, password, challenge.realm, challenge.nonce, uri, "DESCRIBE", challenge.opaque
+            );
 
             String authRequest = "DESCRIBE " + rtspUrl + " RTSP/1.0\r\n" +
                     "CSeq: 2\r\n" +
@@ -422,60 +482,96 @@ public class RtspService {
                     "Accept: application/sdp\r\n" +
                     "\r\n";
 
+            logger.debug("Sending Digest auth request for: {}", rtspUrl);
             out.write(authRequest.getBytes());
             out.flush();
 
-            String responseLine = in.readLine();
-            if (responseLine != null && responseLine.contains("200")) {
-                logger.debug("Got 200 OK with authentication, validating SDP: {}", rtspUrl);
-
-                // Read headers to get Content-Length
-                int contentLength = 0;
-                String headerLine;
-                while ((headerLine = in.readLine()) != null) {
-                    if (headerLine.isEmpty()) {
-                        break; // End of headers
-                    }
-                    if (headerLine.startsWith("Content-Length:")) {
-                        try {
-                            contentLength = Integer.parseInt(headerLine.substring(15).trim());
-                        } catch (NumberFormatException e) {
-                            logger.debug("Invalid Content-Length header");
-                        }
-                    }
-                }
-
-                // Read SDP body
-                StringBuilder sdpBody = new StringBuilder();
-                if (contentLength > 0) {
-                    char[] buffer = new char[contentLength];
-                    int read = in.read(buffer, 0, contentLength);
-                    if (read > 0) {
-                        sdpBody.append(buffer, 0, read);
-                    }
-                } else {
-                    // Read until connection closes or timeout
-                    String sdpLine;
-                    while ((sdpLine = in.readLine()) != null && !sdpLine.isEmpty()) {
-                        sdpBody.append(sdpLine).append("\n");
-                    }
-                }
-
-                // Validate SDP content
-                if (validateSdp(sdpBody.toString(), rtspUrl)) {
-                    logger.info("RTSP URL authenticated and validated with SDP: {}", rtspUrl);
-                    RTSPStream stream = new RTSPStream("Main", rtspUrl);
-                    return stream;
-                } else {
-                    logger.warn("RTSP URL authenticated but invalid/missing SDP: {}", rtspUrl);
-                    return null;
-                }
-            } else {
-                logger.debug("Authentication failed for RTSP URL: {}", rtspUrl);
-            }
+            return readAuthResponse(rtspUrl, in);
 
         } catch (Exception e) {
-            logger.debug("Error during RTSP authentication for {}: {}", rtspUrl, e.getMessage());
+            logger.debug("Error during Digest authentication for {}: {}", rtspUrl, e.getMessage());
+        }
+        return null;
+    }
+
+    /**
+     * Attempt Basic authentication.
+     */
+    private RTSPStream attemptBasicAuth(String rtspUrl, String username, String password,
+                                        Socket socket, BufferedReader in, OutputStream out) {
+        try {
+            String authHeader = AuthUtils.generateBasicAuth(username, password);
+
+            String authRequest = "DESCRIBE " + rtspUrl + " RTSP/1.0\r\n" +
+                    "CSeq: 2\r\n" +
+                    "User-Agent: CCTV-Discovery/1.0\r\n" +
+                    "Authorization: " + authHeader + "\r\n" +
+                    "Accept: application/sdp\r\n" +
+                    "\r\n";
+
+            logger.debug("Sending Basic auth request for: {}", rtspUrl);
+            out.write(authRequest.getBytes());
+            out.flush();
+
+            return readAuthResponse(rtspUrl, in);
+
+        } catch (Exception e) {
+            logger.debug("Error during Basic authentication for {}: {}", rtspUrl, e.getMessage());
+        }
+        return null;
+    }
+
+    /**
+     * Read and validate authentication response.
+     */
+    private RTSPStream readAuthResponse(String rtspUrl, BufferedReader in) throws Exception {
+        String responseLine = in.readLine();
+        if (responseLine != null && responseLine.contains("200")) {
+            logger.debug("Got 200 OK with authentication, validating SDP: {}", rtspUrl);
+
+            // Read headers to get Content-Length
+            int contentLength = 0;
+            String headerLine;
+            while ((headerLine = in.readLine()) != null) {
+                if (headerLine.isEmpty()) {
+                    break; // End of headers
+                }
+                if (headerLine.startsWith("Content-Length:")) {
+                    try {
+                        contentLength = Integer.parseInt(headerLine.substring(15).trim());
+                    } catch (NumberFormatException e) {
+                        logger.debug("Invalid Content-Length header");
+                    }
+                }
+            }
+
+            // Read SDP body
+            StringBuilder sdpBody = new StringBuilder();
+            if (contentLength > 0) {
+                char[] buffer = new char[contentLength];
+                int read = in.read(buffer, 0, contentLength);
+                if (read > 0) {
+                    sdpBody.append(buffer, 0, read);
+                }
+            } else {
+                // Read until connection closes or timeout
+                String sdpLine;
+                while ((sdpLine = in.readLine()) != null && !sdpLine.isEmpty()) {
+                    sdpBody.append(sdpLine).append("\n");
+                }
+            }
+
+            // Validate SDP content
+            if (validateSdp(sdpBody.toString(), rtspUrl)) {
+                logger.info("RTSP URL authenticated and validated with SDP: {}", rtspUrl);
+                RTSPStream stream = new RTSPStream("Main", rtspUrl);
+                return stream;
+            } else {
+                logger.warn("RTSP URL authenticated but invalid/missing SDP: {}", rtspUrl);
+                return null;
+            }
+        } else {
+            logger.debug("Authentication failed. Response: {}", responseLine);
         }
         return null;
     }
