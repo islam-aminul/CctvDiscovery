@@ -312,4 +312,21 @@ public class AppConfig {
     public int getMaxCredentials() {
         return getInt("ui.credentials.max", 4);
     }
+
+    // RTSP Validation
+    public String getRtspValidationMethod() {
+        return getProperty("rtsp.validation.method");
+    }
+
+    public void setRtspValidationMethod(String method) {
+        setProperty("rtsp.validation.method", method);
+    }
+
+    public int getRtspValidationTimeout() {
+        return getInt("rtsp.validation.timeout", 0); // 0 = use default for method
+    }
+
+    public void setRtspValidationTimeout(int timeout) {
+        setProperty("rtsp.validation.timeout", String.valueOf(timeout));
+    }
 }

@@ -90,6 +90,11 @@ public class MainController {
     private Button btnStart;
     private Button btnExport;
 
+    // RTSP Validation Method
+    private RadioButton rbSdpOnly;
+    private RadioButton rbRtpPacket;
+    private RadioButton rbFrameCapture;
+
     // Progress
     private ProgressBar progressBar;
     private Label lblProgress;
@@ -749,6 +754,41 @@ public class MainController {
         Label lblTitle = new Label("3. Discovery");
         lblTitle.getStyleClass().add("section-title");
 
+        // RTSP Validation Method Selection
+        Label lblValidation = new Label("RTSP Validation Method:");
+        lblValidation.setStyle("-fx-font-size: 11px; -fx-font-weight: bold;");
+
+        ToggleGroup validationGroup = new ToggleGroup();
+
+        rbSdpOnly = new RadioButton("SDP Only (Fast, ~60% accurate)");
+        rbSdpOnly.setToggleGroup(validationGroup);
+        rbSdpOnly.setStyle("-fx-font-size: 10px;");
+        rbSdpOnly.setOnAction(e -> onValidationMethodChanged());
+
+        rbRtpPacket = new RadioButton("RTP Packet (Medium, ~90% accurate)");
+        rbRtpPacket.setToggleGroup(validationGroup);
+        rbRtpPacket.setStyle("-fx-font-size: 10px;");
+        rbRtpPacket.setOnAction(e -> onValidationMethodChanged());
+
+        rbFrameCapture = new RadioButton("Frame Capture (Slow, ~98% accurate)");
+        rbFrameCapture.setToggleGroup(validationGroup);
+        rbFrameCapture.setStyle("-fx-font-size: 10px;");
+        rbFrameCapture.setOnAction(e -> onValidationMethodChanged());
+
+        // Load saved preference or default to RTP_PACKET
+        String savedMethod = config.getRtspValidationMethod();
+        if ("SDP_ONLY".equals(savedMethod)) {
+            rbSdpOnly.setSelected(true);
+        } else if ("FRAME_CAPTURE".equals(savedMethod)) {
+            rbFrameCapture.setSelected(true);
+        } else {
+            rbRtpPacket.setSelected(true); // Default
+        }
+
+        VBox validationBox = new VBox(4);
+        validationBox.getChildren().addAll(lblValidation, rbSdpOnly, rbRtpPacket, rbFrameCapture);
+        validationBox.setStyle("-fx-padding: 0 0 8 0;");
+
         btnStart = new Button("Start Discovery");
         btnStart.getStyleClass().add("button-success");
         btnStart.setMaxWidth(Double.MAX_VALUE);
@@ -756,9 +796,22 @@ public class MainController {
         btnStart.setDisable(true);
         btnStart.setOnAction(e -> startDiscovery());
 
-        vbox.getChildren().addAll(lblTitle, btnStart);
+        vbox.getChildren().addAll(lblTitle, validationBox, btnStart);
         updateStartButtonState();
         return vbox;
+    }
+
+    private void onValidationMethodChanged() {
+        // Save preference immediately
+        String method = "RTP_PACKET"; // default
+        if (rbSdpOnly.isSelected()) {
+            method = "SDP_ONLY";
+        } else if (rbFrameCapture.isSelected()) {
+            method = "FRAME_CAPTURE";
+        }
+        config.setRtspValidationMethod(method);
+        config.saveUserSettings();
+        logger.info("RTSP validation method changed to: {}", method);
     }
 
     private VBox createExportSection() {
@@ -1346,6 +1399,9 @@ public class MainController {
         progressBar.setProgress(0);
         lblProgress.setText("Starting discovery...");
 
+        // Configure RTSP validation method before discovery
+        configureRtspValidation();
+
         executorService.submit(() -> {
             try {
                 runDiscovery();
@@ -1357,6 +1413,46 @@ public class MainController {
                 });
             }
         });
+    }
+
+    private void configureRtspValidation() {
+        try {
+            // Get selected validation method
+            String methodName = config.getRtspValidationMethod();
+            if (methodName == null || methodName.isEmpty()) {
+                methodName = "RTP_PACKET"; // Default
+            }
+
+            // Convert to enum
+            RtspService.RtspValidationMethod method;
+            switch (methodName) {
+                case "SDP_ONLY":
+                    method = RtspService.RtspValidationMethod.SDP_ONLY;
+                    break;
+                case "FRAME_CAPTURE":
+                    method = RtspService.RtspValidationMethod.FRAME_CAPTURE;
+                    break;
+                case "RTP_PACKET":
+                default:
+                    method = RtspService.RtspValidationMethod.RTP_PACKET;
+                    break;
+            }
+
+            // Get custom timeout (0 = use default)
+            int customTimeout = config.getRtspValidationTimeout();
+
+            // Configure RtspService
+            RtspService.RtspDiscoveryConfig discoveryConfig = new RtspService.RtspDiscoveryConfig();
+            discoveryConfig.setValidationMethod(method);
+            discoveryConfig.setCustomTimeout(customTimeout);
+            RtspService.setDiscoveryConfig(discoveryConfig);
+
+            logger.info("RTSP validation configured: method={}, timeout={}ms (0=default)",
+                       method, customTimeout);
+
+        } catch (Exception e) {
+            logger.error("Error configuring RTSP validation, using defaults", e);
+        }
     }
 
     private void runDiscovery() {
