@@ -72,7 +72,7 @@ public class RtspService {
      * RTSP discovery configuration
      */
     public static class RtspDiscoveryConfig {
-        private RtspValidationMethod validationMethod = RtspValidationMethod.SDP_ONLY;
+        private RtspValidationMethod validationMethod = RtspValidationMethod.RTP_PACKET;
         private int customTimeoutMs = 0; // 0 = use default for method
 
         public RtspValidationMethod getValidationMethod() {
