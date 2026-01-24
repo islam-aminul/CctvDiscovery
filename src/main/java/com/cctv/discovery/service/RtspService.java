@@ -53,6 +53,8 @@ public class RtspService {
             for (String key : props.stringPropertyNames()) {
                 if (key.startsWith("manufacturer.") && key.endsWith(".paths")) {
                     String manufacturer = key.substring(13, key.length() - 6); // Extract manufacturer name
+                    // Normalize manufacturer name: replace spaces with underscores for consistent lookup
+                    manufacturer = manufacturer.replace(" ", "_");
                     String pathsStr = props.getProperty(key);
 
                     if (pathsStr != null && !pathsStr.trim().isEmpty()) {
@@ -110,7 +112,7 @@ public class RtspService {
         });
 
         // CP Plus
-        MANUFACTURER_PATHS.put("CP PLUS", new String[]{
+        MANUFACTURER_PATHS.put("CP_PLUS", new String[]{
                 "/cam/realmonitor?channel=1&subtype=0",
                 "/cam/realmonitor?channel=1&subtype=1"
         });
@@ -164,7 +166,9 @@ public class RtspService {
 
         // 2. Try manufacturer-specific paths
         if (manufacturer != null) {
-            String[] mfgPaths = MANUFACTURER_PATHS.get(manufacturer.toUpperCase());
+            // Normalize manufacturer name: replace spaces with underscores for consistent lookup
+            String normalizedManufacturer = manufacturer.replace(" ", "_").toUpperCase();
+            String[] mfgPaths = MANUFACTURER_PATHS.get(normalizedManufacturer);
             if (mfgPaths != null) {
                 for (String path : mfgPaths) {
                     if (!pathsToTry.contains(path)) {
