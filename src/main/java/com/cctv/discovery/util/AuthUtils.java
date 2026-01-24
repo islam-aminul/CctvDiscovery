@@ -185,7 +185,7 @@ public class AuthUtils {
 
         // Check for Digest authentication
         if (wwwAuthenticate.toLowerCase().startsWith("digest")) {
-            return parseDigestChallenge(wwwAuthenticate);
+            return parseDigestChallengeInternal(wwwAuthenticate);
         }
 
         return null;
@@ -213,8 +213,9 @@ public class AuthUtils {
 
     /**
      * Parse Digest authentication challenge with comprehensive format support.
+     * Internal method used by parseAuthChallenge.
      */
-    private static AuthChallenge parseDigestChallenge(String wwwAuthenticate) {
+    private static AuthChallenge parseDigestChallengeInternal(String wwwAuthenticate) {
         AuthChallenge challenge = new AuthChallenge();
         challenge.type = AuthType.DIGEST;
 
