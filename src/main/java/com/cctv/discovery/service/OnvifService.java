@@ -435,9 +435,29 @@ public class OnvifService {
             connection.setConnectTimeout(5000);
             connection.setReadTimeout(10000);
 
+            logger.debug("========== ONVIF SOAP REQUEST ==========");
+            logger.debug("URL: {}", serviceUrl);
+            logger.debug("Method: POST");
+            logger.debug("Content-Type: application/soap+xml; charset=utf-8");
+            logger.debug("SOAP Request Body:\n{}", soapRequest);
+            logger.debug("========================================");
+
             connection.getOutputStream().write(soapRequest.getBytes("UTF-8"));
 
             int responseCode = connection.getResponseCode();
+            String responseMessage = connection.getResponseMessage();
+
+            logger.debug("========== ONVIF SOAP RESPONSE ==========");
+            logger.debug("Response Code: {} {}", responseCode, responseMessage);
+
+            // Log response headers
+            logger.debug("Response Headers:");
+            connection.getHeaderFields().forEach((key, values) -> {
+                if (key != null) {
+                    logger.debug("  {}: {}", key, String.join(", ", values));
+                }
+            });
+
             if (responseCode == 200) {
                 InputStream is = connection.getInputStream();
                 ByteArrayOutputStream baos = new ByteArrayOutputStream();
@@ -446,9 +466,26 @@ public class OnvifService {
                 while ((len = is.read(buffer)) != -1) {
                     baos.write(buffer, 0, len);
                 }
-                return baos.toString("UTF-8");
+                String response = baos.toString("UTF-8");
+                logger.debug("Response Body:\n{}", response);
+                logger.debug("=========================================");
+                return response;
             } else {
-                logger.warn("ONVIF request failed with code: {}", responseCode);
+                // Try to read error response body
+                InputStream errorStream = connection.getErrorStream();
+                if (errorStream != null) {
+                    ByteArrayOutputStream errorBaos = new ByteArrayOutputStream();
+                    byte[] buffer = new byte[1024];
+                    int len;
+                    while ((len = errorStream.read(buffer)) != -1) {
+                        errorBaos.write(buffer, 0, len);
+                    }
+                    String errorBody = errorBaos.toString("UTF-8");
+                    logger.warn("ONVIF request failed with code: {}. Error body:\n{}", responseCode, errorBody);
+                } else {
+                    logger.warn("ONVIF request failed with code: {}", responseCode);
+                }
+                logger.debug("=========================================");
                 return null;
             }
 
