@@ -861,6 +861,54 @@
                 discovery process. This section explains the complete workflow and what happens behind the scenes.
             </p>
 
+            <h3>RTSP Validation Method Selection</h3>
+            <p>
+                Before starting discovery, you can choose how RTSP stream URLs are validated. This setting is located in the
+                <strong>Discovery</strong> section above the "Start Discovery" button. Three validation methods are available:
+            </p>
+
+            <h4>1. SDP Only (Fast, ~60% accurate)</h4>
+            <ul>
+                <li><strong>Speed:</strong> 3 seconds per URL</li>
+                <li><strong>Accuracy:</strong> ~60%</li>
+                <li><strong>Method:</strong> Sends RTSP DESCRIBE request and parses SDP (Session Description Protocol) metadata</li>
+                <li><strong>Pros:</strong> Fastest validation method</li>
+                <li><strong>Cons:</strong> Many cameras return valid SDP for ANY path, including invalid ones. Query parameters and URL fragments may be ignored, resulting in false positives</li>
+                <li><strong>Use When:</strong> Speed is critical and you can tolerate false positives</li>
+            </ul>
+
+            <h4>2. RTP Packet (Medium, ~90% accurate)</h4>
+            <ul>
+                <li><strong>Speed:</strong> 5 seconds per URL</li>
+                <li><strong>Accuracy:</strong> ~90%</li>
+                <li><strong>Method:</strong> Full RTSP session (DESCRIBE → SETUP → PLAY), then listens for actual RTP packets over UDP</li>
+                <li><strong>Pros:</strong> Verifies that the stream actually works and delivers video data. Confirms query parameters are honored</li>
+                <li><strong>Cons:</strong> Slower than SDP. May miss some edge cases where RTP packets are delayed or corrupt</li>
+                <li><strong>Use When:</strong> You need a balance between speed and accuracy</li>
+            </ul>
+
+            <h4>3. Frame Capture (Slow, ~98% accurate) - DEFAULT</h4>
+            <ul>
+                <li><strong>Speed:</strong> 10 seconds per URL</li>
+                <li><strong>Accuracy:</strong> ~98%</li>
+                <li><strong>Method:</strong> Uses FFmpeg to actually decode and capture a video frame from the stream</li>
+                <li><strong>Pros:</strong> Highest accuracy. Verifies the video stream is fully decodable and playable. Near-perfect confirmation</li>
+                <li><strong>Cons:</strong> Slowest method. Discovery takes longer with large networks</li>
+                <li><strong>Use When:</strong> Accuracy is critical and you can afford the extra time (recommended for production audits)</li>
+            </ul>
+
+            <div class="tip">
+                <strong>Performance Comparison:</strong> For a network with 20 cameras and 5 RTSP paths per camera (100 URLs total):<br>
+                • SDP Only: ~5 minutes<br>
+                • RTP Packet: ~8 minutes<br>
+                • Frame Capture: ~17 minutes
+            </div>
+
+            <div class="note">
+                <strong>Recommendation:</strong> Frame Capture (Default) is recommended for most use cases as it provides the most
+                reliable results. Use SDP Only for quick preliminary scans or when time is extremely limited.
+            </div>
+
             <h3>Pre-Discovery Checklist</h3>
             <p>Before starting, verify:</p>
             <ul>

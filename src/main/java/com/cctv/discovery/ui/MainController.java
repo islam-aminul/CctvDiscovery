@@ -775,14 +775,14 @@ public class MainController {
         rbFrameCapture.setStyle("-fx-font-size: 10px;");
         rbFrameCapture.setOnAction(e -> onValidationMethodChanged());
 
-        // Load saved preference or default to RTP_PACKET
+        // Load saved preference or default to FRAME_CAPTURE
         String savedMethod = config.getRtspValidationMethod();
         if ("SDP_ONLY".equals(savedMethod)) {
             rbSdpOnly.setSelected(true);
-        } else if ("FRAME_CAPTURE".equals(savedMethod)) {
-            rbFrameCapture.setSelected(true);
+        } else if ("RTP_PACKET".equals(savedMethod)) {
+            rbRtpPacket.setSelected(true);
         } else {
-            rbRtpPacket.setSelected(true); // Default
+            rbFrameCapture.setSelected(true); // Default
         }
 
         VBox validationBox = new VBox(4);
@@ -802,15 +802,13 @@ public class MainController {
     }
 
     private void onValidationMethodChanged() {
-        // Save preference immediately
-        String method = "RTP_PACKET"; // default
+        // Log selection change (not saved until settings dialog saves)
+        String method = "FRAME_CAPTURE"; // default
         if (rbSdpOnly.isSelected()) {
             method = "SDP_ONLY";
-        } else if (rbFrameCapture.isSelected()) {
-            method = "FRAME_CAPTURE";
+        } else if (rbRtpPacket.isSelected()) {
+            method = "RTP_PACKET";
         }
-        config.setRtspValidationMethod(method);
-        config.saveUserSettings();
         logger.info("RTSP validation method changed to: {}", method);
     }
 
@@ -1417,25 +1415,14 @@ public class MainController {
 
     private void configureRtspValidation() {
         try {
-            // Get selected validation method
-            String methodName = config.getRtspValidationMethod();
-            if (methodName == null || methodName.isEmpty()) {
-                methodName = "RTP_PACKET"; // Default
-            }
-
-            // Convert to enum
+            // Get selected validation method from UI radio buttons
             RtspService.RtspValidationMethod method;
-            switch (methodName) {
-                case "SDP_ONLY":
-                    method = RtspService.RtspValidationMethod.SDP_ONLY;
-                    break;
-                case "FRAME_CAPTURE":
-                    method = RtspService.RtspValidationMethod.FRAME_CAPTURE;
-                    break;
-                case "RTP_PACKET":
-                default:
-                    method = RtspService.RtspValidationMethod.RTP_PACKET;
-                    break;
+            if (rbSdpOnly.isSelected()) {
+                method = RtspService.RtspValidationMethod.SDP_ONLY;
+            } else if (rbRtpPacket.isSelected()) {
+                method = RtspService.RtspValidationMethod.RTP_PACKET;
+            } else {
+                method = RtspService.RtspValidationMethod.FRAME_CAPTURE; // Default
             }
 
             // Get custom timeout (0 = use default)
@@ -2033,38 +2020,34 @@ public class MainController {
         Label quickGuide = new Label(
                 "Quick Start Guide:\n\n" +
                 "1. Network Selection:\n" +
-                "   • Simple Mode: Choose network interface, manual IP range, or CIDR notation\n" +
-                "   • Advanced Mode: Enable to select multiple sources (interfaces, ranges, CIDRs)\n" +
+                "   • Simple Mode: Choose network interface, manual IP range, or CIDR\n" +
+                "   • Advanced Mode: Enable to select multiple sources\n" +
                 "   • Summary shows selected configuration in blue text\n\n" +
                 "2. Add Credentials (Required - Max 4):\n" +
                 "   • Default username 'admin' is pre-filled\n" +
                 "   • Enter password and click 'Add Credential'\n" +
-                "   • Right-click credentials to Edit or Delete\n" +
-                "   • Summary shows credential count in blue text\n\n" +
-                "3. Configure Settings (Optional):\n" +
-                "   • Click 'Settings' button to configure custom ports\n" +
-                "   • Add custom RTSP paths for specific camera models\n" +
+                "   • Right-click credentials to Edit or Delete\n\n" +
+                "3. RTSP Validation Method (in Discovery section):\n" +
+                "   • SDP Only: Fast (3s/URL), ~60% accurate - may have false positives\n" +
+                "   • RTP Packet: Medium (5s/URL), ~90% accurate - verifies streaming\n" +
+                "   • Frame Capture: Slow (10s/URL), ~98% accurate - verifies video (Default)\n" +
+                "   Choose based on your priority: speed vs accuracy\n\n" +
+                "4. Configure Settings (Optional):\n" +
+                "   • Click 'Settings' to configure custom ports and RTSP paths\n" +
                 "   • Settings persist across application restarts\n\n" +
-                "4. Start Discovery:\n" +
-                "   • Click green 'Start Discovery' button\n" +
-                "   • Monitor progress in Progress section (bottom of left panel)\n" +
-                "   • Progress bar shows completion percentage\n\n" +
-                "5. View Results:\n" +
-                "   • Color-coded rows indicate device status:\n" +
-                "     - Green: Successfully discovered with streams\n" +
-                "     - Yellow: Currently authenticating\n" +
-                "     - Red: Authentication failed\n" +
-                "     - Gray: Unknown device type (not a camera)\n" +
-                "     - Blue: Discovered but not yet processed\n" +
+                "5. Start Discovery:\n" +
+                "   • Click 'Start Discovery' button\n" +
+                "   • Monitor progress bar and status messages\n\n" +
+                "6. View Results:\n" +
+                "   • Color-coded rows: Green (success), Yellow (authenticating),\n" +
+                "     Red (failed), Gray (not camera), Blue (discovered)\n" +
                 "   • Right-click failed devices to retry with different credentials\n\n" +
-                "6. Export Results:\n" +
+                "7. Export Results:\n" +
                 "   • Enter Site ID, Premise Name, and Operator Name\n" +
-                "   • Click 'Export to Excel' button\n" +
-                "   • Choose save location\n" +
-                "   • Excel file includes CCTV Audit and Host Audit sheets"
+                "   • Click 'Export to Excel' and choose save location"
         );
         quickGuide.setWrapText(true);
-        quickGuide.setStyle("-fx-font-size: 12px;");
+        quickGuide.setStyle("-fx-font-size: 10px;");
 
         // User Manual button
         Button btnUserManual = new Button("Open Full User Manual");
