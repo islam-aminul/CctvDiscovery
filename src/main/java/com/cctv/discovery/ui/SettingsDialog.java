@@ -35,6 +35,12 @@ public class SettingsDialog extends Stage {
     private ListView<String> lvPathPairs;
     private ObservableList<String> pathPairs;
 
+    // RTSP Validation Method
+    private RadioButton rbSdpOnly;
+    private RadioButton rbRtpPacket;
+    private RadioButton rbFrameCapture;
+    private TextField tfCustomTimeout;
+
     public SettingsDialog(Stage owner) {
         initOwner(owner);
         initModality(Modality.APPLICATION_MODAL);
@@ -56,7 +62,7 @@ public class SettingsDialog extends Stage {
         this.pathPairs = FXCollections.observableArrayList();
 
         VBox root = createContent();
-        Scene scene = new Scene(root, 650, 600);
+        Scene scene = new Scene(root, 650, 750);
 
         try {
             java.net.URL cssResource = getClass().getResource("/css/app.css");
@@ -79,7 +85,7 @@ public class SettingsDialog extends Stage {
         Label title = new Label("Application Settings");
         title.setStyle("-fx-font-size: 16px; -fx-font-weight: bold;");
 
-        Label subtitle = new Label("Configure ports and RTSP paths for cameras with custom settings");
+        Label subtitle = new Label("Configure ports, RTSP paths, and validation method for cameras");
         subtitle.setStyle("-fx-text-fill: #666; -fx-font-size: 12px;");
 
         // Port Settings Section
@@ -87,6 +93,9 @@ public class SettingsDialog extends Stage {
 
         // RTSP Paths Section
         VBox rtspSection = createRtspPathsSection();
+
+        // RTSP Validation Section
+        VBox validationSection = createRtspValidationSection();
 
         // Buttons
         HBox buttonBox = createButtonBox();
@@ -97,6 +106,7 @@ public class SettingsDialog extends Stage {
                 subtitle,
                 portSection,
                 rtspSection,
+                validationSection,
                 buttonBox
         );
 
@@ -209,6 +219,61 @@ public class SettingsDialog extends Stage {
         return vbox;
     }
 
+    private VBox createRtspValidationSection() {
+        VBox vbox = new VBox(8);
+
+        Label lblTitle = new Label("RTSP Validation Method");
+        lblTitle.setStyle("-fx-font-weight: bold; -fx-font-size: 13px;");
+
+        Label lblHelp = new Label("Choose how RTSP stream URLs are validated during discovery. Higher accuracy takes more time.");
+        lblHelp.setStyle("-fx-text-fill: #666; -fx-font-size: 11px;");
+        lblHelp.setWrapText(true);
+
+        // Radio buttons for validation method
+        ToggleGroup validationGroup = new ToggleGroup();
+
+        rbSdpOnly = new RadioButton("SDP Only - Fast (3s per URL), ~60% accurate");
+        rbSdpOnly.setToggleGroup(validationGroup);
+        rbSdpOnly.setStyle("-fx-font-size: 11px;");
+
+        rbRtpPacket = new RadioButton("RTP Packet - Medium (5s per URL), ~90% accurate");
+        rbRtpPacket.setToggleGroup(validationGroup);
+        rbRtpPacket.setStyle("-fx-font-size: 11px;");
+
+        rbFrameCapture = new RadioButton("Frame Capture - Slow (10s per URL), ~98% accurate (Recommended)");
+        rbFrameCapture.setToggleGroup(validationGroup);
+        rbFrameCapture.setStyle("-fx-font-size: 11px;");
+
+        VBox radioBox = new VBox(4);
+        radioBox.getChildren().addAll(rbSdpOnly, rbRtpPacket, rbFrameCapture);
+        radioBox.setStyle("-fx-padding: 5 0 5 10;");
+
+        // Custom timeout field (optional)
+        Label lblTimeout = new Label("Custom Timeout (optional):");
+        lblTimeout.setStyle("-fx-font-size: 11px; -fx-font-weight: bold;");
+
+        HBox timeoutBox = new HBox(8);
+        timeoutBox.setAlignment(Pos.CENTER_LEFT);
+
+        tfCustomTimeout = new TextField();
+        tfCustomTimeout.setPromptText("0 = use default for method");
+        tfCustomTimeout.setPrefWidth(200);
+        tfCustomTimeout.setStyle("-fx-font-size: 11px;");
+
+        Label lblMs = new Label("milliseconds");
+        lblMs.setStyle("-fx-font-size: 11px; -fx-text-fill: #666;");
+
+        timeoutBox.getChildren().addAll(tfCustomTimeout, lblMs);
+
+        Label lblNote = new Label("💡 Tip: Frame Capture is recommended for accurate production audits. Use SDP Only for quick preliminary scans.");
+        lblNote.setStyle("-fx-text-fill: #0066cc; -fx-font-size: 10px; -fx-font-style: italic;");
+        lblNote.setWrapText(true);
+
+        vbox.getChildren().addAll(lblTitle, lblHelp, radioBox, lblTimeout, timeoutBox, lblNote);
+
+        return vbox;
+    }
+
     private void addPathPair() {
         String mainPath = tfMainPath.getText().trim();
         String subPath = tfSubPath.getText().trim();
@@ -308,6 +373,20 @@ public class SettingsDialog extends Stage {
                 pathPairs.add(pairDisplay);
             }
         }
+
+        // RTSP Validation Method
+        String validationMethod = config.getRtspValidationMethod();
+        if ("SDP_ONLY".equals(validationMethod)) {
+            rbSdpOnly.setSelected(true);
+        } else if ("RTP_PACKET".equals(validationMethod)) {
+            rbRtpPacket.setSelected(true);
+        } else {
+            rbFrameCapture.setSelected(true); // Default
+        }
+
+        // Custom timeout
+        int timeout = config.getRtspValidationTimeout();
+        tfCustomTimeout.setText(timeout > 0 ? String.valueOf(timeout) : "0");
     }
 
     private void saveSettings() {
@@ -383,6 +462,35 @@ public class SettingsDialog extends Stage {
             } else {
                 config.setProperty("rtsp.custom.paths", "");
             }
+
+            // Save RTSP validation method
+            String validationMethod = "FRAME_CAPTURE"; // default
+            if (rbSdpOnly.isSelected()) {
+                validationMethod = "SDP_ONLY";
+            } else if (rbRtpPacket.isSelected()) {
+                validationMethod = "RTP_PACKET";
+            }
+            config.setRtspValidationMethod(validationMethod);
+
+            // Save custom timeout (validate first)
+            String timeoutStr = tfCustomTimeout.getText().trim();
+            if (!timeoutStr.isEmpty() && !timeoutStr.equals("0")) {
+                try {
+                    int timeout = Integer.parseInt(timeoutStr);
+                    if (timeout < 0 || timeout > 300000) { // Max 5 minutes
+                        showError("Invalid Timeout", "Timeout must be between 0 and 300000 milliseconds (5 minutes)");
+                        return;
+                    }
+                    config.setRtspValidationTimeout(timeout);
+                } catch (NumberFormatException e) {
+                    showError("Invalid Timeout", "Timeout must be a valid number");
+                    return;
+                }
+            } else {
+                config.setRtspValidationTimeout(0); // Use default
+            }
+
+            logger.info("Saved RTSP validation: method={}, timeout={}", validationMethod, timeoutStr);
 
             // Save to file
             config.saveUserSettings();
