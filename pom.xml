@@ -30,7 +30,7 @@
         <commons-codec.version>1.15</commons-codec.version>
         <gson.version>2.8.9</gson.version>
         <slf4j.version>1.7.36</slf4j.version>
-        <logback.version>1.4.11</logback.version>
+        <logback.version>1.2.13</logback.version>
 
         <!-- Build Configuration Properties -->
         <app.filename>CctvDiscovery</app.filename>
@@ -141,11 +141,11 @@
             <version>${slf4j.version}</version>
         </dependency>
 
-        <!-- Logging binding -->
+        <!-- Logging binding - Logback (uses logback.xml for file + console logging) -->
         <dependency>
-            <groupId>org.slf4j</groupId>
-            <artifactId>slf4j-simple</artifactId>
-            <version>${slf4j.version}</version>
+            <groupId>ch.qos.logback</groupId>
+            <artifactId>logback-classic</artifactId>
+            <version>${logback.version}</version>
         </dependency>
 
         <!-- HTTP Client for RTSP/REST -->

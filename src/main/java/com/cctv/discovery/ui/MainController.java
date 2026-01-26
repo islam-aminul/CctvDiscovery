@@ -90,10 +90,15 @@ public class MainController {
     private Button btnStart;
     private Button btnExport;
 
-    // RTSP Validation Method
+    // Verification Method (left panel)
+    private Button btnVerificationMethod;
+    private Label lblVerificationSummary;
+
+    // RTSP Validation Method (used in verification modal and settings)
     private RadioButton rbSdpOnly;
     private RadioButton rbRtpPacket;
     private RadioButton rbFrameCapture;
+    private String selectedValidationMethod = "FRAME_CAPTURE";
 
     // Progress
     private ProgressBar progressBar;
@@ -225,16 +230,19 @@ public class MainController {
         vbox.setPadding(new Insets(10));
         vbox.getStyleClass().add("left-panel");
 
-        // Network Section
+        // 1. Network Section
         VBox networkSection = createNetworkSection();
 
-        // Credential Section
+        // 2. Credential Section
         VBox credentialSection = createCredentialSection();
 
-        // Action Section
-        VBox actionSection = createActionSection();
+        // 3. Verification Method Section
+        VBox verificationSection = createVerificationMethodSection();
 
-        // Export Section
+        // 4. Start Discovery Section
+        VBox discoverySection = createDiscoverySection();
+
+        // 5. Export Section
         VBox exportSection = createExportSection();
 
         // Progress Section - AT BOTTOM
@@ -244,7 +252,8 @@ public class MainController {
         vbox.getChildren().addAll(
                 networkSection,
                 credentialSection,
-                actionSection,
+                verificationSection,
+                discoverySection,
                 exportSection,
                 progressSection
         );
@@ -748,46 +757,220 @@ public class MainController {
         return vbox;
     }
 
-    private VBox createActionSection() {
+    private VBox createVerificationMethodSection() {
         VBox vbox = new VBox(6);
 
-        Label lblTitle = new Label("3. Discovery");
+        Label lblTitle = new Label("3. Verification Method");
         lblTitle.getStyleClass().add("section-title");
 
-        // RTSP Validation Method Selection
-        Label lblValidation = new Label("RTSP Validation Method:");
-        lblValidation.setStyle("-fx-font-size: 11px; -fx-font-weight: bold;");
+        btnVerificationMethod = new Button("Set Verification Method");
+        btnVerificationMethod.setMaxWidth(Double.MAX_VALUE);
+        btnVerificationMethod.setPrefHeight(35);
+        btnVerificationMethod.setOnAction(e -> showVerificationMethodDialog());
+
+        // Load saved preference
+        String savedMethod = config.getRtspValidationMethod();
+        if ("SDP_ONLY".equals(savedMethod)) {
+            selectedValidationMethod = "SDP_ONLY";
+        } else if ("RTP_PACKET".equals(savedMethod)) {
+            selectedValidationMethod = "RTP_PACKET";
+        } else {
+            selectedValidationMethod = "FRAME_CAPTURE";
+        }
+
+        lblVerificationSummary = new Label(getVerificationSummaryText(selectedValidationMethod));
+        lblVerificationSummary.getStyleClass().add("label-info");
+        lblVerificationSummary.setStyle("-fx-font-style: italic; -fx-text-fill: #0078d4;");
+        lblVerificationSummary.setWrapText(true);
+
+        vbox.getChildren().addAll(lblTitle, btnVerificationMethod, lblVerificationSummary);
+        return vbox;
+    }
+
+    private String getVerificationSummaryText(String method) {
+        switch (method) {
+            case "SDP_ONLY":
+                return "Quick Check \u2014 fastest, basic protocol check (~60% accuracy)";
+            case "RTP_PACKET":
+                return "Stream Test \u2014 balanced, verifies live data streaming (~90% accuracy)";
+            case "FRAME_CAPTURE":
+            default:
+                return "Video Capture \u2014 most reliable, verifies actual video frames (~98% accuracy)";
+        }
+    }
+
+    private void showVerificationMethodDialog() {
+        Dialog<ButtonType> dialog = new Dialog<>();
+        dialog.setTitle("Verification Method");
+        dialog.setHeaderText("Choose Camera Verification Method");
+        dialog.getDialogPane().setPrefWidth(520);
+
+        // Set window icon
+        dialog.setOnShown(e -> {
+            try {
+                javafx.stage.Stage stage = (javafx.stage.Stage) dialog.getDialogPane().getScene().getWindow();
+                java.io.InputStream iconStream = getClass().getResourceAsStream("/icon.png");
+                if (iconStream != null) {
+                    stage.getIcons().add(new javafx.scene.image.Image(iconStream));
+                }
+            } catch (Exception ex) {
+                logger.debug("Could not load icon for verification method dialog", ex);
+            }
+        });
+
+        VBox content = new VBox(12);
+        content.setPadding(new Insets(15));
+
+        Label lblIntro = new Label("Choose how the tool confirms a camera is working.\nMore thorough methods take longer but give more reliable results.");
+        lblIntro.setWrapText(true);
+        lblIntro.setStyle("-fx-font-size: 11px; -fx-text-fill: #555;");
 
         ToggleGroup validationGroup = new ToggleGroup();
 
-        rbSdpOnly = new RadioButton("SDP Only (Fast, ~60% accurate)");
-        rbSdpOnly.setToggleGroup(validationGroup);
-        rbSdpOnly.setStyle("-fx-font-size: 10px;");
-        rbSdpOnly.setOnAction(e -> onValidationMethodChanged());
+        // Card 1: Quick Check (SDP_ONLY)
+        VBox card1 = createVerificationCard(
+                validationGroup,
+                "Quick Check",
+                "Fastest option \u2014 checks if camera responds to\nconnection requests only. Some cameras may appear\nworking even if the video feed has issues.",
+                "~3 seconds per camera  |  ~60% accuracy",
+                false
+        );
+        RadioButton rb1 = (RadioButton) card1.getUserData();
 
-        rbRtpPacket = new RadioButton("RTP Packet (Medium, ~90% accurate)");
-        rbRtpPacket.setToggleGroup(validationGroup);
-        rbRtpPacket.setStyle("-fx-font-size: 10px;");
-        rbRtpPacket.setOnAction(e -> onValidationMethodChanged());
+        // Card 2: Stream Test (RTP_PACKET)
+        VBox card2 = createVerificationCard(
+                validationGroup,
+                "Stream Test",
+                "Balanced option \u2014 verifies the camera is actively\nsending video data. Good for quick audits where\nsome uncertainty is acceptable.",
+                "~5 seconds per camera  |  ~90% accuracy",
+                false
+        );
+        RadioButton rb2 = (RadioButton) card2.getUserData();
 
-        rbFrameCapture = new RadioButton("Frame Capture (Slow, ~98% accurate)");
-        rbFrameCapture.setToggleGroup(validationGroup);
-        rbFrameCapture.setStyle("-fx-font-size: 10px;");
-        rbFrameCapture.setOnAction(e -> onValidationMethodChanged());
+        // Card 3: Video Capture (FRAME_CAPTURE) - Recommended
+        VBox card3 = createVerificationCard(
+                validationGroup,
+                "Video Capture",
+                "Most reliable \u2014 actually captures a video frame to\nconfirm the camera is fully operational. Best for\nofficial audits and compliance reports.",
+                "~10 seconds per camera  |  ~98% accuracy",
+                true
+        );
+        RadioButton rb3 = (RadioButton) card3.getUserData();
 
-        // Load saved preference or default to FRAME_CAPTURE
-        String savedMethod = config.getRtspValidationMethod();
-        if ("SDP_ONLY".equals(savedMethod)) {
-            rbSdpOnly.setSelected(true);
-        } else if ("RTP_PACKET".equals(savedMethod)) {
-            rbRtpPacket.setSelected(true);
+        // Store references for use in configureRtspValidation
+        rbSdpOnly = rb1;
+        rbRtpPacket = rb2;
+        rbFrameCapture = rb3;
+
+        // Select current method
+        if ("SDP_ONLY".equals(selectedValidationMethod)) {
+            rb1.setSelected(true);
+            card1.setStyle(getSelectedCardStyle());
+        } else if ("RTP_PACKET".equals(selectedValidationMethod)) {
+            rb2.setSelected(true);
+            card2.setStyle(getSelectedCardStyle());
         } else {
-            rbFrameCapture.setSelected(true); // Default
+            rb3.setSelected(true);
+            card3.setStyle(getSelectedCardStyle());
         }
 
-        VBox validationBox = new VBox(4);
-        validationBox.getChildren().addAll(lblValidation, rbSdpOnly, rbRtpPacket, rbFrameCapture);
-        validationBox.setStyle("-fx-padding: 0 0 8 0;");
+        // Update card styles on selection change
+        validationGroup.selectedToggleProperty().addListener((obs, oldToggle, newToggle) -> {
+            card1.setStyle(rb1.isSelected() ? getSelectedCardStyle() : getUnselectedCardStyle());
+            card2.setStyle(rb2.isSelected() ? getSelectedCardStyle() : getUnselectedCardStyle());
+            card3.setStyle(rb3.isSelected() ? getSelectedCardStyle() : getUnselectedCardStyle());
+        });
+
+        content.getChildren().addAll(lblIntro, card1, card2, card3);
+        dialog.getDialogPane().setContent(content);
+
+        // Buttons
+        ButtonType okButton = new ButtonType("OK", ButtonBar.ButtonData.OK_DONE);
+        ButtonType cancelButton = new ButtonType("Cancel", ButtonBar.ButtonData.CANCEL_CLOSE);
+        dialog.getDialogPane().getButtonTypes().addAll(okButton, cancelButton);
+
+        // Style buttons
+        dialog.setOnShowing(dialogEvent -> {
+            Button okBtn = (Button) dialog.getDialogPane().lookupButton(okButton);
+            Button cancelBtn = (Button) dialog.getDialogPane().lookupButton(cancelButton);
+            if (okBtn != null) {
+                okBtn.setStyle("-fx-background-color: #28a745; -fx-text-fill: white; -fx-font-weight: bold; -fx-pref-width: 80px; -fx-pref-height: 30px;");
+            }
+            if (cancelBtn != null) {
+                cancelBtn.setStyle("-fx-background-color: #6c757d; -fx-text-fill: white; -fx-font-weight: bold; -fx-pref-width: 80px; -fx-pref-height: 30px;");
+            }
+        });
+
+        Optional<ButtonType> result = dialog.showAndWait();
+
+        if (result.isPresent() && result.get() == okButton) {
+            // Save selection
+            if (rb1.isSelected()) {
+                selectedValidationMethod = "SDP_ONLY";
+            } else if (rb2.isSelected()) {
+                selectedValidationMethod = "RTP_PACKET";
+            } else {
+                selectedValidationMethod = "FRAME_CAPTURE";
+            }
+            lblVerificationSummary.setText(getVerificationSummaryText(selectedValidationMethod));
+            logger.info("Verification method changed to: {}", selectedValidationMethod);
+        }
+    }
+
+    private VBox createVerificationCard(ToggleGroup group, String title, String description, String stats, boolean recommended) {
+        VBox card = new VBox(4);
+        card.setPadding(new Insets(10));
+        card.setStyle(getUnselectedCardStyle());
+
+        RadioButton rb = new RadioButton();
+        rb.setToggleGroup(group);
+
+        // Title row with radio button
+        Label lblTitle = new Label(title);
+        lblTitle.setStyle("-fx-font-weight: bold; -fx-font-size: 12px;");
+
+        HBox titleRow = new HBox(8);
+        titleRow.setAlignment(Pos.CENTER_LEFT);
+        titleRow.getChildren().addAll(rb, lblTitle);
+
+        if (recommended) {
+            Label badge = new Label("Recommended");
+            badge.setStyle("-fx-background-color: #28a745; -fx-text-fill: white; -fx-font-size: 9px; -fx-font-weight: bold; -fx-padding: 2 6; -fx-background-radius: 3;");
+            titleRow.getChildren().add(badge);
+        }
+
+        Label lblDesc = new Label(description);
+        lblDesc.setStyle("-fx-font-size: 11px; -fx-text-fill: #555;");
+        lblDesc.setPadding(new Insets(0, 0, 0, 24));
+
+        Label lblStats = new Label(stats);
+        lblStats.setStyle("-fx-font-size: 10px; -fx-text-fill: #888; -fx-font-style: italic;");
+        lblStats.setPadding(new Insets(0, 0, 0, 24));
+
+        card.getChildren().addAll(titleRow, lblDesc, lblStats);
+
+        // Store radio button reference on the card
+        card.setUserData(rb);
+
+        // Click anywhere on card to select
+        card.setOnMouseClicked(e -> rb.setSelected(true));
+
+        return card;
+    }
+
+    private String getSelectedCardStyle() {
+        return "-fx-border-color: #0078d4; -fx-border-width: 2; -fx-border-radius: 5; -fx-background-color: #e8f0fe; -fx-background-radius: 5;";
+    }
+
+    private String getUnselectedCardStyle() {
+        return "-fx-border-color: #cccccc; -fx-border-width: 1; -fx-border-radius: 5; -fx-background-color: #ffffff; -fx-background-radius: 5;";
+    }
+
+    private VBox createDiscoverySection() {
+        VBox vbox = new VBox(6);
+
+        Label lblTitle = new Label("4. Start Discovery");
+        lblTitle.getStyleClass().add("section-title");
 
         btnStart = new Button("Start Discovery");
         btnStart.getStyleClass().add("button-success");
@@ -796,26 +979,19 @@ public class MainController {
         btnStart.setDisable(true);
         btnStart.setOnAction(e -> startDiscovery());
 
-        vbox.getChildren().addAll(lblTitle, validationBox, btnStart);
+        vbox.getChildren().addAll(lblTitle, btnStart);
         updateStartButtonState();
         return vbox;
     }
 
     private void onValidationMethodChanged() {
-        // Log selection change (not saved until settings dialog saves)
-        String method = "FRAME_CAPTURE"; // default
-        if (rbSdpOnly.isSelected()) {
-            method = "SDP_ONLY";
-        } else if (rbRtpPacket.isSelected()) {
-            method = "RTP_PACKET";
-        }
-        logger.info("RTSP validation method changed to: {}", method);
+        logger.info("RTSP validation method changed to: {}", selectedValidationMethod);
     }
 
     private VBox createExportSection() {
         VBox vbox = new VBox(6);
 
-        Label lblTitle = new Label("4. Export");
+        Label lblTitle = new Label("5. Export");
         lblTitle.getStyleClass().add("section-title");
 
         btnExport = new Button("Export to Excel");
@@ -1415,11 +1591,11 @@ public class MainController {
 
     private void configureRtspValidation() {
         try {
-            // Get selected validation method from UI radio buttons
+            // Get selected validation method from stored selection
             RtspService.RtspValidationMethod method;
-            if (rbSdpOnly.isSelected()) {
+            if ("SDP_ONLY".equals(selectedValidationMethod)) {
                 method = RtspService.RtspValidationMethod.SDP_ONLY;
-            } else if (rbRtpPacket.isSelected()) {
+            } else if ("RTP_PACKET".equals(selectedValidationMethod)) {
                 method = RtspService.RtspValidationMethod.RTP_PACKET;
             } else {
                 method = RtspService.RtspValidationMethod.FRAME_CAPTURE; // Default
@@ -2049,30 +2225,35 @@ public class MainController {
         quickGuide.setWrapText(true);
         quickGuide.setStyle("-fx-font-size: 10px;");
 
-        // User Manual button
-        Button btnUserManual = new Button("Open Full User Manual");
-        btnUserManual.setStyle("-fx-background-color: #0078d4; -fx-text-fill: white; -fx-font-weight: bold;");
-        btnUserManual.setPrefWidth(200);
+        // User Manual and Close buttons - horizontally aligned
+        Button btnUserManual = new Button("Open User Manual");
+        btnUserManual.setStyle("-fx-background-color: #0078d4; -fx-text-fill: white; -fx-font-weight: bold; -fx-pref-height: 30px;");
         btnUserManual.setOnAction(e -> openUserManual());
 
-        HBox buttonBox = new HBox(btnUserManual);
-        buttonBox.setAlignment(Pos.CENTER);
+        Button btnCloseHelp = new Button("Close");
+        btnCloseHelp.setStyle("-fx-background-color: #ffc107; -fx-text-fill: black; -fx-font-weight: bold; -fx-pref-width: 80px; -fx-pref-height: 30px;");
+        btnCloseHelp.setOnAction(e -> {
+            dialog.setResult(null);
+            dialog.close();
+        });
+
+        Region buttonSpacer = new Region();
+        HBox.setHgrow(buttonSpacer, Priority.ALWAYS);
+
+        HBox buttonBox = new HBox(10, btnUserManual, buttonSpacer, btnCloseHelp);
+        buttonBox.setAlignment(Pos.CENTER_LEFT);
         buttonBox.setPadding(new Insets(10, 0, 0, 0));
 
         content.getChildren().addAll(quickGuide, new Separator(), buttonBox);
         dialog.getDialogPane().setContent(content);
 
-        // Close button
-        ButtonType closeButton = new ButtonType("Close", ButtonBar.ButtonData.OK_DONE);
-        dialog.getDialogPane().getButtonTypes().add(closeButton);
+        // Add a hidden button type so the dialog can close (required by JavaFX Dialog)
+        ButtonType hiddenClose = new ButtonType("Close", ButtonBar.ButtonData.CANCEL_CLOSE);
+        dialog.getDialogPane().getButtonTypes().add(hiddenClose);
 
-        // Style close button
-        dialog.setOnShowing(dialogEvent -> {
-            Button closeBtn = (Button) dialog.getDialogPane().lookupButton(closeButton);
-            if (closeBtn != null) {
-                closeBtn.setStyle("-fx-background-color: #28a745; -fx-text-fill: white; -fx-font-weight: bold; -fx-pref-width: 80px; -fx-pref-height: 30px;");
-            }
-        });
+        // Hide the default button bar since we have custom buttons
+        dialog.getDialogPane().lookupButton(hiddenClose).setVisible(false);
+        dialog.getDialogPane().lookupButton(hiddenClose).setManaged(false);
 
         dialog.showAndWait();
     }
@@ -2159,6 +2340,7 @@ public class MainController {
         // Disable modal buttons and start button during discovery
         btnConfigureNetwork.setDisable(true);
         btnManageCredentials.setDisable(true);
+        btnVerificationMethod.setDisable(true);
         btnStart.setDisable(true);
     }
 
@@ -2166,6 +2348,7 @@ public class MainController {
         discoveryInProgress = false;
         btnConfigureNetwork.setDisable(false);
         btnManageCredentials.setDisable(false);
+        btnVerificationMethod.setDisable(false);
         updateStartButtonState();
     }
 
@@ -2174,6 +2357,18 @@ public class MainController {
         alert.setTitle(title);
         alert.setHeaderText(null);
         alert.setContentText(content);
+
+        // Apply application icon to all alerts
+        try {
+            javafx.stage.Stage stage = (javafx.stage.Stage) alert.getDialogPane().getScene().getWindow();
+            java.io.InputStream iconStream = getClass().getResourceAsStream("/icon.png");
+            if (iconStream != null) {
+                stage.getIcons().add(new javafx.scene.image.Image(iconStream));
+            }
+        } catch (Exception e) {
+            logger.debug("Could not load icon for alert dialog", e);
+        }
+
         alert.showAndWait();
     }
 

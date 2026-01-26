@@ -62,7 +62,7 @@ public class SettingsDialog extends Stage {
         this.pathPairs = FXCollections.observableArrayList();
 
         VBox root = createContent();
-        Scene scene = new Scene(root, 650, 750);
+        Scene scene = new Scene(root, 650, 520);
 
         try {
             java.net.URL cssResource = getClass().getResource("/css/app.css");
@@ -88,25 +88,38 @@ public class SettingsDialog extends Stage {
         Label subtitle = new Label("Configure ports, RTSP paths, and validation method for cameras");
         subtitle.setStyle("-fx-text-fill: #666; -fx-font-size: 12px;");
 
-        // Port Settings Section
-        VBox portSection = createPortSection();
+        // TabPane for organized sections
+        TabPane tabPane = new TabPane();
+        tabPane.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
+        VBox.setVgrow(tabPane, Priority.ALWAYS);
 
-        // RTSP Paths Section
-        VBox rtspSection = createRtspPathsSection();
+        // Tab 1: Ports
+        Tab portsTab = new Tab("Ports");
+        VBox portContent = createPortSection();
+        portContent.setPadding(new Insets(15));
+        portsTab.setContent(portContent);
 
-        // RTSP Validation Section
-        VBox validationSection = createRtspValidationSection();
+        // Tab 2: RTSP Paths
+        Tab pathsTab = new Tab("RTSP Paths");
+        VBox pathsContent = createRtspPathsSection();
+        pathsContent.setPadding(new Insets(15));
+        pathsTab.setContent(pathsContent);
+
+        // Tab 3: RTSP Validation
+        Tab validationTab = new Tab("RTSP Validation");
+        VBox validationContent = createRtspValidationSection();
+        validationContent.setPadding(new Insets(15));
+        validationTab.setContent(validationContent);
+
+        tabPane.getTabs().addAll(portsTab, pathsTab, validationTab);
 
         // Buttons
         HBox buttonBox = createButtonBox();
 
-        // No separators, just sections with spacing
         vbox.getChildren().addAll(
                 title,
                 subtitle,
-                portSection,
-                rtspSection,
-                validationSection,
+                tabPane,
                 buttonBox
         );
 
