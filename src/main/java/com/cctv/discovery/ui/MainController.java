@@ -90,6 +90,11 @@ public class MainController {
     private Button btnStart;
     private Button btnExport;
 
+    // RTSP Validation Method
+    private RadioButton rbSdpOnly;
+    private RadioButton rbRtpPacket;
+    private RadioButton rbFrameCapture;
+
     // Progress
     private ProgressBar progressBar;
     private Label lblProgress;
@@ -749,6 +754,41 @@ public class MainController {
         Label lblTitle = new Label("3. Discovery");
         lblTitle.getStyleClass().add("section-title");
 
+        // RTSP Validation Method Selection
+        Label lblValidation = new Label("RTSP Validation Method:");
+        lblValidation.setStyle("-fx-font-size: 11px; -fx-font-weight: bold;");
+
+        ToggleGroup validationGroup = new ToggleGroup();
+
+        rbSdpOnly = new RadioButton("SDP Only (Fast, ~60% accurate)");
+        rbSdpOnly.setToggleGroup(validationGroup);
+        rbSdpOnly.setStyle("-fx-font-size: 10px;");
+        rbSdpOnly.setOnAction(e -> onValidationMethodChanged());
+
+        rbRtpPacket = new RadioButton("RTP Packet (Medium, ~90% accurate)");
+        rbRtpPacket.setToggleGroup(validationGroup);
+        rbRtpPacket.setStyle("-fx-font-size: 10px;");
+        rbRtpPacket.setOnAction(e -> onValidationMethodChanged());
+
+        rbFrameCapture = new RadioButton("Frame Capture (Slow, ~98% accurate)");
+        rbFrameCapture.setToggleGroup(validationGroup);
+        rbFrameCapture.setStyle("-fx-font-size: 10px;");
+        rbFrameCapture.setOnAction(e -> onValidationMethodChanged());
+
+        // Load saved preference or default to FRAME_CAPTURE
+        String savedMethod = config.getRtspValidationMethod();
+        if ("SDP_ONLY".equals(savedMethod)) {
+            rbSdpOnly.setSelected(true);
+        } else if ("RTP_PACKET".equals(savedMethod)) {
+            rbRtpPacket.setSelected(true);
+        } else {
+            rbFrameCapture.setSelected(true); // Default
+        }
+
+        VBox validationBox = new VBox(4);
+        validationBox.getChildren().addAll(lblValidation, rbSdpOnly, rbRtpPacket, rbFrameCapture);
+        validationBox.setStyle("-fx-padding: 0 0 8 0;");
+
         btnStart = new Button("Start Discovery");
         btnStart.getStyleClass().add("button-success");
         btnStart.setMaxWidth(Double.MAX_VALUE);
@@ -756,9 +796,20 @@ public class MainController {
         btnStart.setDisable(true);
         btnStart.setOnAction(e -> startDiscovery());
 
-        vbox.getChildren().addAll(lblTitle, btnStart);
+        vbox.getChildren().addAll(lblTitle, validationBox, btnStart);
         updateStartButtonState();
         return vbox;
+    }
+
+    private void onValidationMethodChanged() {
+        // Log selection change (not saved until settings dialog saves)
+        String method = "FRAME_CAPTURE"; // default
+        if (rbSdpOnly.isSelected()) {
+            method = "SDP_ONLY";
+        } else if (rbRtpPacket.isSelected()) {
+            method = "RTP_PACKET";
+        }
+        logger.info("RTSP validation method changed to: {}", method);
     }
 
     private VBox createExportSection() {
@@ -1346,6 +1397,9 @@ public class MainController {
         progressBar.setProgress(0);
         lblProgress.setText("Starting discovery...");
 
+        // Configure RTSP validation method before discovery
+        configureRtspValidation();
+
         executorService.submit(() -> {
             try {
                 runDiscovery();
@@ -1357,6 +1411,35 @@ public class MainController {
                 });
             }
         });
+    }
+
+    private void configureRtspValidation() {
+        try {
+            // Get selected validation method from UI radio buttons
+            RtspService.RtspValidationMethod method;
+            if (rbSdpOnly.isSelected()) {
+                method = RtspService.RtspValidationMethod.SDP_ONLY;
+            } else if (rbRtpPacket.isSelected()) {
+                method = RtspService.RtspValidationMethod.RTP_PACKET;
+            } else {
+                method = RtspService.RtspValidationMethod.FRAME_CAPTURE; // Default
+            }
+
+            // Get custom timeout (0 = use default)
+            int customTimeout = config.getRtspValidationTimeout();
+
+            // Configure RtspService
+            RtspService.RtspDiscoveryConfig discoveryConfig = new RtspService.RtspDiscoveryConfig();
+            discoveryConfig.setValidationMethod(method);
+            discoveryConfig.setCustomTimeout(customTimeout);
+            RtspService.setDiscoveryConfig(discoveryConfig);
+
+            logger.info("RTSP validation configured: method={}, timeout={}ms (0=default)",
+                       method, customTimeout);
+
+        } catch (Exception e) {
+            logger.error("Error configuring RTSP validation, using defaults", e);
+        }
     }
 
     private void runDiscovery() {
@@ -1937,38 +2020,34 @@ public class MainController {
         Label quickGuide = new Label(
                 "Quick Start Guide:\n\n" +
                 "1. Network Selection:\n" +
-                "   • Simple Mode: Choose network interface, manual IP range, or CIDR notation\n" +
-                "   • Advanced Mode: Enable to select multiple sources (interfaces, ranges, CIDRs)\n" +
+                "   • Simple Mode: Choose network interface, manual IP range, or CIDR\n" +
+                "   • Advanced Mode: Enable to select multiple sources\n" +
                 "   • Summary shows selected configuration in blue text\n\n" +
                 "2. Add Credentials (Required - Max 4):\n" +
                 "   • Default username 'admin' is pre-filled\n" +
                 "   • Enter password and click 'Add Credential'\n" +
-                "   • Right-click credentials to Edit or Delete\n" +
-                "   • Summary shows credential count in blue text\n\n" +
-                "3. Configure Settings (Optional):\n" +
-                "   • Click 'Settings' button to configure custom ports\n" +
-                "   • Add custom RTSP paths for specific camera models\n" +
+                "   • Right-click credentials to Edit or Delete\n\n" +
+                "3. RTSP Validation Method (in Discovery section):\n" +
+                "   • SDP Only: Fast (3s/URL), ~60% accurate - may have false positives\n" +
+                "   • RTP Packet: Medium (5s/URL), ~90% accurate - verifies streaming\n" +
+                "   • Frame Capture: Slow (10s/URL), ~98% accurate - verifies video (Default)\n" +
+                "   Choose based on your priority: speed vs accuracy\n\n" +
+                "4. Configure Settings (Optional):\n" +
+                "   • Click 'Settings' to configure custom ports and RTSP paths\n" +
                 "   • Settings persist across application restarts\n\n" +
-                "4. Start Discovery:\n" +
-                "   • Click green 'Start Discovery' button\n" +
-                "   • Monitor progress in Progress section (bottom of left panel)\n" +
-                "   • Progress bar shows completion percentage\n\n" +
-                "5. View Results:\n" +
-                "   • Color-coded rows indicate device status:\n" +
-                "     - Green: Successfully discovered with streams\n" +
-                "     - Yellow: Currently authenticating\n" +
-                "     - Red: Authentication failed\n" +
-                "     - Gray: Unknown device type (not a camera)\n" +
-                "     - Blue: Discovered but not yet processed\n" +
+                "5. Start Discovery:\n" +
+                "   • Click 'Start Discovery' button\n" +
+                "   • Monitor progress bar and status messages\n\n" +
+                "6. View Results:\n" +
+                "   • Color-coded rows: Green (success), Yellow (authenticating),\n" +
+                "     Red (failed), Gray (not camera), Blue (discovered)\n" +
                 "   • Right-click failed devices to retry with different credentials\n\n" +
-                "6. Export Results:\n" +
+                "7. Export Results:\n" +
                 "   • Enter Site ID, Premise Name, and Operator Name\n" +
-                "   • Click 'Export to Excel' button\n" +
-                "   • Choose save location\n" +
-                "   • Excel file includes CCTV Audit and Host Audit sheets"
+                "   • Click 'Export to Excel' and choose save location"
         );
         quickGuide.setWrapText(true);
-        quickGuide.setStyle("-fx-font-size: 12px;");
+        quickGuide.setStyle("-fx-font-size: 10px;");
 
         // User Manual button
         Button btnUserManual = new Button("Open Full User Manual");

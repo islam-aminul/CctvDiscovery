@@ -72,7 +72,7 @@ public class RtspService {
      * RTSP discovery configuration
      */
     public static class RtspDiscoveryConfig {
-        private RtspValidationMethod validationMethod = RtspValidationMethod.RTP_PACKET;
+        private RtspValidationMethod validationMethod = RtspValidationMethod.FRAME_CAPTURE;
         private int customTimeoutMs = 0; // 0 = use default for method
 
         public RtspValidationMethod getValidationMethod() {
