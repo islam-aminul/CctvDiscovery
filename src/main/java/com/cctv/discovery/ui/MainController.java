@@ -2201,38 +2201,33 @@ public class MainController {
         });
 
         // Content
-        VBox content = new VBox(15);
-        content.setPadding(new Insets(20));
+        VBox content = new VBox(8);
+        content.setPadding(new Insets(12));
         content.setPrefWidth(500);
 
         Label quickGuide = new Label(
-                "Quick Start Guide:\n\n" +
+                "Quick Start Guide:\n" +
                 "1. Network Selection:\n" +
                 "   • Simple Mode: Choose network interface, manual IP range, or CIDR\n" +
                 "   • Advanced Mode: Enable to select multiple sources\n" +
-                "   • Summary shows selected configuration in blue text\n\n" +
                 "2. Add Credentials (Required - Max 4):\n" +
                 "   • Default username 'admin' is pre-filled\n" +
                 "   • Enter password and click 'Add Credential'\n" +
-                "   • Right-click credentials to Edit or Delete\n\n" +
-                "3. RTSP Validation Method (in Discovery section):\n" +
-                "   • SDP Only: Fast (3s/URL), ~60% accurate - may have false positives\n" +
-                "   • RTP Packet: Medium (5s/URL), ~90% accurate - verifies streaming\n" +
-                "   • Frame Capture: Slow (10s/URL), ~98% accurate - verifies video (Default)\n" +
-                "   Choose based on your priority: speed vs accuracy\n\n" +
+                "   • Right-click credentials to Edit or Delete\n" +
+                "3. Verification Method:\n" +
+                "   • Quick Check: Fast (~3s), ~60% accurate\n" +
+                "   • Stream Test: Medium (~5s), ~90% accurate\n" +
+                "   • Video Capture: Thorough (~10s), ~98% accurate (Default)\n" +
                 "4. Configure Settings (Optional):\n" +
                 "   • Click 'Settings' to configure custom ports and RTSP paths\n" +
-                "   • Settings persist across application restarts\n\n" +
                 "5. Start Discovery:\n" +
-                "   • Click 'Start Discovery' button\n" +
-                "   • Monitor progress bar and status messages\n\n" +
+                "   • Click 'Start Discovery' and monitor progress\n" +
                 "6. View Results:\n" +
-                "   • Color-coded rows: Green (success), Yellow (authenticating),\n" +
+                "   • Color-coded: Green (success), Yellow (in progress),\n" +
                 "     Red (failed), Gray (not camera), Blue (discovered)\n" +
-                "   • Right-click failed devices to retry with different credentials\n\n" +
+                "   • Right-click failed devices to retry with different credentials\n" +
                 "7. Export Results:\n" +
-                "   • Enter Site ID, Premise Name, and Operator Name\n" +
-                "   • Click 'Export to Excel' and choose save location"
+                "   • Enter Site ID and click 'Export to Excel'"
         );
         quickGuide.setWrapText(true);
         quickGuide.setStyle("-fx-font-size: 10px;");
