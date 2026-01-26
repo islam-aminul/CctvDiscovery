@@ -119,6 +119,7 @@ public class MainController {
 
     // State
     private boolean discoveryInProgress = false;
+    private boolean discoveryCompleted = false;
     private boolean networkConfigured = false;
     private HostAuditData hostAuditData; // Collected at startup
 
@@ -1563,6 +1564,13 @@ public class MainController {
         boolean hasCredentials = !credentials.isEmpty();
 
         btnStart.setDisable(!networkConfigured || !hasCredentials || discoveryInProgress);
+
+        // After a completed discovery, restyle to blue and rename
+        if (discoveryCompleted && !discoveryInProgress) {
+            btnStart.setText("Restart Discovery");
+            btnStart.getStyleClass().remove("button-success");
+            btnStart.setStyle("-fx-background-color: #0078d4; -fx-text-fill: white; -fx-font-weight: bold;");
+        }
     }
 
     private void startDiscovery() {
@@ -1718,6 +1726,7 @@ public class MainController {
         Platform.runLater(() -> {
             progressBar.setProgress(1.0);
             lblProgress.setText("Discovery complete! Found " + finalDevices.size() + " devices.");
+            discoveryCompleted = true;
             enableInputs();
             btnExport.setDisable(finalDevices.isEmpty());
             updateExportButtonColor();
