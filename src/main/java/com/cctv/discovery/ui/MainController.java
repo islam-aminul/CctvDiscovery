@@ -1725,7 +1725,10 @@ public class MainController {
         // Complete
         Platform.runLater(() -> {
             progressBar.setProgress(1.0);
-            lblProgress.setText("Discovery complete! Found " + finalDevices.size() + " devices.");
+            long successCount = finalDevices.stream()
+                    .filter(d -> d.getStatus() == Device.DeviceStatus.COMPLETED)
+                    .count();
+            lblProgress.setText("Discovery complete! Found " + successCount + " devices.");
             discoveryCompleted = true;
             enableInputs();
             btnExport.setDisable(finalDevices.isEmpty());
