@@ -19,6 +19,7 @@ public class RTSPStream implements Serializable {
     private Double fps;
     private boolean compliant;
     private String complianceIssues;
+    private String sdpSessionName;
 
     public RTSPStream() {
     }
@@ -116,6 +117,14 @@ public class RTSPStream implements Serializable {
 
     public void setComplianceIssues(String complianceIssues) {
         this.complianceIssues = complianceIssues;
+    }
+
+    public String getSdpSessionName() {
+        return sdpSessionName;
+    }
+
+    public void setSdpSessionName(String sdpSessionName) {
+        this.sdpSessionName = sdpSessionName;
     }
 
     @Override

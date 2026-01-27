@@ -422,6 +422,160 @@ public class OnvifService {
     }
 
     /**
+     * Get device hostname using ONVIF GetHostname.
+     * Sets device name from the hostname if available.
+     */
+    public void getHostname(Device device) {
+        if (device.getOnvifServiceUrl() == null || device.getUsername() == null) {
+            return;
+        }
+        logger.info("Retrieving hostname for device: {}", device.getIpAddress());
+
+        try {
+            String soapRequest = buildGetHostnameRequest(device.getUsername(), device.getPassword());
+            String response = sendOnvifRequest(device.getOnvifServiceUrl(), soapRequest,
+                    device.getUsername(), device.getPassword());
+
+            if (response != null) {
+                parseHostname(device, response);
+            } else {
+                logger.debug("No response from GetHostname for {}", device.getIpAddress());
+            }
+        } catch (Exception e) {
+            logger.debug("Failed to get hostname for {}: {}", device.getIpAddress(), e.getMessage());
+        }
+    }
+
+    /**
+     * Build GetHostname SOAP request with WS-Security.
+     */
+    private String buildGetHostnameRequest(String username, String password) throws Exception {
+        MessageFactory messageFactory = MessageFactory.newInstance();
+        SOAPMessage soapMessage = messageFactory.createMessage();
+        SOAPPart soapPart = soapMessage.getSOAPPart();
+        SOAPEnvelope envelope = soapPart.getEnvelope();
+
+        envelope.addNamespaceDeclaration("tds", "http://www.onvif.org/ver10/device/wsdl");
+
+        SOAPHeader header = envelope.getHeader();
+        SOAPBody body = envelope.getBody();
+
+        // Add WS-Security header
+        String securityHeader = AuthUtils.generateWsSecurityHeader(username, password);
+        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+        factory.setNamespaceAware(true);
+        Document secDoc = factory.newDocumentBuilder().parse(
+                new ByteArrayInputStream(securityHeader.getBytes("UTF-8")));
+        header.appendChild(header.getOwnerDocument().importNode(secDoc.getDocumentElement(), true));
+
+        // Add body
+        body.addChildElement("GetHostname", "tds");
+
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        soapMessage.writeTo(out);
+        return out.toString("UTF-8");
+    }
+
+    /**
+     * Parse GetHostname response.
+     * Response structure: <HostnameInformation><Name>hostname</Name></HostnameInformation>
+     */
+    private void parseHostname(Device device, String xml) throws Exception {
+        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+        factory.setNamespaceAware(true);
+        DocumentBuilder builder = factory.newDocumentBuilder();
+        Document doc = builder.parse(new ByteArrayInputStream(xml.getBytes("UTF-8")));
+
+        String name = getElementText(doc, "Name");
+        if (name != null && !name.trim().isEmpty()) {
+            device.setDeviceName(name.trim());
+            logger.info("Retrieved hostname from ONVIF for {}: {}", device.getIpAddress(), name.trim());
+        } else {
+            logger.debug("GetHostname returned empty name for {}", device.getIpAddress());
+        }
+    }
+
+    /**
+     * Get network interfaces using ONVIF GetNetworkInterfaces.
+     * Retrieves MAC address (HwAddress) from the device directly.
+     * Used as fallback when ARP-based MAC resolution fails.
+     */
+    public void getNetworkInterfaces(Device device) {
+        if (device.getOnvifServiceUrl() == null || device.getUsername() == null) {
+            return;
+        }
+        logger.info("Retrieving network interfaces for device: {}", device.getIpAddress());
+
+        try {
+            String soapRequest = buildGetNetworkInterfacesRequest(device.getUsername(), device.getPassword());
+            String response = sendOnvifRequest(device.getOnvifServiceUrl(), soapRequest,
+                    device.getUsername(), device.getPassword());
+
+            if (response != null) {
+                parseNetworkInterfaces(device, response);
+            } else {
+                logger.debug("No response from GetNetworkInterfaces for {}", device.getIpAddress());
+            }
+        } catch (Exception e) {
+            logger.debug("Failed to get network interfaces for {}: {}", device.getIpAddress(), e.getMessage());
+        }
+    }
+
+    /**
+     * Build GetNetworkInterfaces SOAP request with WS-Security.
+     */
+    private String buildGetNetworkInterfacesRequest(String username, String password) throws Exception {
+        MessageFactory messageFactory = MessageFactory.newInstance();
+        SOAPMessage soapMessage = messageFactory.createMessage();
+        SOAPPart soapPart = soapMessage.getSOAPPart();
+        SOAPEnvelope envelope = soapPart.getEnvelope();
+
+        envelope.addNamespaceDeclaration("tds", "http://www.onvif.org/ver10/device/wsdl");
+
+        SOAPHeader header = envelope.getHeader();
+        SOAPBody body = envelope.getBody();
+
+        // Add WS-Security header
+        String securityHeader = AuthUtils.generateWsSecurityHeader(username, password);
+        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+        factory.setNamespaceAware(true);
+        Document secDoc = factory.newDocumentBuilder().parse(
+                new ByteArrayInputStream(securityHeader.getBytes("UTF-8")));
+        header.appendChild(header.getOwnerDocument().importNode(secDoc.getDocumentElement(), true));
+
+        // Add body
+        body.addChildElement("GetNetworkInterfaces", "tds");
+
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        soapMessage.writeTo(out);
+        return out.toString("UTF-8");
+    }
+
+    /**
+     * Parse GetNetworkInterfaces response.
+     * Response structure: <NetworkInterfaces><Info><HwAddress>xx:xx:xx:xx:xx:xx</HwAddress></Info></NetworkInterfaces>
+     */
+    private void parseNetworkInterfaces(Device device, String xml) throws Exception {
+        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+        factory.setNamespaceAware(true);
+        DocumentBuilder builder = factory.newDocumentBuilder();
+        Document doc = builder.parse(new ByteArrayInputStream(xml.getBytes("UTF-8")));
+
+        String hwAddress = getElementText(doc, "HwAddress");
+        if (hwAddress != null && !hwAddress.trim().isEmpty()) {
+            String mac = hwAddress.trim().toUpperCase();
+            // Normalize to XX:XX:XX:XX:XX:XX format if needed
+            if (mac.contains("-")) {
+                mac = mac.replace("-", ":");
+            }
+            device.setMacAddress(mac);
+            logger.info("Retrieved MAC address from ONVIF for {}: {}", device.getIpAddress(), mac);
+        } else {
+            logger.debug("GetNetworkInterfaces returned no HwAddress for {}", device.getIpAddress());
+        }
+    }
+
+    /**
      * Send ONVIF SOAP request and get response.
      */
     private String sendOnvifRequest(String serviceUrl, String soapRequest, String username, String password) {
