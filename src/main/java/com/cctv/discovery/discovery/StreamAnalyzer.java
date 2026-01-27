@@ -101,6 +101,13 @@ public class StreamAnalyzer {
             String codecName = getCodecName(videoCodec);
             stream.setCodec(codecName);
 
+            // Extract H.264 profile from FFmpeg metadata
+            String profileName = extractProfile(grabber);
+            if (profileName != null) {
+                stream.setProfile(profileName);
+                logger.debug("Detected profile: {} for {}", profileName, stream.getRtspUrl());
+            }
+
             // Calculate bitrate by sampling frames
             long startTime = System.currentTimeMillis();
             long totalBytes = 0;
@@ -129,11 +136,12 @@ public class StreamAnalyzer {
             // Check compliance
             checkCompliance(stream);
 
-            logger.info("Stream analyzed: {} - {}@{}fps, {}, {}kbps",
+            logger.info("Stream analyzed: {} - {}@{}fps, {} ({}), {}kbps",
                     stream.getRtspUrl(),
                     stream.getResolution(),
                     stream.getFps(),
                     stream.getCodec(),
+                    stream.getProfile() != null ? stream.getProfile() : "N/A",
                     stream.getBitrateKbps());
 
         } catch (Exception e) {
@@ -171,6 +179,73 @@ public class StreamAnalyzer {
     }
 
     /**
+     * Extract H.264 profile from FFmpegFrameGrabber.
+     * Uses the video codec context's profile field.
+     *
+     * H.264 profile IDs (from FFmpeg avcodec.h):
+     *   66 = Baseline, 77 = Main, 88 = Extended,
+     *   100 = High, 110 = High 10, 122 = High 4:2:2, 244 = High 4:4:4 Predictive,
+     *   44 = CAVLC 4:4:4, 83 = Scalable Baseline, 86 = Scalable High,
+     *   118 = Multiview High, 128 = Stereo High, 138 = Multiview Depth High
+     */
+    private String extractProfile(FFmpegFrameGrabber grabber) {
+        try {
+            // JavaCV exposes the video codec context; getVideoCodecName gives codec string
+            String videoCodecName = grabber.getVideoCodecName();
+            if (videoCodecName == null) {
+                return null;
+            }
+
+            // Try to get profile from FFmpeg metadata
+            String metadata = grabber.getVideoMetadata("profile");
+            if (metadata != null && !metadata.isEmpty()) {
+                return metadata;
+            }
+
+            // Fallback: parse profile from SPS via format context metadata
+            // FFmpeg sets profile in the codec context; access via getVideoSideData or metadata
+            String formatMeta = grabber.getMetadata("profile");
+            if (formatMeta != null && !formatMeta.isEmpty()) {
+                return formatMeta;
+            }
+
+            // Fallback: use pixel format as a proxy hint
+            // High 10 uses yuv420p10le, High 4:2:2 uses yuv422p, High 4:4:4 uses yuv444p
+            int pixFmt = grabber.getPixelFormat();
+            if (videoCodecName.contains("h264") || videoCodecName.contains("H264")
+                    || videoCodecName.contains("264")) {
+                // avutil pixel format IDs (common):
+                // 0 = yuv420p (Baseline/Main/High), 64 = yuv420p10le (High 10)
+                // 4 = yuv422p (High 4:2:2), 5 = yuv444p (High 4:4:4)
+                if (pixFmt == 64 || pixFmt == 68) {
+                    return "High 10";
+                } else if (pixFmt == 4) {
+                    return "High 4:2:2";
+                } else if (pixFmt == 5) {
+                    return "High 4:4:4";
+                }
+            }
+
+            return null;
+        } catch (Exception e) {
+            logger.debug("Could not extract profile: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Check if a profile is considered "High" and requires transcoding for browser HLS playback.
+     * Baseline and Main profiles are directly playable. High and above require transcoding.
+     */
+    private boolean isHighProfile(String profile) {
+        if (profile == null) {
+            return false;
+        }
+        String lower = profile.toLowerCase();
+        return lower.contains("high");
+    }
+
+    /**
      * Estimate frame size in bytes (rough approximation).
      */
     private int estimateFrameSize(Frame frame) {
@@ -188,44 +263,50 @@ public class StreamAnalyzer {
 
     /**
      * Check stream compliance with requirements.
-     * Sub-stream should be: 360p-480p, H.264, <256kbps
+     * Sub-stream: 360p-480p, H.264, <512kbps, Baseline/Main profile (not High).
+     * All streams: High profile flagged (requires transcoding for browser HLS).
      */
     private void checkCompliance(RTSPStream stream) {
         List<String> issues = new ArrayList<>();
 
-        // Only check sub-streams
-        String streamName = stream.getStreamName();
-        if (streamName == null || !streamName.toLowerCase().contains("sub")) {
-            stream.setCompliant(true);
-            return;
+        // Check H.264 profile on ALL streams (High profiles need transcoding for HLS)
+        String profile = stream.getProfile();
+        if (isHighProfile(profile)) {
+            issues.add("High profile (requires transcoding for browser HLS)");
         }
 
-        // Check resolution (360p-480p = 640x360 to 720x480)
-        String resolution = stream.getResolution();
-        if (resolution != null) {
-            String[] parts = resolution.split("x");
-            if (parts.length == 2) {
-                try {
-                    int height = Integer.parseInt(parts[1]);
-                    if (height < 360 || height > 480) {
-                        issues.add("Resolution not in 360p-480p range");
+        // Sub-stream specific checks
+        String streamName = stream.getStreamName();
+        boolean isSub = streamName != null && streamName.toLowerCase().contains("sub");
+
+        if (isSub) {
+            // Check resolution (360p-480p = 640x360 to 720x480)
+            String resolution = stream.getResolution();
+            if (resolution != null) {
+                String[] parts = resolution.split("x");
+                if (parts.length == 2) {
+                    try {
+                        int height = Integer.parseInt(parts[1]);
+                        if (height < 360 || height > 480) {
+                            issues.add("Resolution not in 360p-480p range");
+                        }
+                    } catch (NumberFormatException e) {
+                        // Ignore
                     }
-                } catch (NumberFormatException e) {
-                    // Ignore
                 }
             }
-        }
 
-        // Check codec (should be H.264)
-        String codec = stream.getCodec();
-        if (codec != null && !codec.contains("H.264")) {
-            issues.add("Codec is not H.264");
-        }
+            // Check codec (should be H.264)
+            String codec = stream.getCodec();
+            if (codec != null && !codec.contains("H.264")) {
+                issues.add("Codec is not H.264");
+            }
 
-        // Check bitrate (should be < 256kbps)
-        Integer bitrate = stream.getBitrateKbps();
-        if (bitrate != null && bitrate >= 256) {
-            issues.add("Bitrate >= 256kbps");
+            // Check bitrate (should be < 512kbps)
+            Integer bitrate = stream.getBitrateKbps();
+            if (bitrate != null && bitrate >= 512) {
+                issues.add("Bitrate >= 512kbps");
+            }
         }
 
         if (!issues.isEmpty()) {

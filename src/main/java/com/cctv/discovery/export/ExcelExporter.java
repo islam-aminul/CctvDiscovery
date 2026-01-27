@@ -41,7 +41,7 @@ public class ExcelExporter {
         Cell warningCell = warningRow.createCell(0);
         warningCell.setCellValue("⚠ WARNING: This document contains PLAINTEXT PASSWORDS. Handle with care! [PROTECTED]");
         warningCell.setCellStyle(warningStyle);
-        sheet.addMergedRegion(new CellRangeAddress(0, 0, 0, 15));
+        sheet.addMergedRegion(new CellRangeAddress(0, 0, 0, 17));
         warningRow.setHeightInPoints(25);
 
         // Metadata rows
@@ -60,7 +60,7 @@ public class ExcelExporter {
         String[] headers = {
                 "IP", "MAC", "Name", "Type", "Manufacturer", "Model", "Serial Number",
                 "Time Diff (sec)", "Username", "Password", "Error",
-                "Stream Name", "RTSP URL", "Resolution", "Codec", "Bitrate (kbps)", "FPS"
+                "Stream Name", "RTSP URL", "Resolution", "Codec", "Profile", "Bitrate (kbps)", "FPS"
         };
 
         for (int i = 0; i < headers.length; i++) {
@@ -168,16 +168,34 @@ public class ExcelExporter {
             createCell(row, 11, stream.getStreamName(), dataStyle);
             createCell(row, 12, stream.getRtspUrl(), dataStyle);
 
-            // Compliance-checked columns
-            boolean isNonCompliant = stream.getComplianceIssues() != null && !stream.getComplianceIssues().isEmpty();
-            CellStyle streamStyle = isNonCompliant ? redStyle : dataStyle;
+            // Per-cell compliance flagging based on individual issues
+            String issues = stream.getComplianceIssues();
+            boolean hasIssues = issues != null && !issues.isEmpty();
 
-            createCell(row, 13, stream.getResolution(), streamStyle);
-            createCell(row, 14, stream.getCodec(), streamStyle);
-            createCell(row, 15, stream.getBitrateKbps() != null ?
-                    stream.getBitrateKbps().toString() : "", streamStyle);
-            createCell(row, 16, stream.getFps() != null ?
-                    String.format("%.2f", stream.getFps()) : "", streamStyle);
+            // Resolution: red if non-compliant sub-stream resolution
+            boolean resolutionFlagged = hasIssues && issues.contains("Resolution");
+            createCell(row, 13, stream.getResolution(),
+                    resolutionFlagged ? redStyle : dataStyle);
+
+            // Codec: red if not H.264
+            boolean codecFlagged = hasIssues && issues.contains("Codec");
+            createCell(row, 14, stream.getCodec(),
+                    codecFlagged ? redStyle : dataStyle);
+
+            // Profile: red if High profile (requires transcoding)
+            boolean profileFlagged = hasIssues && issues.contains("High profile");
+            createCell(row, 15, stream.getProfile() != null ? stream.getProfile() : "",
+                    profileFlagged ? redStyle : dataStyle);
+
+            // Bitrate: red if >= 512kbps
+            boolean bitrateFlagged = hasIssues && issues.contains("Bitrate");
+            createCell(row, 16, stream.getBitrateKbps() != null ?
+                    stream.getBitrateKbps().toString() : "",
+                    bitrateFlagged ? redStyle : dataStyle);
+
+            // FPS: normal style (no compliance rule)
+            createCell(row, 17, stream.getFps() != null ?
+                    String.format("%.2f", stream.getFps()) : "", dataStyle);
         }
 
         return rowNum + 1;
@@ -240,9 +258,9 @@ public class ExcelExporter {
         Font font = workbook.createFont();
         font.setFontName("Consolas");
         font.setFontHeightInPoints((short) 10);
+        font.setBold(true);
+        font.setColor(IndexedColors.RED.getIndex());
         style.setFont(font);
-        style.setFillForegroundColor(IndexedColors.RED.getIndex());
-        style.setFillPattern(FillPatternType.SOLID_FOREGROUND);
         style.setBorderBottom(BorderStyle.THIN);
         style.setBorderTop(BorderStyle.THIN);
         style.setBorderLeft(BorderStyle.THIN);

@@ -14,6 +14,7 @@ public class RTSPStream implements Serializable {
     private String rtspUrl;
     private String resolution;
     private String codec;
+    private String profile;
     private Integer bitrateKbps;
     private Double fps;
     private boolean compliant;
@@ -77,6 +78,14 @@ public class RTSPStream implements Serializable {
         this.codec = codec;
     }
 
+    public String getProfile() {
+        return profile;
+    }
+
+    public void setProfile(String profile) {
+        this.profile = profile;
+    }
+
     public Integer getBitrateKbps() {
         return bitrateKbps;
     }
@@ -116,6 +125,7 @@ public class RTSPStream implements Serializable {
                 ", rtspUrl='" + rtspUrl + '\'' +
                 ", resolution='" + resolution + '\'' +
                 ", codec='" + codec + '\'' +
+                ", profile='" + profile + '\'' +
                 ", bitrateKbps=" + bitrateKbps +
                 ", fps=" + fps +
                 ", compliant=" + compliant +
