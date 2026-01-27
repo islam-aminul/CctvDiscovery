@@ -9,6 +9,7 @@ import com.cctv.discovery.model.Device;
 import com.cctv.discovery.model.HostAuditData;
 import com.cctv.discovery.model.RTSPStream;
 import com.cctv.discovery.service.HostAuditService;
+import com.cctv.discovery.service.MacLookupService;
 import com.cctv.discovery.service.OnvifService;
 import com.cctv.discovery.service.RtspService;
 import com.cctv.discovery.util.NetworkUtils;
@@ -1833,6 +1834,24 @@ public class MainController {
                         device.setNvrDvr(true);
                         logger.info("Multiple video sources detected - marking as NVR/DVR");
                     }
+
+                    // Retrieve device name via ONVIF GetHostname
+                    onvifService.getHostname(device);
+
+                    // Retrieve MAC via ONVIF GetNetworkInterfaces if ARP resolution failed
+                    if (device.getMacAddress() == null || device.getMacAddress().isEmpty()) {
+                        onvifService.getNetworkInterfaces(device);
+                        // Lookup manufacturer from ONVIF-retrieved MAC if not already known
+                        if (device.getMacAddress() != null &&
+                                (device.getManufacturer() == null || "Unknown".equals(device.getManufacturer()))) {
+                            String manufacturer = MacLookupService.getInstance().lookupManufacturer(device.getMacAddress());
+                            if (manufacturer != null && !"Unknown".equals(manufacturer)) {
+                                device.setManufacturer(manufacturer);
+                                logger.info("Manufacturer from ONVIF MAC: {}", manufacturer);
+                            }
+                        }
+                    }
+
                     return true;
                 }
             }
@@ -1861,6 +1880,24 @@ public class MainController {
                             device.setNvrDvr(true);
                             logger.info("Multiple video sources detected - marking as NVR/DVR");
                         }
+
+                        // Retrieve device name via ONVIF GetHostname
+                        onvifService.getHostname(device);
+
+                        // Retrieve MAC via ONVIF GetNetworkInterfaces if ARP resolution failed
+                        if (device.getMacAddress() == null || device.getMacAddress().isEmpty()) {
+                            onvifService.getNetworkInterfaces(device);
+                            // Lookup manufacturer from ONVIF-retrieved MAC if not already known
+                            if (device.getMacAddress() != null &&
+                                    (device.getManufacturer() == null || "Unknown".equals(device.getManufacturer()))) {
+                                String manufacturer = MacLookupService.getInstance().lookupManufacturer(device.getMacAddress());
+                                if (manufacturer != null && !"Unknown".equals(manufacturer)) {
+                                    device.setManufacturer(manufacturer);
+                                    logger.info("Manufacturer from ONVIF MAC: {}", manufacturer);
+                                }
+                            }
+                        }
+
                         return true;
                     }
                 }
@@ -1895,6 +1932,18 @@ public class MainController {
                 device.getRtspStreams().addAll(streams);
                 logger.info("RTSP discovery successful with user: {} - found {} streams",
                         cred.getUsername(), streams.size());
+
+                // Extract device name from SDP session name if not already set by ONVIF
+                if (device.getDeviceName() == null || device.getDeviceName().isEmpty()) {
+                    for (RTSPStream stream : streams) {
+                        if (stream.getSdpSessionName() != null) {
+                            device.setDeviceName(stream.getSdpSessionName());
+                            logger.info("Set device name from SDP session name: {}", stream.getSdpSessionName());
+                            break;
+                        }
+                    }
+                }
+
                 return true;
             }
         }

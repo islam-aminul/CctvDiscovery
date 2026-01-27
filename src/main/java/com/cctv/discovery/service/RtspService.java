@@ -478,6 +478,11 @@ public class RtspService {
                 if (validateSdp(sdpBody.toString(), rtspUrl)) {
                     logger.info("RTSP URL validated with SDP: {}", rtspUrl);
                     RTSPStream stream = new RTSPStream("Main", rtspUrl);
+                    String sessionName = parseSdpSessionName(sdpBody.toString());
+                    if (sessionName != null) {
+                        stream.setSdpSessionName(sessionName);
+                        logger.debug("SDP session name extracted: {}", sessionName);
+                    }
                     return stream;
                 } else {
                     logger.warn("RTSP URL returned 200 OK but invalid/missing SDP: {}", rtspUrl);
@@ -709,6 +714,11 @@ public class RtspService {
             if (validateSdp(sdpBody.toString(), rtspUrl)) {
                 logger.info("RTSP URL authenticated and validated with SDP: {}", rtspUrl);
                 RTSPStream stream = new RTSPStream("Main", rtspUrl);
+                String sessionName = parseSdpSessionName(sdpBody.toString());
+                if (sessionName != null) {
+                    stream.setSdpSessionName(sessionName);
+                    logger.debug("SDP session name extracted: {}", sessionName);
+                }
                 return stream;
             } else {
                 logger.warn("RTSP URL authenticated but invalid/missing SDP: {}", rtspUrl);
@@ -970,7 +980,13 @@ public class RtspService {
             if (packetsReceived >= 5) {
                 logger.info("✓ RTP validation SUCCESS: {} ({} packets)", rtspUrl, packetsReceived);
                 logger.debug("===========================================");
-                return new RTSPStream("Main", rtspUrl);
+                RTSPStream stream = new RTSPStream("Main", rtspUrl);
+                String sessionName = parseSdpSessionName(sdpContent);
+                if (sessionName != null) {
+                    stream.setSdpSessionName(sessionName);
+                    logger.debug("SDP session name extracted: {}", sessionName);
+                }
+                return stream;
             } else {
                 logger.debug("✗ Insufficient RTP packets: {} (need 5)", packetsReceived);
                 logger.debug("===========================================");
@@ -1172,6 +1188,32 @@ public class RtspService {
                     rtspUrl, hasVersion, hasVideoMedia, hasCodecInfo);
 
         return true;
+    }
+
+    /**
+     * Parse session name (s= line) from SDP content.
+     * The SDP session name often contains the device/camera name or model.
+     *
+     * @param sdpContent The SDP body from RTSP DESCRIBE response
+     * @return Session name string, or null if not found or meaningless
+     */
+    private String parseSdpSessionName(String sdpContent) {
+        if (sdpContent == null || sdpContent.isEmpty()) {
+            return null;
+        }
+
+        String[] lines = sdpContent.split("\r?\n");
+        for (String line : lines) {
+            line = line.trim();
+            if (line.startsWith("s=")) {
+                String name = line.substring(2).trim();
+                // Filter out empty or meaningless placeholder values
+                if (!name.isEmpty() && !name.equals("-") && !name.equals(" ")) {
+                    return name;
+                }
+            }
+        }
+        return null;
     }
 
     /**
