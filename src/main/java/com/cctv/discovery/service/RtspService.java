@@ -740,6 +740,7 @@ public class RtspService {
         Socket socket = null;
         DatagramSocket rtpSocket = null;
         String sessionId = null;
+        String authorizationHeader = null;
 
         try {
             String host = extractHost(rtspUrl);
@@ -754,9 +755,10 @@ public class RtspService {
             logger.debug("========== RTP PACKET VALIDATION ==========");
             logger.debug("URL: {}, Timeout: {}ms", rtspUrl, timeout);
 
-            // Step 1: DESCRIBE
+            // Step 1: DESCRIBE (unauthenticated first)
+            int cseq = 1;
             String describeRequest = "DESCRIBE " + rtspUrl + " RTSP/1.0\r\n" +
-                                   "CSeq: 1\r\n" +
+                                   "CSeq: " + cseq + "\r\n" +
                                    "User-Agent: CCTV-Discovery/1.0\r\n" +
                                    "Accept: application/sdp\r\n\r\n";
 
@@ -769,18 +771,101 @@ public class RtspService {
                 return null;
             }
 
-            // Handle authentication
-            if (responseLine.contains("401")) {
-                logger.debug("Authentication required, not supported in RTP method yet");
-                return null;  // TODO: Add auth support if needed
+            // Read headers from initial DESCRIBE response
+            StringBuilder describeHeaders = new StringBuilder();
+            String headerLine;
+            while ((headerLine = in.readLine()) != null && !headerLine.isEmpty()) {
+                describeHeaders.append(headerLine).append("\n");
             }
 
-            if (!responseLine.contains("200")) {
+            // Handle authentication - retry DESCRIBE with credentials
+            if (responseLine.contains("401")) {
+                logger.debug("RTP validation: 401 received, attempting authentication for {}", rtspUrl);
+
+                if (username == null || username.isEmpty()) {
+                    logger.debug("No credentials available for RTP authentication");
+                    return null;
+                }
+
+                // Parse WWW-Authenticate challenges
+                java.util.List<AuthUtils.AuthChallenge> challenges = new java.util.ArrayList<>();
+                for (String line : describeHeaders.toString().split("\n")) {
+                    if (line.startsWith("WWW-Authenticate:")) {
+                        String authHeader = line.substring(17).trim();
+                        AuthUtils.AuthChallenge challenge = AuthUtils.parseAuthChallenge(authHeader);
+                        if (challenge != null) {
+                            challenges.add(challenge);
+                        }
+                    }
+                }
+
+                if (challenges.isEmpty()) {
+                    logger.debug("No WWW-Authenticate challenges found in 401 response");
+                    return null;
+                }
+
+                // Sort: Digest preferred over Basic
+                challenges.sort((a, b) -> {
+                    if (a.type == AuthUtils.AuthType.DIGEST) return -1;
+                    if (b.type == AuthUtils.AuthType.DIGEST) return 1;
+                    return 0;
+                });
+
+                // Build authorization header from first valid challenge
+                for (AuthUtils.AuthChallenge challenge : challenges) {
+                    if (!AuthUtils.isValidChallenge(challenge)) continue;
+
+                    if (challenge.type == AuthUtils.AuthType.DIGEST) {
+                        String uri = extractUri(rtspUrl);
+                        authorizationHeader = AuthUtils.buildDigestAuthHeader(
+                            username, password, challenge.realm, challenge.nonce,
+                            uri, "DESCRIBE", challenge.opaque
+                        );
+                        logger.debug("RTP: Using Digest authentication");
+                        break;
+                    } else if (challenge.type == AuthUtils.AuthType.BASIC) {
+                        authorizationHeader = AuthUtils.generateBasicAuth(username, password);
+                        logger.debug("RTP: Using Basic authentication");
+                        break;
+                    }
+                }
+
+                if (authorizationHeader == null) {
+                    logger.debug("Failed to build authorization header");
+                    return null;
+                }
+
+                // Close old socket, open fresh connection for authenticated session
+                try { socket.close(); } catch (Exception ignored) {}
+
+                socket = new Socket(host, port);
+                socket.setSoTimeout(timeout);
+                out = socket.getOutputStream();
+                in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+
+                // Re-send DESCRIBE with auth
+                cseq++;
+                String authDescribe = "DESCRIBE " + rtspUrl + " RTSP/1.0\r\n" +
+                                     "CSeq: " + cseq + "\r\n" +
+                                     "User-Agent: CCTV-Discovery/1.0\r\n" +
+                                     "Authorization: " + authorizationHeader + "\r\n" +
+                                     "Accept: application/sdp\r\n\r\n";
+
+                out.write(authDescribe.getBytes());
+                out.flush();
+
+                responseLine = in.readLine();
+                if (responseLine == null || !responseLine.contains("200")) {
+                    logger.debug("Authenticated DESCRIBE failed: {}", responseLine);
+                    return null;
+                }
+                logger.debug("RTP: Authenticated DESCRIBE succeeded");
+            } else if (!responseLine.contains("200")) {
                 logger.debug("DESCRIBE failed: {}", responseLine);
                 return null;
             }
 
-            // Read SDP
+            // Read SDP (from either unauthenticated or authenticated 200 response)
             StringBuilder sdp = new StringBuilder();
             String line;
             boolean inBody = false;
@@ -804,15 +889,21 @@ public class RtspService {
             // Step 2: Extract control URL
             String controlUrl = extractControlUrlFromSdp(sdpContent, rtspUrl);
 
-            // Step 3: SETUP
+            // Step 3: SETUP (with auth if needed)
             rtpSocket = new DatagramSocket();
             int clientRtpPort = rtpSocket.getLocalPort();
 
-            String setupRequest = "SETUP " + controlUrl + " RTSP/1.0\r\n" +
-                                "CSeq: 2\r\n" +
-                                "Transport: RTP/AVP;unicast;client_port=" + clientRtpPort + "-" + (clientRtpPort + 1) + "\r\n\r\n";
+            cseq++;
+            StringBuilder setupBuilder = new StringBuilder();
+            setupBuilder.append("SETUP ").append(controlUrl).append(" RTSP/1.0\r\n");
+            setupBuilder.append("CSeq: ").append(cseq).append("\r\n");
+            if (authorizationHeader != null) {
+                setupBuilder.append("Authorization: ").append(authorizationHeader).append("\r\n");
+            }
+            setupBuilder.append("Transport: RTP/AVP;unicast;client_port=")
+                        .append(clientRtpPort).append("-").append(clientRtpPort + 1).append("\r\n\r\n");
 
-            out.write(setupRequest.getBytes());
+            out.write(setupBuilder.toString().getBytes());
             out.flush();
 
             responseLine = in.readLine();
@@ -833,13 +924,18 @@ public class RtspService {
                 return null;
             }
 
-            // Step 4: PLAY
-            String playRequest = "PLAY " + rtspUrl + " RTSP/1.0\r\n" +
-                               "CSeq: 3\r\n" +
-                               "Session: " + sessionId + "\r\n" +
-                               "Range: npt=0.000-\r\n\r\n";
+            // Step 4: PLAY (with auth if needed)
+            cseq++;
+            StringBuilder playBuilder = new StringBuilder();
+            playBuilder.append("PLAY ").append(rtspUrl).append(" RTSP/1.0\r\n");
+            playBuilder.append("CSeq: ").append(cseq).append("\r\n");
+            playBuilder.append("Session: ").append(sessionId).append("\r\n");
+            if (authorizationHeader != null) {
+                playBuilder.append("Authorization: ").append(authorizationHeader).append("\r\n");
+            }
+            playBuilder.append("Range: npt=0.000-\r\n\r\n");
 
-            out.write(playRequest.getBytes());
+            out.write(playBuilder.toString().getBytes());
             out.flush();
 
             responseLine = in.readLine();
@@ -886,14 +982,19 @@ public class RtspService {
             logger.debug("===========================================");
             return null;
         } finally {
-            // Cleanup
+            // Cleanup - send TEARDOWN with auth
             if (sessionId != null && socket != null) {
                 try {
                     OutputStream out = socket.getOutputStream();
-                    String teardown = "TEARDOWN " + rtspUrl + " RTSP/1.0\r\n" +
-                                    "CSeq: 4\r\n" +
-                                    "Session: " + sessionId + "\r\n\r\n";
-                    out.write(teardown.getBytes());
+                    StringBuilder teardownBuilder = new StringBuilder();
+                    teardownBuilder.append("TEARDOWN ").append(rtspUrl).append(" RTSP/1.0\r\n");
+                    teardownBuilder.append("CSeq: 5\r\n");
+                    teardownBuilder.append("Session: ").append(sessionId).append("\r\n");
+                    if (authorizationHeader != null) {
+                        teardownBuilder.append("Authorization: ").append(authorizationHeader).append("\r\n");
+                    }
+                    teardownBuilder.append("\r\n");
+                    out.write(teardownBuilder.toString().getBytes());
                     out.flush();
                 } catch (Exception ignored) {}
             }
