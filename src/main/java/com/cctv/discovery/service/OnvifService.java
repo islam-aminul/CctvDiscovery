@@ -1,7 +1,6 @@
 package com.cctv.discovery.service;
 
 import com.cctv.discovery.model.Device;
-import com.cctv.discovery.model.RTSPStream;
 import com.cctv.discovery.util.AuthUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,7 +21,6 @@ import java.io.InputStream;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
-import java.net.InetSocketAddress;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.security.cert.X509Certificate;
@@ -40,22 +38,25 @@ public class OnvifService {
     private static final int WS_DISCOVERY_PORT = 3702;
     private static final int DISCOVERY_TIMEOUT_MS = 5000;
 
-    // Static block to disable SSL certificate validation for self-signed camera certificates
+    // Static block to disable SSL certificate validation for self-signed camera
+    // certificates
     static {
         try {
             // Create a trust manager that trusts all certificates
-            TrustManager[] trustAllCerts = new TrustManager[]{
-                new X509TrustManager() {
-                    public X509Certificate[] getAcceptedIssuers() {
-                        return null;
+            TrustManager[] trustAllCerts = new TrustManager[] {
+                    new X509TrustManager() {
+                        public X509Certificate[] getAcceptedIssuers() {
+                            return null;
+                        }
+
+                        public void checkClientTrusted(X509Certificate[] certs, String authType) {
+                            // Trust all client certificates
+                        }
+
+                        public void checkServerTrusted(X509Certificate[] certs, String authType) {
+                            // Trust all server certificates (cameras with self-signed certs)
+                        }
                     }
-                    public void checkClientTrusted(X509Certificate[] certs, String authType) {
-                        // Trust all client certificates
-                    }
-                    public void checkServerTrusted(X509Certificate[] certs, String authType) {
-                        // Trust all server certificates (cameras with self-signed certs)
-                    }
-                }
             };
 
             // Install the all-trusting trust manager
@@ -243,7 +244,8 @@ public class OnvifService {
     }
 
     /**
-     * Get device information using ONVIF GetDeviceInformation with explicit service URL.
+     * Get device information using ONVIF GetDeviceInformation with explicit service
+     * URL.
      */
     public boolean getDeviceInformation(Device device, String serviceUrl, String username, String password) {
         logger.info("ONVIF GetDeviceInformation request to {} with user {}", serviceUrl, username);
@@ -263,7 +265,7 @@ public class OnvifService {
             device.setOnvifAuthMethod(Device.OnvifAuthMethod.WS_SECURITY);
 
             logger.info("ONVIF GetDeviceInformation SUCCESS - Model: {}, Manufacturer: {}",
-                device.getModel(), device.getManufacturer());
+                    device.getModel(), device.getManufacturer());
 
             return true;
 
@@ -275,7 +277,8 @@ public class OnvifService {
 
     /**
      * Try ONVIF device discovery using constructed URLs from detected ports.
-     * Used when WS-Discovery fails (IGMP blocked) but device has HTTP/HTTPS ports open.
+     * Used when WS-Discovery fails (IGMP blocked) but device has HTTP/HTTPS ports
+     * open.
      */
     public boolean discoverDeviceByPort(Device device, int port, String username, String password) {
         String protocol = (port == 443 || port == 8443) ? "https" : "http";
@@ -478,7 +481,8 @@ public class OnvifService {
 
     /**
      * Parse GetHostname response.
-     * Response structure: <HostnameInformation><Name>hostname</Name></HostnameInformation>
+     * Response structure:
+     * <HostnameInformation><Name>hostname</Name></HostnameInformation>
      */
     private void parseHostname(Device device, String xml) throws Exception {
         DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
@@ -553,7 +557,8 @@ public class OnvifService {
 
     /**
      * Parse GetNetworkInterfaces response.
-     * Response structure: <NetworkInterfaces><Info><HwAddress>xx:xx:xx:xx:xx:xx</HwAddress></Info></NetworkInterfaces>
+     * Response structure:
+     * <NetworkInterfaces><Info><HwAddress>xx:xx:xx:xx:xx:xx</HwAddress></Info></NetworkInterfaces>
      */
     private void parseNetworkInterfaces(Device device, String xml) throws Exception {
         DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();

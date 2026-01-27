@@ -13,9 +13,6 @@ import javafx.stage.Stage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
-import java.util.List;
-
 /**
  * Simplified settings dialog for non-technical users.
  * Only allows configuration of ports and custom RTSP paths.
@@ -120,8 +117,7 @@ public class SettingsDialog extends Stage {
                 title,
                 subtitle,
                 tabPane,
-                buttonBox
-        );
+                buttonBox);
 
         return vbox;
     }
@@ -132,7 +128,8 @@ public class SettingsDialog extends Stage {
         Label lblTitle = new Label("Port Configuration");
         lblTitle.setStyle("-fx-font-weight: bold; -fx-font-size: 13px;");
 
-        Label lblHelp = new Label("Only change these if your camera uses non-standard ports. Enter a single port or multiple ports separated by commas.");
+        Label lblHelp = new Label(
+                "Only change these if your camera uses non-standard ports. Enter a single port or multiple ports separated by commas.");
         lblHelp.setStyle("-fx-text-fill: #666; -fx-font-size: 11px;");
         lblHelp.setWrapText(true);
 
@@ -223,7 +220,8 @@ public class SettingsDialog extends Stage {
         removeBox.setAlignment(Pos.CENTER);
         removeBox.getChildren().add(btnRemove);
 
-        Label lblNote = new Label("💡 Tip: Main stream is usually high quality, Sub stream is lower quality for bandwidth saving");
+        Label lblNote = new Label(
+                "💡 Tip: Main stream is usually high quality, Sub stream is lower quality for bandwidth saving");
         lblNote.setStyle("-fx-text-fill: #0066cc; -fx-font-size: 10px; -fx-font-style: italic;");
         lblNote.setWrapText(true);
 
@@ -238,7 +236,8 @@ public class SettingsDialog extends Stage {
         Label lblTitle = new Label("RTSP Validation Method");
         lblTitle.setStyle("-fx-font-weight: bold; -fx-font-size: 13px;");
 
-        Label lblHelp = new Label("Choose how RTSP stream URLs are validated during discovery. Higher accuracy takes more time.");
+        Label lblHelp = new Label(
+                "Choose how RTSP stream URLs are validated during discovery. Higher accuracy takes more time.");
         lblHelp.setStyle("-fx-text-fill: #666; -fx-font-size: 11px;");
         lblHelp.setWrapText(true);
 
@@ -278,7 +277,8 @@ public class SettingsDialog extends Stage {
 
         timeoutBox.getChildren().addAll(tfCustomTimeout, lblMs);
 
-        Label lblNote = new Label("💡 Tip: Frame Capture is recommended for accurate production audits. Use SDP Only for quick preliminary scans.");
+        Label lblNote = new Label(
+                "💡 Tip: Frame Capture is recommended for accurate production audits. Use SDP Only for quick preliminary scans.");
         lblNote.setStyle("-fx-text-fill: #0066cc; -fx-font-size: 10px; -fx-font-style: italic;");
         lblNote.setWrapText(true);
 
@@ -319,7 +319,8 @@ public class SettingsDialog extends Stage {
         // Case 2: Check for duplicate (main, sub) pair
         String pairDisplay = String.format("Main: %s | Sub: %s", mainPath, subPath);
         if (pathPairs.contains(pairDisplay)) {
-            showError("Duplicate Path Pair", "This exact path pair already exists:\n\nMain: " + mainPath + "\nSub: " + subPath);
+            showError("Duplicate Path Pair",
+                    "This exact path pair already exists:\n\nMain: " + mainPath + "\nSub: " + subPath);
             return;
         }
 
@@ -431,10 +432,12 @@ public class SettingsDialog extends Stage {
             if (httpHadDuplicates || rtspHadDuplicates) {
                 StringBuilder message = new StringBuilder("Duplicate ports were automatically removed:\n\n");
                 if (httpHadDuplicates) {
-                    message.append("HTTP Ports: ").append(httpPorts).append(" → ").append(deduplicatedHttpPorts).append("\n");
+                    message.append("HTTP Ports: ").append(httpPorts).append(" → ").append(deduplicatedHttpPorts)
+                            .append("\n");
                 }
                 if (rtspHadDuplicates) {
-                    message.append("RTSP Ports: ").append(rtspPorts).append(" → ").append(deduplicatedRtspPorts).append("\n");
+                    message.append("RTSP Ports: ").append(rtspPorts).append(" → ").append(deduplicatedRtspPorts)
+                            .append("\n");
                 }
 
                 Alert info = new Alert(Alert.AlertType.INFORMATION);
@@ -587,8 +590,10 @@ public class SettingsDialog extends Stage {
 
     /**
      * Deduplicates a comma-separated list of ports while preserving order
+     * 
      * @param portList comma-separated port list
-     * @return String array: [0] = deduplicated ports, [1] = "true" if duplicates found, "false" otherwise
+     * @return String array: [0] = deduplicated ports, [1] = "true" if duplicates
+     *         found, "false" otherwise
      */
     private String[] deduplicatePorts(String portList) {
         String[] parts = portList.split(",");
@@ -609,6 +614,6 @@ public class SettingsDialog extends Stage {
             result.append(port);
         }
 
-        return new String[]{result.toString(), String.valueOf(hadDuplicates)};
+        return new String[] { result.toString(), String.valueOf(hadDuplicates) };
     }
 }

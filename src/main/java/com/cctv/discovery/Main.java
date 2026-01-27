@@ -7,8 +7,10 @@ import org.slf4j.LoggerFactory;
 /**
  * Main entry point for CCTV Discovery application.
  *
- * This class serves as the standard Java entry point and delegates to the JavaFX
- * Launcher class. This architecture prevents "Runtime Components Missing" errors
+ * This class serves as the standard Java entry point and delegates to the
+ * JavaFX
+ * Launcher class. This architecture prevents "Runtime Components Missing"
+ * errors
  * on modern or headless Java environments.
  */
 public class Main {
@@ -16,14 +18,14 @@ public class Main {
 
     public static void main(String[] args) {
         // Always print to console for debugging (works even if logging fails)
-        System.out.println("=== CCTV Discovery Tool v1.0.0 ===");
+        System.out.println("--- CCTV Discovery Tool ---");
         System.out.println("Starting application...");
         System.out.println("Java Version: " + System.getProperty("java.version"));
-        System.out.println("JavaFX Runtime: Checking...");
 
         try {
-            logger.info("=== CCTV Discovery Tool v1.0.0 ===");
+            logger.info("--- CCTV Discovery Tool ---");
             logger.info("Starting application...");
+            logger.info("Java Version: " + System.getProperty("java.version"));
 
             System.out.println("Launching JavaFX application...");
 
@@ -32,13 +34,10 @@ public class Main {
 
         } catch (Exception e) {
             logger.error("Fatal error during application startup", e);
-            System.err.println("\n========================================");
             System.err.println("Failed to start CCTV Discovery Tool.");
-            System.err.println("========================================");
             System.err.println("Error: " + e.getMessage());
-            System.err.println("\nFull stack trace:");
+            System.err.println("Full stack trace:");
             e.printStackTrace();
-            System.err.println("========================================");
             System.exit(1);
         }
     }
