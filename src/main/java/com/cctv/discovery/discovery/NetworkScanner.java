@@ -130,7 +130,7 @@ public class NetworkScanner {
             device.setManufacturer(manufacturer);
         }
 
-        logger.debug("Scanned device: {} - Open ports: {}", ip, openPorts);
+        logger.info("Scanned device: {} - Open ports: {}", ip, openPorts);
         return device;
     }
 

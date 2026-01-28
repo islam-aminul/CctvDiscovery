@@ -196,38 +196,45 @@ public class OnvifService {
             device.setOnvifServiceUrl(serviceUrl);
 
             // Extract UUID/EndpointReference for MAC resolution
+            // UUID often contains MAC in last 12 hex digits: uuid:xxxxxxxx-xxxx-xxxx-xxxx-AABBCCDDEEFF
             NodeList endpointList = doc.getElementsByTagNameNS("*", "EndpointReference");
             if (endpointList.getLength() > 0) {
                 Element endpoint = (Element) endpointList.item(0);
                 NodeList addressList = endpoint.getElementsByTagNameNS("*", "Address");
                 if (addressList.getLength() > 0) {
                     String uuid = addressList.item(0).getTextContent().trim();
-                    // UUID often contains MAC in format: uuid:xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
-                    // We'll extract MAC later if pattern matches
+                    if (device.getMacAddress() == null || device.getMacAddress().isEmpty()) {
+                        String mac = extractMacFromUuid(uuid);
+                        if (mac != null) {
+                            device.setMacAddress(mac);
+                            logger.info("Extracted MAC address from UUID for {}: {}", ipAddress, mac);
+                        }
+                    }
                 }
             }
 
             return device;
 
         } catch (Exception e) {
-            logger.debug("Error parsing ProbeMatch", e);
+            logger.info("Error parsing ProbeMatch", e);
             return null;
         }
     }
 
     /**
      * Extract IP address from ONVIF service URL.
+     * Uses java.net.URI instead of deprecated java.net.URL constructor.
      */
     private String extractIpFromUrl(String url) {
         try {
-            URL urlObj = new URL(url);
-            String host = urlObj.getHost();
+            java.net.URI uri = new java.net.URI(url);
+            String host = uri.getHost();
             // Check if host is IP address (not hostname)
-            if (host.matches("\\d+\\.\\d+\\.\\d+\\.\\d+")) {
+            if (host != null && host.matches("\\d+\\.\\d+\\.\\d+\\.\\d+")) {
                 return host;
             }
         } catch (Exception e) {
-            logger.debug("Error extracting IP from URL: {}", url);
+            logger.info("Error extracting IP from URL: {}", url);
         }
         return null;
     }
@@ -295,7 +302,7 @@ public class OnvifService {
             return true;
         }
 
-        logger.debug("ONVIF failed on {}", serviceUrl);
+        logger.info("ONVIF failed on {}", serviceUrl);
         return false;
     }
 
@@ -442,10 +449,10 @@ public class OnvifService {
             if (response != null) {
                 parseHostname(device, response);
             } else {
-                logger.debug("No response from GetHostname for {}", device.getIpAddress());
+                logger.info("No response from GetHostname for {}", device.getIpAddress());
             }
         } catch (Exception e) {
-            logger.debug("Failed to get hostname for {}: {}", device.getIpAddress(), e.getMessage());
+            logger.info("Failed to get hostname for {}: {}", device.getIpAddress(), e.getMessage());
         }
     }
 
@@ -495,7 +502,7 @@ public class OnvifService {
             device.setDeviceName(name.trim());
             logger.info("Retrieved hostname from ONVIF for {}: {}", device.getIpAddress(), name.trim());
         } else {
-            logger.debug("GetHostname returned empty name for {}", device.getIpAddress());
+            logger.info("GetHostname returned empty name for {}", device.getIpAddress());
         }
     }
 
@@ -518,10 +525,10 @@ public class OnvifService {
             if (response != null) {
                 parseNetworkInterfaces(device, response);
             } else {
-                logger.debug("No response from GetNetworkInterfaces for {}", device.getIpAddress());
+                logger.info("No response from GetNetworkInterfaces for {}", device.getIpAddress());
             }
         } catch (Exception e) {
-            logger.debug("Failed to get network interfaces for {}: {}", device.getIpAddress(), e.getMessage());
+            logger.info("Failed to get network interfaces for {}: {}", device.getIpAddress(), e.getMessage());
         }
     }
 
@@ -576,7 +583,7 @@ public class OnvifService {
             device.setMacAddress(mac);
             logger.info("Retrieved MAC address from ONVIF for {}: {}", device.getIpAddress(), mac);
         } else {
-            logger.debug("GetNetworkInterfaces returned no HwAddress for {}", device.getIpAddress());
+            logger.info("GetNetworkInterfaces returned no HwAddress for {}", device.getIpAddress());
         }
     }
 
@@ -594,26 +601,25 @@ public class OnvifService {
             connection.setConnectTimeout(5000);
             connection.setReadTimeout(10000);
 
-            logger.debug("========== ONVIF SOAP REQUEST ==========");
-            logger.debug("URL: {}", serviceUrl);
-            logger.debug("Method: POST");
-            logger.debug("Content-Type: application/soap+xml; charset=utf-8");
-            logger.debug("SOAP Request Body:\n{}", soapRequest);
-            logger.debug("========================================");
+            logger.info("ONVIF SOAP REQUEST");
+            logger.info("URL: {}", serviceUrl);
+            logger.info("Method: POST");
+            logger.info("Content-Type: application/soap+xml; charset=utf-8");
+            logger.info("SOAP Request Body:\n{}", soapRequest);
 
             connection.getOutputStream().write(soapRequest.getBytes("UTF-8"));
 
             int responseCode = connection.getResponseCode();
             String responseMessage = connection.getResponseMessage();
 
-            logger.debug("========== ONVIF SOAP RESPONSE ==========");
-            logger.debug("Response Code: {} {}", responseCode, responseMessage);
+            logger.info("ONVIF SOAP RESPONSE");
+            logger.info("Response Code: {} {}", responseCode, responseMessage);
 
             // Log response headers
-            logger.debug("Response Headers:");
+            logger.info("Response Headers:");
             connection.getHeaderFields().forEach((key, values) -> {
                 if (key != null) {
-                    logger.debug("  {}: {}", key, String.join(", ", values));
+                    logger.info("  {}: {}", key, String.join(", ", values));
                 }
             });
 
@@ -626,8 +632,7 @@ public class OnvifService {
                     baos.write(buffer, 0, len);
                 }
                 String response = baos.toString("UTF-8");
-                logger.debug("Response Body:\n{}", response);
-                logger.debug("=========================================");
+                logger.info("Response Body:\n{}", response);
                 return response;
             } else {
                 // Try to read error response body
@@ -644,21 +649,20 @@ public class OnvifService {
                 } else {
                     logger.warn("ONVIF request failed with code: {}", responseCode);
                 }
-                logger.debug("=========================================");
                 return null;
             }
 
         } catch (javax.net.ssl.SSLException e) {
             // SSL errors are common for non-ONVIF devices or incompatible SSL configs
-            logger.debug("SSL error for {}: {}", serviceUrl, e.getMessage());
+            logger.info("SSL error for {}: {}", serviceUrl, e.getMessage());
             return null;
         } catch (java.net.SocketException e) {
             // Connection refused/reset - device doesn't support ONVIF on this port
-            logger.debug("Connection error for {}: {}", serviceUrl, e.getMessage());
+            logger.info("Connection error for {}: {}", serviceUrl, e.getMessage());
             return null;
         } catch (java.net.SocketTimeoutException e) {
             // Timeout - device not responding
-            logger.debug("Timeout for {}: {}", serviceUrl, e.getMessage());
+            logger.info("Timeout for {}: {}", serviceUrl, e.getMessage());
             return null;
         } catch (Exception e) {
             // Other unexpected errors - log with stack trace
@@ -669,6 +673,59 @@ public class OnvifService {
                 connection.disconnect();
             }
         }
+    }
+
+    /**
+     * Extract MAC address from ONVIF UUID endpoint reference.
+     * UUID format: uuid:xxxxxxxx-xxxx-xxxx-xxxx-AABBCCDDEEFF
+     * The last 12 hex digits often represent the device MAC address.
+     *
+     * @param uuid The UUID string from EndpointReference/Address
+     * @return Formatted MAC address (XX:XX:XX:XX:XX:XX) or null if not extractable
+     */
+    private String extractMacFromUuid(String uuid) {
+        if (uuid == null || uuid.isEmpty()) {
+            return null;
+        }
+
+        // Remove "uuid:" or "urn:uuid:" prefix if present
+        String cleanUuid = uuid;
+        if (cleanUuid.startsWith("urn:uuid:")) {
+            cleanUuid = cleanUuid.substring(9);
+        } else if (cleanUuid.startsWith("uuid:")) {
+            cleanUuid = cleanUuid.substring(5);
+        }
+
+        // Remove hyphens to get continuous hex string
+        String hex = cleanUuid.replace("-", "");
+
+        // UUID should be 32 hex characters; last 12 represent MAC
+        if (hex.length() < 12) {
+            return null;
+        }
+
+        // Validate that all characters are hex
+        String lastTwelve = hex.substring(hex.length() - 12).toUpperCase();
+        for (char c : lastTwelve.toCharArray()) {
+            if (!((c >= '0' && c <= '9') || (c >= 'A' && c <= 'F'))) {
+                return null;
+            }
+        }
+
+        // Skip if all zeros (not a real MAC)
+        if ("000000000000".equals(lastTwelve)) {
+            return null;
+        }
+
+        // Format as XX:XX:XX:XX:XX:XX
+        StringBuilder mac = new StringBuilder();
+        for (int i = 0; i < 12; i += 2) {
+            if (mac.length() > 0) {
+                mac.append(':');
+            }
+            mac.append(lastTwelve, i, i + 2);
+        }
+        return mac.toString();
     }
 
     /**

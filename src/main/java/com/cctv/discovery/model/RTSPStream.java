@@ -129,15 +129,16 @@ public class RTSPStream implements Serializable {
 
     @Override
     public String toString() {
-        return "RTSPStream{" +
-                "streamName='" + streamName + '\'' +
-                ", rtspUrl='" + rtspUrl + '\'' +
-                ", resolution='" + resolution + '\'' +
-                ", codec='" + codec + '\'' +
-                ", profile='" + profile + '\'' +
-                ", bitrateKbps=" + bitrateKbps +
-                ", fps=" + fps +
-                ", compliant=" + compliant +
-                '}';
+        return new StringBuilder("RTSPStream{")
+                .append("streamName='").append(streamName).append('\'')
+                .append(", rtspUrl='").append(rtspUrl).append('\'')
+                .append(", resolution='").append(resolution).append('\'')
+                .append(", codec='").append(codec).append('\'')
+                .append(", profile='").append(profile).append('\'')
+                .append(", bitrateKbps=").append(bitrateKbps)
+                .append(", fps=").append(fps)
+                .append(", compliant=").append(compliant)
+                .append('}')
+                .toString();
     }
 }

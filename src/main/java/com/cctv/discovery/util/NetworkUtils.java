@@ -187,7 +187,7 @@ public class NetworkUtils {
             // Check OSHI cache first (for local interface IPs)
             long now = System.currentTimeMillis();
             if (now - lastCacheUpdate < CACHE_VALIDITY_MS && ipToMacCache.containsKey(ipAddress)) {
-                logger.debug("MAC address for {} found in OSHI cache: {}", ipAddress, ipToMacCache.get(ipAddress));
+                logger.info("MAC address for {} found in OSHI cache: {}", ipAddress, ipToMacCache.get(ipAddress));
                 return ipToMacCache.get(ipAddress);
             }
 
@@ -199,20 +199,20 @@ public class NetworkUtils {
             // Check OSHI cache again after refresh
             String mac = ipToMacCache.get(ipAddress);
             if (mac != null) {
-                logger.debug("MAC address for {} resolved via OSHI: {}", ipAddress, mac);
+                logger.info("MAC address for {} resolved via OSHI: {}", ipAddress, mac);
                 return mac;
             }
 
             // Fall back to ARP CLI for remote devices (not in OSHI cache)
-            logger.debug("IP {} not in OSHI cache, querying OS ARP table", ipAddress);
+            logger.info("IP {} not in OSHI cache, querying OS ARP table", ipAddress);
             mac = resolveMacViaArp(ipAddress);
 
             if (mac != null) {
                 // Cache the ARP result for future lookups
                 ipToMacCache.put(ipAddress, mac);
-                logger.debug("MAC address for {} resolved via ARP: {}", ipAddress, mac);
+                logger.info("MAC address for {} resolved via ARP: {}", ipAddress, mac);
             } else {
-                logger.debug("MAC address for {} not found in ARP table", ipAddress);
+                logger.info("MAC address for {} not found in ARP table", ipAddress);
             }
 
             return mac;
@@ -240,7 +240,7 @@ public class NetworkUtils {
             } else if (os.contains("nix") || os.contains("nux") || os.contains("mac")) {
                 process = Runtime.getRuntime().exec(new String[]{"arp", "-n", ipAddress});
             } else {
-                logger.debug("Unsupported OS for ARP resolution: {}", os);
+                logger.info("Unsupported OS for ARP resolution: {}", os);
                 return null;
             }
 
@@ -259,7 +259,7 @@ public class NetworkUtils {
 
             process.waitFor();
         } catch (Exception e) {
-            logger.debug("Error querying ARP for IP {}: {}", ipAddress, e.getMessage());
+            logger.info("Error querying ARP for IP {}: {}", ipAddress, e.getMessage());
         }
         return null;
     }
@@ -283,7 +283,7 @@ public class NetworkUtils {
      */
     private static synchronized void refreshMacCache() {
         try {
-            logger.debug("Refreshing MAC address cache using OSHI...");
+            logger.info("Refreshing MAC address cache using OSHI...");
             ipToMacCache.clear();
 
             SystemInfo systemInfo = new SystemInfo();
@@ -330,7 +330,7 @@ public class NetworkUtils {
     public static void clearMacCache() {
         ipToMacCache.clear();
         lastCacheUpdate = 0;
-        logger.debug("MAC address cache cleared");
+        logger.info("MAC address cache cleared");
     }
 
     /**
@@ -419,7 +419,7 @@ public class NetworkUtils {
                 }
             }
         } catch (Exception e) {
-            logger.debug("Error getting network prefix length for {}: {}", ni.getName(), e.getMessage());
+            logger.info("Error getting network prefix length for {}: {}", ni.getName(), e.getMessage());
         }
         // Default to /24 if unable to determine
         return 24;

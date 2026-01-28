@@ -1,32 +1,38 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
-    <!-- Console appender - always works -->
+    <!-- Console appender - application logs only (no FFmpeg noise) -->
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
             <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
         </encoder>
     </appender>
 
-    <!-- File appender - logs in same directory as JAR/EXE -->
+    <!-- File appender - all logs including FFmpeg native output -->
     <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
         <file>cctv-discovery.log</file>
-        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
-            <fileNamePattern>cctv-discovery.%d{yyyy-MM-dd}.log</fileNamePattern>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>cctv-discovery.%d{yyyy-MM-dd}.%i.log</fileNamePattern>
+            <maxFileSize>10MB</maxFileSize>
             <maxHistory>30</maxHistory>
-            <totalSizeCap>100MB</totalSizeCap>
+            <totalSizeCap>200MB</totalSizeCap>
         </rollingPolicy>
         <encoder>
             <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
         </encoder>
     </appender>
 
+    <!-- FFmpeg native logs: file only (not console) to keep console clean -->
+    <logger name="org.bytedeco.javacv.FFmpegLogCallback" level="WARN" additivity="false">
+        <appender-ref ref="FILE" />
+    </logger>
+
     <!-- Root logger -->
-    <root level="DEBUG">
+    <root level="INFO">
         <appender-ref ref="CONSOLE" />
         <appender-ref ref="FILE" />
     </root>
 
-    <!-- Reduce verbosity of some libraries -->
+    <!-- Reduce verbosity of third-party libraries -->
     <logger name="org.bytedeco" level="WARN" />
     <logger name="org.apache.poi" level="WARN" />
     <logger name="org.apache.http" level="WARN" />

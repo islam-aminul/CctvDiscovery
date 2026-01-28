@@ -3,7 +3,9 @@ package com.cctv.discovery.discovery;
 import com.cctv.discovery.model.Device;
 import com.cctv.discovery.model.RTSPStream;
 import org.bytedeco.javacv.FFmpegFrameGrabber;
+import org.bytedeco.javacv.FFmpegLogCallback;
 import org.bytedeco.javacv.Frame;
+import org.bytedeco.ffmpeg.global.avutil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -16,6 +18,14 @@ import java.util.concurrent.*;
  */
 public class StreamAnalyzer {
     private static final Logger logger = LoggerFactory.getLogger(StreamAnalyzer.class);
+
+    static {
+        // Route FFmpeg native logs through SLF4J instead of raw stderr.
+        // AV_LOG_WARNING = 24: capture warnings and errors for diagnostics.
+        // Logback routes FFmpegLogCallback logger to file only (not console).
+        avutil.av_log_set_level(avutil.AV_LOG_WARNING);
+        FFmpegLogCallback.set();
+    }
 
     private static final int MAX_PARALLEL_STREAMS = 8;
     private static final int ANALYSIS_DURATION_SECONDS = 10;
@@ -77,7 +87,7 @@ public class StreamAnalyzer {
             grabber.setImageWidth(0);
             grabber.setImageHeight(0);
 
-            logger.debug("Starting stream analysis for: {}", stream.getRtspUrl());
+            logger.info("Starting stream analysis for: {}", stream.getRtspUrl());
             grabber.start();
 
             // Extract basic metadata
@@ -105,7 +115,7 @@ public class StreamAnalyzer {
             String profileName = extractProfile(grabber);
             if (profileName != null) {
                 stream.setProfile(profileName);
-                logger.debug("Detected profile: {} for {}", profileName, stream.getRtspUrl());
+                logger.info("Detected profile: {} for {}", profileName, stream.getRtspUrl());
             }
 
             // Calculate bitrate by sampling frames
@@ -153,7 +163,7 @@ public class StreamAnalyzer {
                     grabber.stop();
                     grabber.release();
                 } catch (Exception e) {
-                    logger.debug("Error releasing grabber", e);
+                    logger.info("Error releasing grabber", e);
                 }
             }
         }
@@ -228,7 +238,7 @@ public class StreamAnalyzer {
 
             return null;
         } catch (Exception e) {
-            logger.debug("Could not extract profile: {}", e.getMessage());
+            logger.info("Could not extract profile: {}", e.getMessage());
             return null;
         }
     }

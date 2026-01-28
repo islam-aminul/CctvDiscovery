@@ -240,13 +240,14 @@ public class Device implements Serializable {
 
     @Override
     public String toString() {
-        return "Device{" +
-                "ip='" + ipAddress + '\'' +
-                ", mac='" + macAddress + '\'' +
-                ", name='" + deviceName + '\'' +
-                ", manufacturer='" + manufacturer + '\'' +
-                ", status=" + status +
-                ", streams=" + rtspStreams.size() +
-                '}';
+        return new StringBuilder("Device{")
+                .append("ip='").append(ipAddress).append('\'')
+                .append(", mac='").append(macAddress).append('\'')
+                .append(", name='").append(deviceName).append('\'')
+                .append(", manufacturer='").append(manufacturer).append('\'')
+                .append(", status=").append(status)
+                .append(", streams=").append(rtspStreams.size())
+                .append('}')
+                .toString();
     }
 }
