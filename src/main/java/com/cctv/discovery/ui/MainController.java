@@ -195,8 +195,19 @@ public class MainController {
 
     private HBox createHeaderPanel() {
         // Header Panel - Full width spanning entire application
-        Label title = new Label("CCTV Discovery Tool");
+        AppConfig config = AppConfig.getInstance();
+
+        // Organization name in regular font above the tool name
+        Label orgLabel = new Label(config.getAppOrganization());
+        orgLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #555555;");
+
+        // Tool name in bold title style
+        Label title = new Label(config.getAppName());
         title.getStyleClass().add("header-title");
+
+        // Stack org name above tool name
+        VBox titleBlock = new VBox(0, orgLabel, title);
+        titleBlock.setAlignment(Pos.CENTER_LEFT);
 
         Button btnSettings = new Button("Settings");
         btnSettings.setOnAction(e -> showSettings());
@@ -219,7 +230,7 @@ public class MainController {
         header.setAlignment(Pos.CENTER_LEFT);
         header.setPadding(new Insets(10, 15, 10, 15));
         header.setStyle("-fx-background-color: #f0f0f0; -fx-border-color: #cccccc; -fx-border-width: 0 0 1 0;");
-        header.getChildren().addAll(title, spacer, buttonBox);
+        header.getChildren().addAll(titleBlock, spacer, buttonBox);
 
         return header;
     }
@@ -2194,7 +2205,7 @@ public class MainController {
     private void showHelpManual() {
         Dialog<Void> dialog = new Dialog<>();
         dialog.setTitle("Help");
-        dialog.setHeaderText("CCTV Discovery Tool - Quick Guide");
+        dialog.setHeaderText(AppConfig.getInstance().getAppName() + " - Quick Guide");
 
         // Set window icon
         dialog.setOnShown(e -> {

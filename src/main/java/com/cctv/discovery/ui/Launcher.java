@@ -1,5 +1,6 @@
 package com.cctv.discovery.ui;
 
+import com.cctv.discovery.config.AppConfig;
 import javafx.application.Application;
 import javafx.scene.Scene;
 import javafx.scene.image.Image;
@@ -19,9 +20,13 @@ public class Launcher extends Application {
     @Override
     public void start(Stage primaryStage) {
         try {
-            logger.info("Starting CCTV Discovery application...");
+            AppConfig config = AppConfig.getInstance();
+            String appName = config.getAppName();
+            String appVersion = config.getAppVersion();
 
-            primaryStage.setTitle("CCTV Discovery & Audit Tool v1.0.0");
+            logger.info("Starting {} v{}...", appName, appVersion);
+
+            primaryStage.setTitle(appName + " v" + appVersion);
 
             // Set application icon
             try {
