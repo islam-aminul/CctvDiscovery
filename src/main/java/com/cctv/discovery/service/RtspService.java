@@ -16,7 +16,6 @@ import java.net.SocketTimeoutException;
 import java.net.DatagramSocket;
 import java.net.DatagramPacket;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 import org.bytedeco.javacv.FFmpegFrameGrabber;
 import org.bytedeco.javacv.FFmpegLogCallback;
 import org.bytedeco.javacv.Frame;
@@ -35,15 +34,13 @@ public class RtspService {
     // Manufacturer-specific RTSP path templates (loaded from resource file)
     private static final Map<String, String[]> MANUFACTURER_PATHS = new HashMap<>();
 
-    // Credential cache: manufacturer -> successful credentials
-    private static final Map<String, String[]> CREDENTIAL_CACHE = new ConcurrentHashMap<>();
-
     // Discovery configuration
     private static RtspDiscoveryConfig discoveryConfig = new RtspDiscoveryConfig();
 
     static {
         // Route FFmpeg native logs through SLF4J instead of raw stderr.
-        // AV_LOG_WARNING = 24: capture warnings and errors (H264 decoder, 401 retries, etc.)
+        // AV_LOG_WARNING = 24: capture warnings and errors (H264 decoder, 401 retries,
+        // etc.)
         // Logback routes FFmpegLogCallback logger to file only (not console).
         avutil.av_log_set_level(avutil.AV_LOG_WARNING);
         FFmpegLogCallback.set();
@@ -54,9 +51,9 @@ public class RtspService {
      * RTSP validation method enum with default timeouts
      */
     public enum RtspValidationMethod {
-        SDP_ONLY("SDP Validation Only", 3000),           // 3s - fast, ~60% accurate
-        RTP_PACKET("RTP Packet Detection", 5000),       // 5s - medium, ~90% accurate
-        FRAME_CAPTURE("Frame Capture", 10000);          // 10s - slow, ~98% accurate
+        SDP_ONLY("SDP Validation Only", 3000), // 3s - fast, ~60% accurate
+        RTP_PACKET("RTP Packet Detection", 5000), // 5s - medium, ~90% accurate
+        FRAME_CAPTURE("Frame Capture", 10000); // 10s - slow, ~98% accurate
 
         private final String displayName;
         private final int defaultTimeoutMs;
@@ -134,7 +131,8 @@ public class RtspService {
             for (String key : props.stringPropertyNames()) {
                 if (key.startsWith("manufacturer.") && key.endsWith(".paths")) {
                     String manufacturer = key.substring(13, key.length() - 6); // Extract manufacturer name
-                    // Normalize manufacturer name: replace spaces with underscores for consistent lookup
+                    // Normalize manufacturer name: replace spaces with underscores for consistent
+                    // lookup
                     manufacturer = manufacturer.replace(" ", "_");
                     String pathsStr = props.getProperty(key);
 
@@ -155,7 +153,7 @@ public class RtspService {
                 loadHardcodedDefaults();
             } else {
                 logger.info("Successfully loaded RTSP templates for {} manufacturers from resource file",
-                           MANUFACTURER_PATHS.size());
+                        MANUFACTURER_PATHS.size());
             }
 
         } catch (Exception e) {
@@ -170,7 +168,7 @@ public class RtspService {
      */
     private static void loadHardcodedDefaults() {
         // Hikvision
-        MANUFACTURER_PATHS.put("HIKVISION", new String[]{
+        MANUFACTURER_PATHS.put("HIKVISION", new String[] {
                 "/Streaming/Channels/101",
                 "/Streaming/Channels/102",
                 "/h264/ch1/main/av_stream",
@@ -178,7 +176,7 @@ public class RtspService {
         });
 
         // Dahua
-        MANUFACTURER_PATHS.put("DAHUA", new String[]{
+        MANUFACTURER_PATHS.put("DAHUA", new String[] {
                 "/cam/realmonitor?channel=1&subtype=0",
                 "/cam/realmonitor?channel=1&subtype=1",
                 "/live/ch00_0",
@@ -186,20 +184,20 @@ public class RtspService {
         });
 
         // Axis
-        MANUFACTURER_PATHS.put("AXIS", new String[]{
+        MANUFACTURER_PATHS.put("AXIS", new String[] {
                 "/axis-media/media.amp",
                 "/axis-media/media.amp?videocodec=h264",
                 "/mpeg4/media.amp"
         });
 
         // CP Plus
-        MANUFACTURER_PATHS.put("CP_PLUS", new String[]{
+        MANUFACTURER_PATHS.put("CP_PLUS", new String[] {
                 "/cam/realmonitor?channel=1&subtype=0",
                 "/cam/realmonitor?channel=1&subtype=1"
         });
 
         // Generic paths
-        MANUFACTURER_PATHS.put("GENERIC", new String[]{
+        MANUFACTURER_PATHS.put("GENERIC", new String[] {
                 "/live",
                 "/live/0",
                 "/live/1",
@@ -247,7 +245,8 @@ public class RtspService {
 
         // 2. Try manufacturer-specific paths
         if (manufacturer != null) {
-            // Normalize manufacturer name: replace spaces with underscores for consistent lookup
+            // Normalize manufacturer name: replace spaces with underscores for consistent
+            // lookup
             String normalizedManufacturer = manufacturer.replace(" ", "_").toUpperCase();
             String[] mfgPaths = MANUFACTURER_PATHS.get(normalizedManufacturer);
             if (mfgPaths != null) {
@@ -355,7 +354,7 @@ public class RtspService {
     private RTSPStream validateRtspStream(String rtspUrl, String username, String password) {
         switch (discoveryConfig.getValidationMethod()) {
             case SDP_ONLY:
-                return testRtspUrl(rtspUrl, username, password);  // Existing SDP method
+                return testRtspUrl(rtspUrl, username, password); // Existing SDP method
 
             case RTP_PACKET:
                 return validateWithRtpPackets(rtspUrl, username, password);
@@ -515,7 +514,7 @@ public class RtspService {
      * Test RTSP URL with authentication (supports both Basic and Digest).
      */
     private RTSPStream testRtspUrlWithAuth(String rtspUrl, String username, String password,
-                                           Socket socket, BufferedReader in, OutputStream out, String headers) {
+            Socket socket, BufferedReader in, OutputStream out, String headers) {
         try {
             // Parse authentication challenges from WWW-Authenticate headers
             java.util.List<AuthUtils.AuthChallenge> challenges = new java.util.ArrayList<>();
@@ -545,8 +544,10 @@ public class RtspService {
 
             // Try authentication methods in order of preference: Digest first, then Basic
             challenges.sort((a, b) -> {
-                if (a.type == AuthUtils.AuthType.DIGEST) return -1;
-                if (b.type == AuthUtils.AuthType.DIGEST) return 1;
+                if (a.type == AuthUtils.AuthType.DIGEST)
+                    return -1;
+                if (b.type == AuthUtils.AuthType.DIGEST)
+                    return 1;
                 return 0;
             });
 
@@ -583,8 +584,8 @@ public class RtspService {
      * Attempt Digest authentication.
      */
     private RTSPStream attemptDigestAuth(String rtspUrl, String username, String password,
-                                         AuthUtils.AuthChallenge challenge,
-                                         Socket socket, BufferedReader in, OutputStream out) {
+            AuthUtils.AuthChallenge challenge,
+            Socket socket, BufferedReader in, OutputStream out) {
         try {
             if (challenge.realm == null || challenge.realm.isEmpty()) {
                 logger.info("Digest challenge missing realm");
@@ -598,13 +599,13 @@ public class RtspService {
             // Send authenticated request
             String uri = extractUri(rtspUrl);
             logger.info("Extracted URI for digest: {}", uri);
-            logger.info("Using credentials - Username: {}, Password: {} chars", username, password != null ? password.length() : 0);
+            logger.info("Using credentials - Username: {}, Password: {} chars", username,
+                    password != null ? password.length() : 0);
             logger.info("Challenge details - Realm: {}, Nonce: {}, Opaque: {}, QOP: {}",
-                         challenge.realm, challenge.nonce, challenge.opaque, challenge.qop);
+                    challenge.realm, challenge.nonce, challenge.opaque, challenge.qop);
 
             String authHeader = AuthUtils.buildDigestAuthHeader(
-                username, password, challenge.realm, challenge.nonce, uri, "DESCRIBE", challenge.opaque
-            );
+                    username, password, challenge.realm, challenge.nonce, uri, "DESCRIBE", challenge.opaque);
 
             String authRequest = "DESCRIBE " + rtspUrl + " RTSP/1.0\r\n" +
                     "CSeq: 2\r\n" +
@@ -632,9 +633,10 @@ public class RtspService {
      * Attempt Basic authentication.
      */
     private RTSPStream attemptBasicAuth(String rtspUrl, String username, String password,
-                                        Socket socket, BufferedReader in, OutputStream out) {
+            Socket socket, BufferedReader in, OutputStream out) {
         try {
-            logger.info("Using credentials - Username: {}, Password: {} chars", username, password != null ? password.length() : 0);
+            logger.info("Using credentials - Username: {}, Password: {} chars", username,
+                    password != null ? password.length() : 0);
 
             String authHeader = AuthUtils.generateBasicAuth(username, password);
 
@@ -767,9 +769,9 @@ public class RtspService {
             // Step 1: DESCRIBE (unauthenticated first)
             int cseq = 1;
             String describeRequest = "DESCRIBE " + rtspUrl + " RTSP/1.0\r\n" +
-                                   "CSeq: " + cseq + "\r\n" +
-                                   "User-Agent: CCTV-Discovery/1.0\r\n" +
-                                   "Accept: application/sdp\r\n\r\n";
+                    "CSeq: " + cseq + "\r\n" +
+                    "User-Agent: CCTV-Discovery/1.0\r\n" +
+                    "Accept: application/sdp\r\n\r\n";
 
             out.write(describeRequest.getBytes());
             out.flush();
@@ -815,21 +817,23 @@ public class RtspService {
 
                 // Sort: Digest preferred over Basic
                 challenges.sort((a, b) -> {
-                    if (a.type == AuthUtils.AuthType.DIGEST) return -1;
-                    if (b.type == AuthUtils.AuthType.DIGEST) return 1;
+                    if (a.type == AuthUtils.AuthType.DIGEST)
+                        return -1;
+                    if (b.type == AuthUtils.AuthType.DIGEST)
+                        return 1;
                     return 0;
                 });
 
                 // Build authorization header from first valid challenge
                 for (AuthUtils.AuthChallenge challenge : challenges) {
-                    if (!AuthUtils.isValidChallenge(challenge)) continue;
+                    if (!AuthUtils.isValidChallenge(challenge))
+                        continue;
 
                     if (challenge.type == AuthUtils.AuthType.DIGEST) {
                         String uri = extractUri(rtspUrl);
                         authorizationHeader = AuthUtils.buildDigestAuthHeader(
-                            username, password, challenge.realm, challenge.nonce,
-                            uri, "DESCRIBE", challenge.opaque
-                        );
+                                username, password, challenge.realm, challenge.nonce,
+                                uri, "DESCRIBE", challenge.opaque);
                         logger.info("RTP: Using Digest authentication");
                         break;
                     } else if (challenge.type == AuthUtils.AuthType.BASIC) {
@@ -845,7 +849,10 @@ public class RtspService {
                 }
 
                 // Close old socket, open fresh connection for authenticated session
-                try { socket.close(); } catch (Exception ignored) {}
+                try {
+                    socket.close();
+                } catch (Exception ignored) {
+                }
 
                 socket = new Socket(host, port);
                 socket.setSoTimeout(timeout);
@@ -855,10 +862,10 @@ public class RtspService {
                 // Re-send DESCRIBE with auth
                 cseq++;
                 String authDescribe = "DESCRIBE " + rtspUrl + " RTSP/1.0\r\n" +
-                                     "CSeq: " + cseq + "\r\n" +
-                                     "User-Agent: CCTV-Discovery/1.0\r\n" +
-                                     "Authorization: " + authorizationHeader + "\r\n" +
-                                     "Accept: application/sdp\r\n\r\n";
+                        "CSeq: " + cseq + "\r\n" +
+                        "User-Agent: CCTV-Discovery/1.0\r\n" +
+                        "Authorization: " + authorizationHeader + "\r\n" +
+                        "Accept: application/sdp\r\n\r\n";
 
                 out.write(authDescribe.getBytes());
                 out.flush();
@@ -885,7 +892,8 @@ public class RtspService {
                 }
                 if (inBody) {
                     sdp.append(line).append("\n");
-                    if (line.startsWith("a=control")) break;  // Got enough
+                    if (line.startsWith("a=control"))
+                        break; // Got enough
                 }
             }
 
@@ -910,7 +918,7 @@ public class RtspService {
                 setupBuilder.append("Authorization: ").append(authorizationHeader).append("\r\n");
             }
             setupBuilder.append("Transport: RTP/AVP;unicast;client_port=")
-                        .append(clientRtpPort).append("-").append(clientRtpPort + 1).append("\r\n\r\n");
+                    .append(clientRtpPort).append("-").append(clientRtpPort + 1).append("\r\n\r\n");
 
             out.write(setupBuilder.toString().getBytes());
             out.flush();
@@ -948,7 +956,8 @@ public class RtspService {
             out.flush();
 
             responseLine = in.readLine();
-            while ((line = in.readLine()) != null && !line.isEmpty()) {} // Skip headers
+            while ((line = in.readLine()) != null && !line.isEmpty()) {
+            } // Skip headers
 
             if (responseLine == null || !responseLine.contains("200")) {
                 logger.info("PLAY failed: {}", responseLine);
@@ -956,7 +965,7 @@ public class RtspService {
             }
 
             // Step 5: Listen for RTP packets
-            rtpSocket.setSoTimeout(2000);  // 2 second timeout for packets
+            rtpSocket.setSoTimeout(2000); // 2 second timeout for packets
             byte[] buffer = new byte[2048];
             DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
 
@@ -1008,11 +1017,16 @@ public class RtspService {
                     teardownBuilder.append("\r\n");
                     out.write(teardownBuilder.toString().getBytes());
                     out.flush();
-                } catch (Exception ignored) {}
+                } catch (Exception ignored) {
+                }
             }
-            if (rtpSocket != null) rtpSocket.close();
+            if (rtpSocket != null)
+                rtpSocket.close();
             if (socket != null) {
-                try { socket.close(); } catch (Exception ignored) {}
+                try {
+                    socket.close();
+                } catch (Exception ignored) {
+                }
             }
         }
     }
@@ -1025,8 +1039,10 @@ public class RtspService {
         for (String line : lines) {
             if (line.startsWith("a=control:")) {
                 String control = line.substring(10).trim();
-                if (control.startsWith("rtsp://")) return control;
-                if (control.startsWith("/")) return baseUrl + control;
+                if (control.startsWith("rtsp://"))
+                    return control;
+                if (control.startsWith("/"))
+                    return baseUrl + control;
                 return baseUrl + "/" + control;
             }
         }
@@ -1060,11 +1076,11 @@ public class RtspService {
             // Optimized FFMPEG settings
             grabber.setOption("rtsp_transport", "tcp");
             grabber.setOption("stimeout", String.valueOf(timeout * 1000)); // Microseconds
-            grabber.setOption("max_delay", "500000");          // 0.5s max delay
-            grabber.setOption("reorder_queue_size", "0");      // No reordering
-            grabber.setOption("fflags", "nobuffer");           // No buffering
-            grabber.setOption("flags", "low_delay");           // Low latency
-            grabber.setImageWidth(0);                          // Native resolution
+            grabber.setOption("max_delay", "500000"); // 0.5s max delay
+            grabber.setOption("reorder_queue_size", "0"); // No reordering
+            grabber.setOption("fflags", "nobuffer"); // No buffering
+            grabber.setOption("flags", "low_delay"); // Low latency
+            grabber.setImageWidth(0); // Native resolution
             grabber.setImageHeight(0);
 
             grabber.start();
@@ -1074,7 +1090,7 @@ public class RtspService {
 
             if (frame != null && frame.image != null) {
                 logger.info("Frame captured in {}ms - {}x{} pixels",
-                           elapsedMs, frame.imageWidth, frame.imageHeight);
+                        elapsedMs, frame.imageWidth, frame.imageHeight);
                 return new RTSPStream("Main", rtspUrl);
             } else {
                 logger.info("No valid frame after {}ms", elapsedMs);
@@ -1102,21 +1118,23 @@ public class RtspService {
     }
 
     /**
-     * Validate SDP (Session Description Protocol) content from RTSP DESCRIBE response.
-     * Checks for presence of video media track to confirm stream is actually available.
+     * Validate SDP (Session Description Protocol) content from RTSP DESCRIBE
+     * response.
+     * Checks for presence of video media track to confirm stream is actually
+     * available.
      *
      * SDP format (RFC 4566):
-     * v=0                               (version)
-     * o=- 1234567890 1234567890 IN IP4 192.168.1.100  (origin)
-     * s=Session                         (session name)
-     * c=IN IP4 192.168.1.100           (connection info)
-     * t=0 0                            (time)
-     * m=video 0 RTP/AVP 96             (media - THIS IS CRITICAL)
-     * a=rtpmap:96 H264/90000           (codec)
-     * a=control:track1                 (control URL)
+     * v=0 (version)
+     * o=- 1234567890 1234567890 IN IP4 192.168.1.100 (origin)
+     * s=Session (session name)
+     * c=IN IP4 192.168.1.100 (connection info)
+     * t=0 0 (time)
+     * m=video 0 RTP/AVP 96 (media - THIS IS CRITICAL)
+     * a=rtpmap:96 H264/90000 (codec)
+     * a=control:track1 (control URL)
      *
      * @param sdpContent The SDP body from RTSP response
-     * @param rtspUrl The RTSP URL being tested (for logging)
+     * @param rtspUrl    The RTSP URL being tested (for logging)
      * @return true if SDP contains valid video stream, false otherwise
      */
     private boolean validateSdp(String sdpContent, String rtspUrl) {
@@ -1151,8 +1169,8 @@ public class RtspService {
 
             // Check for codec info (nice to have - indicates proper stream configuration)
             if (line.startsWith("a=rtpmap:") &&
-                (line.contains("H264") || line.contains("H265") || line.contains("HEVC") ||
-                 line.contains("MPEG4") || line.contains("MJPEG") || line.contains("MP4V"))) {
+                    (line.contains("H264") || line.contains("H265") || line.contains("HEVC") ||
+                            line.contains("MPEG4") || line.contains("MJPEG") || line.contains("MP4V"))) {
                 hasCodecInfo = true;
                 logger.info("SDP codec info found: {}", line);
             }
@@ -1166,7 +1184,8 @@ public class RtspService {
 
         // Video media track is critical - without it, there's no video stream
         if (!hasVideoMedia) {
-            logger.warn("SDP missing video media track (m=video) for {} - May be audio-only or invalid stream", rtspUrl);
+            logger.warn("SDP missing video media track (m=video) for {} - May be audio-only or invalid stream",
+                    rtspUrl);
             return false;
         }
 
@@ -1176,7 +1195,7 @@ public class RtspService {
         }
 
         logger.info("SDP validation PASSED for {} - Version: {}, Video: {}, Codec: {}",
-                    rtspUrl, hasVersion, hasVideoMedia, hasCodecInfo);
+                rtspUrl, hasVersion, hasVideoMedia, hasCodecInfo);
 
         return true;
     }

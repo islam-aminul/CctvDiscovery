@@ -7,8 +7,6 @@ import oshi.SystemInfo;
 import oshi.hardware.*;
 import oshi.software.os.*;
 
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
@@ -23,9 +21,9 @@ public class HostAuditService {
     private static final Logger logger = LoggerFactory.getLogger(HostAuditService.class);
 
     private static final String[] NTP_SERVERS = {
-        "time.google.com",
-        "time.windows.com",
-        "pool.ntp.org"
+            "time.google.com",
+            "time.windows.com",
+            "pool.ntp.org"
     };
 
     /**
@@ -166,16 +164,16 @@ public class HostAuditService {
 
             // BIOS Information
             String biosInfo = String.format("%s %s (Released: %s)",
-                firmware.getManufacturer(),
-                firmware.getVersion(),
-                firmware.getReleaseDate() != null ? firmware.getReleaseDate() : "Unknown");
+                    firmware.getManufacturer(),
+                    firmware.getVersion(),
+                    firmware.getReleaseDate() != null ? firmware.getReleaseDate() : "Unknown");
             data.setBiosInformation(biosInfo);
 
             // Motherboard
             String motherboardInfo = String.format("%s %s (SN: %s)",
-                baseboard.getManufacturer(),
-                baseboard.getModel(),
-                baseboard.getSerialNumber());
+                    baseboard.getManufacturer(),
+                    baseboard.getModel(),
+                    baseboard.getSerialNumber());
             data.setMotherboard(motherboardInfo);
 
         } catch (Exception e) {
@@ -217,8 +215,8 @@ public class HostAuditService {
 
                 // Get IP addresses
                 String[] ipAddresses = net.getIPv4addr();
-                String ipAddress = (ipAddresses != null && ipAddresses.length > 0) ?
-                    String.join(", ", ipAddresses) : "N/A";
+                String ipAddress = (ipAddresses != null && ipAddresses.length > 0) ? String.join(", ", ipAddresses)
+                        : "N/A";
 
                 // Status
                 String status = net.isKnownVmMacAddr() ? "Virtual" : "Physical";
@@ -317,7 +315,6 @@ public class HostAuditService {
 
             DatagramPacket packet = new DatagramPacket(buf, buf.length, address, 123);
 
-            long t1 = System.currentTimeMillis();
             socket.send(packet);
             socket.receive(packet);
             long t4 = System.currentTimeMillis();
@@ -350,39 +347,39 @@ public class HostAuditService {
 
             // Top 5 by CPU
             List<HostAuditData.ProcessInfo> topCpu = processes.stream()
-                .sorted((p1, p2) -> Double.compare(
-                    p2.getProcessCpuLoadCumulative(),
-                    p1.getProcessCpuLoadCumulative()))
-                .limit(5)
-                .map(p -> new HostAuditData.ProcessInfo(
-                    p.getName(),
-                    p.getProcessID(),
-                    String.format("%.2f%%", p.getProcessCpuLoadCumulative() * 100)))
-                .collect(Collectors.toList());
+                    .sorted((p1, p2) -> Double.compare(
+                            p2.getProcessCpuLoadCumulative(),
+                            p1.getProcessCpuLoadCumulative()))
+                    .limit(5)
+                    .map(p -> new HostAuditData.ProcessInfo(
+                            p.getName(),
+                            p.getProcessID(),
+                            String.format("%.2f%%", p.getProcessCpuLoadCumulative() * 100)))
+                    .collect(Collectors.toList());
             data.setTopCpuProcesses(topCpu);
 
             // Top 5 by Memory
             List<HostAuditData.ProcessInfo> topMemory = processes.stream()
-                .sorted((p1, p2) -> Long.compare(p2.getResidentSetSize(), p1.getResidentSetSize()))
-                .limit(5)
-                .map(p -> new HostAuditData.ProcessInfo(
-                    p.getName(),
-                    p.getProcessID(),
-                    formatBytes(p.getResidentSetSize())))
-                .collect(Collectors.toList());
+                    .sorted((p1, p2) -> Long.compare(p2.getResidentSetSize(), p1.getResidentSetSize()))
+                    .limit(5)
+                    .map(p -> new HostAuditData.ProcessInfo(
+                            p.getName(),
+                            p.getProcessID(),
+                            formatBytes(p.getResidentSetSize())))
+                    .collect(Collectors.toList());
             data.setTopMemoryProcesses(topMemory);
 
             // Top 5 by Disk IO (read + write bytes)
             List<HostAuditData.ProcessInfo> topDiskIO = processes.stream()
-                .sorted((p1, p2) -> Long.compare(
-                    p2.getBytesRead() + p2.getBytesWritten(),
-                    p1.getBytesRead() + p1.getBytesWritten()))
-                .limit(5)
-                .map(p -> new HostAuditData.ProcessInfo(
-                    p.getName(),
-                    p.getProcessID(),
-                    formatBytes(p.getBytesRead() + p.getBytesWritten())))
-                .collect(Collectors.toList());
+                    .sorted((p1, p2) -> Long.compare(
+                            p2.getBytesRead() + p2.getBytesWritten(),
+                            p1.getBytesRead() + p1.getBytesWritten()))
+                    .limit(5)
+                    .map(p -> new HostAuditData.ProcessInfo(
+                            p.getName(),
+                            p.getProcessID(),
+                            formatBytes(p.getBytesRead() + p.getBytesWritten())))
+                    .collect(Collectors.toList());
             data.setTopDiskIOProcesses(topDiskIO);
 
         } catch (Exception e) {
@@ -393,14 +390,16 @@ public class HostAuditService {
     // Utility methods
 
     private String formatBytes(long bytes) {
-        if (bytes < 1024) return bytes + " B";
+        if (bytes < 1024)
+            return bytes + " B";
         int exp = (int) (Math.log(bytes) / Math.log(1024));
         String pre = "KMGTPE".charAt(exp - 1) + "";
         return String.format("%.2f %sB", bytes / Math.pow(1024, exp), pre);
     }
 
     private String formatBitsPerSecond(long bps) {
-        if (bps < 1000) return bps + " bps";
+        if (bps < 1000)
+            return bps + " bps";
         int exp = (int) (Math.log(bps) / Math.log(1000));
         String pre = "KMGTPE".charAt(exp - 1) + "";
         return String.format("%.2f %sbps", bps / Math.pow(1000, exp), pre);

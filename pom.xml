@@ -6,7 +6,7 @@
 
     <groupId>com.cctv</groupId>
     <artifactId>cctv-discovery</artifactId>
-    <version>1.0.0</version>
+    <version>1.1.4</version>
     <name>CCTV Discovery</name>
     <description>A Java 8 project for CCTV discovery and auditing.</description>
     <inceptionYear>2026</inceptionYear>
@@ -35,11 +35,11 @@
         <!-- Build Configuration Properties -->
         <app.filename>CctvDiscovery</app.filename>
         <jre.source.directory>jre8</jre.source.directory>
-        <jre.target.directory>jre8</jre.target.directory>
-        <keystore.filename>cctv-audit.jks</keystore.filename>
-        <pfx.filename>cctv-audit.pfx</pfx.filename>
+        <jre.target.directory>jre</jre.target.directory>
+        <keystore.filename>cctv-discovery.jks</keystore.filename>
+        <pfx.filename>cctv-discovery.pfx</pfx.filename>
+        <keystore.alias>cctv-discovery</keystore.alias>
         <keystore.password>changeit</keystore.password>
-        <keystore.alias>cctv-signer</keystore.alias>
 
         <!-- Conditional execution flags -->
         <skip.signing>true</skip.signing>
