@@ -24,9 +24,9 @@ public class ExcelExporter {
      * Export devices to Excel file with password protection.
      */
     public void exportToExcel(List<Device> devices, String siteId, String premiseName,
-                               String operatorName, File outputFile, String password, HostAuditData hostAudit) throws Exception {
+            String operatorName, File outputFile, String password, HostAuditData hostAudit) throws Exception {
         Workbook workbook = new XSSFWorkbook();
-        Sheet sheet = workbook.createSheet("CCTV Audit Report");
+        Sheet sheet = workbook.createSheet("CCTV Report");
 
         // Create styles with locked cells
         CellStyle warningStyle = createWarningStyle(workbook);
@@ -39,7 +39,8 @@ public class ExcelExporter {
         // Warning row - Enhanced with protection notice
         Row warningRow = sheet.createRow(rowNum++);
         Cell warningCell = warningRow.createCell(0);
-        warningCell.setCellValue("⚠ WARNING: This document contains PLAINTEXT PASSWORDS. Handle with care! [PROTECTED]");
+        warningCell
+                .setCellValue("⚠ WARNING: This document contains PLAINTEXT PASSWORDS. Handle with care! [PROTECTED]");
         warningCell.setCellStyle(warningStyle);
         sheet.addMergedRegion(new CellRangeAddress(0, 0, 0, 17));
         warningRow.setHeightInPoints(25);
@@ -95,7 +96,7 @@ public class ExcelExporter {
 
         // Create Host Audit sheet
         if (hostAudit != null) {
-            Sheet hostSheet = workbook.createSheet("Host Audit");
+            Sheet hostSheet = workbook.createSheet("Host Report");
             createHostAuditSheet(hostSheet, hostAudit, headerStyle, dataStyle);
 
             // Protect host audit sheet too
@@ -146,7 +147,7 @@ public class ExcelExporter {
     }
 
     private int addDeviceRow(Sheet sheet, int rowNum, Device device, RTSPStream stream,
-                             CellStyle dataStyle, CellStyle redStyle) {
+            CellStyle dataStyle, CellStyle redStyle) {
         Row row = sheet.createRow(rowNum);
 
         // Device columns
@@ -157,8 +158,9 @@ public class ExcelExporter {
         createCell(row, 4, device.getManufacturer(), dataStyle);
         createCell(row, 5, device.getModel(), dataStyle);
         createCell(row, 6, device.getSerialNumber(), dataStyle);
-        createCell(row, 7, device.getTimeDifferenceSeconds() != null ?
-                device.getTimeDifferenceSeconds().toString() : "", dataStyle);
+        createCell(row, 7,
+                device.getTimeDifferenceSeconds() != null ? device.getTimeDifferenceSeconds().toString() : "",
+                dataStyle);
         createCell(row, 8, device.getUsername(), dataStyle);
         createCell(row, 9, device.getPassword(), dataStyle);
         createCell(row, 10, device.getErrorMessage(), dataStyle);
@@ -189,13 +191,11 @@ public class ExcelExporter {
 
             // Bitrate: red if >= 512kbps
             boolean bitrateFlagged = hasIssues && issues.contains("Bitrate");
-            createCell(row, 16, stream.getBitrateKbps() != null ?
-                    stream.getBitrateKbps().toString() : "",
+            createCell(row, 16, stream.getBitrateKbps() != null ? stream.getBitrateKbps().toString() : "",
                     bitrateFlagged ? redStyle : dataStyle);
 
             // FPS: normal style (no compliance rule)
-            createCell(row, 17, stream.getFps() != null ?
-                    String.format("%.2f", stream.getFps()) : "", dataStyle);
+            createCell(row, 17, stream.getFps() != null ? String.format("%.2f", stream.getFps()) : "", dataStyle);
         }
 
         return rowNum + 1;
@@ -211,7 +211,7 @@ public class ExcelExporter {
         CellStyle style = workbook.createCellStyle();
         Font font = workbook.createFont();
         font.setFontName("Consolas");
-        font.setFontHeightInPoints((short) 12);
+        font.setFontHeightInPoints((short) 10);
         font.setBold(true);
         font.setColor(IndexedColors.RED.getIndex());
         style.setFont(font);
@@ -366,7 +366,7 @@ public class ExcelExporter {
                 driftValue += " ⚠ ALERT: Drift > 1 second!";
             }
             rowNum = addInfoRow(sheet, rowNum, "NTP Time Drift", driftValue,
-                data.isNtpTimeDriftAlert() ? createRedHighlightStyle(sheet.getWorkbook()) : dataStyle);
+                    data.isNtpTimeDriftAlert() ? createRedHighlightStyle(sheet.getWorkbook()) : dataStyle);
         }
         rowNum++; // Blank row
 
