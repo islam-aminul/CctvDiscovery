@@ -101,7 +101,7 @@ public class MacLookupService {
             return manufacturer;
         }
 
-        logger.debug("Unknown manufacturer for MAC prefix: {}", prefix);
+        logger.info("Unknown manufacturer for MAC prefix: {}", prefix);
         return "Unknown";
     }
 

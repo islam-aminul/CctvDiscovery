@@ -138,7 +138,7 @@ public class RtspService {
                             paths[i] = paths[i].trim();
                         }
                         MANUFACTURER_PATHS.put(manufacturer.toUpperCase(), paths);
-                        logger.debug("Loaded {} RTSP paths for manufacturer: {}", paths.length, manufacturer);
+                        logger.info("Loaded {} RTSP paths for manufacturer: {}", paths.length, manufacturer);
                     }
                 }
             }
@@ -222,7 +222,7 @@ public class RtspService {
 
         // Get detected RTSP ports - do NOT test if none found
         List<Integer> rtspPorts = getDetectedRtspPorts(device);
-        logger.debug("Device {} - Detected RTSP ports: {}", device.getIpAddress(), rtspPorts);
+        logger.info("Device {} - Detected RTSP ports: {}", device.getIpAddress(), rtspPorts);
 
         // Skip RTSP testing if no ports detected
         if (rtspPorts.isEmpty()) {
@@ -235,7 +235,7 @@ public class RtspService {
         // 1. Try smart cache first
         if (macPrefix != null && SMART_CACHE.containsKey(macPrefix)) {
             pathsToTry.addAll(SMART_CACHE.get(macPrefix));
-            logger.debug("Using smart cache for MAC prefix: {}", macPrefix);
+            logger.info("Using smart cache for MAC prefix: {}", macPrefix);
         }
 
         // 2. Try manufacturer-specific paths
@@ -255,14 +255,14 @@ public class RtspService {
         // 3. Try custom user-configured path pairs (main + sub)
         String[] customPaths = AppConfig.getInstance().getCustomRtspPaths();
         if (customPaths.length > 0 && customPaths.length % 2 == 0) {
-            logger.debug("Trying {} custom RTSP path pairs from configuration", customPaths.length / 2);
+            logger.info("Trying {} custom RTSP path pairs from configuration", customPaths.length / 2);
 
             // Process custom paths as pairs
             for (int i = 0; i < customPaths.length; i += 2) {
                 String mainPath = customPaths[i];
                 String subPath = customPaths[i + 1];
 
-                logger.debug("Trying custom path pair: main={}, sub={}", mainPath, subPath);
+                logger.info("Trying custom path pair: main={}, sub={}", mainPath, subPath);
 
                 // Try main stream on each detected RTSP port
                 for (int port : rtspPorts) {
@@ -402,22 +402,20 @@ public class RtspService {
                     "Accept: application/sdp\r\n" +
                     "\r\n";
 
-            logger.debug("========== RTSP REQUEST ==========");
-            logger.debug("Sending RTSP DESCRIBE to: {}", rtspUrl);
-            logger.debug("Request:\n{}", request.replace("\r\n", "\n"));
-            logger.debug("==================================");
+            logger.info("RTSP REQUEST");
+            logger.info("Sending RTSP DESCRIBE to: {}", rtspUrl);
+            logger.info("Request:\n{}", request.replace("\r\n", "\n"));
 
             out.write(request.getBytes());
             out.flush();
 
             // Read response
             String line = in.readLine();
-            logger.debug("========== RTSP RESPONSE ==========");
-            logger.debug("Response Line: {}", line);
+            logger.info("RTSP RESPONSE");
+            logger.info("Response Line: {}", line);
 
             if (line == null) {
-                logger.debug("No response from RTSP URL: {}", rtspUrl);
-                logger.debug("===================================");
+                logger.info("No response from RTSP URL: {}", rtspUrl);
                 return null;
             }
 
@@ -429,18 +427,17 @@ public class RtspService {
                     break;
                 }
                 allHeaders.append(headerLine).append("\n");
-                logger.debug("Header: {}", headerLine);
+                logger.info("Header: {}", headerLine);
             }
-            logger.debug("===================================");
 
             if (line.contains("401")) {
                 // Unauthorized - need authentication
-                logger.debug("RTSP URL requires authentication: {}", rtspUrl);
+                logger.info("RTSP URL requires authentication: {}", rtspUrl);
                 // Re-create the header content for authentication parsing
                 return testRtspUrlWithAuth(rtspUrl, username, password, socket, in, out, allHeaders.toString());
             } else if (line.contains("200")) {
                 // Success - validate SDP content
-                logger.debug("Got 200 OK from RTSP URL, validating SDP: {}", rtspUrl);
+                logger.info("Got 200 OK from RTSP URL, validating SDP: {}", rtspUrl);
 
                 // Headers already read and logged above, parse Content-Length from allHeaders
                 int contentLength = 0;
@@ -449,7 +446,7 @@ public class RtspService {
                         try {
                             contentLength = Integer.parseInt(hdr.substring(15).trim());
                         } catch (NumberFormatException e) {
-                            logger.debug("Invalid Content-Length header");
+                            logger.info("Invalid Content-Length header");
                         }
                     }
                 }
@@ -470,9 +467,8 @@ public class RtspService {
                     }
                 }
 
-                logger.debug("========== SDP RESPONSE ==========");
-                logger.debug("SDP Body (length={}):\n{}", sdpBody.length(), sdpBody.toString());
-                logger.debug("==================================");
+                logger.info("SDP RESPONSE");
+                logger.info("SDP Body (length={}):\n{}", sdpBody.length(), sdpBody.toString());
 
                 // Validate SDP content
                 if (validateSdp(sdpBody.toString(), rtspUrl)) {
@@ -481,7 +477,7 @@ public class RtspService {
                     String sessionName = parseSdpSessionName(sdpBody.toString());
                     if (sessionName != null) {
                         stream.setSdpSessionName(sessionName);
-                        logger.debug("SDP session name extracted: {}", sessionName);
+                        logger.info("SDP session name extracted: {}", sessionName);
                     }
                     return stream;
                 } else {
@@ -489,13 +485,13 @@ public class RtspService {
                     return null;
                 }
             } else {
-                logger.debug("RTSP URL returned non-success code: {} - {}", line, rtspUrl);
+                logger.info("RTSP URL returned non-success code: {} - {}", line, rtspUrl);
             }
 
         } catch (SocketTimeoutException e) {
-            logger.debug("Timeout testing RTSP URL: {}", rtspUrl);
+            logger.info("Timeout testing RTSP URL: {}", rtspUrl);
         } catch (Exception e) {
-            logger.debug("Error testing RTSP URL {}: {}", rtspUrl, e.getMessage());
+            logger.info("Error testing RTSP URL {}: {}", rtspUrl, e.getMessage());
         } finally {
             if (socket != null && !socket.isClosed()) {
                 try {
@@ -523,12 +519,12 @@ public class RtspService {
                 if (line.startsWith("WWW-Authenticate:")) {
                     String authHeader = line.substring(17).trim();
                     rawAuthHeaders.add(authHeader);
-                    logger.debug("Parsing WWW-Authenticate header: {}", authHeader);
+                    logger.info("Parsing WWW-Authenticate header: {}", authHeader);
 
                     AuthUtils.AuthChallenge challenge = AuthUtils.parseAuthChallenge(authHeader);
                     if (challenge != null) {
                         challenges.add(challenge);
-                        logger.debug("Parsed auth challenge: {}", challenge);
+                        logger.info("Parsed auth challenge: {}", challenge);
                     } else {
                         logger.warn("Failed to parse WWW-Authenticate header: {}", authHeader);
                     }
@@ -549,16 +545,16 @@ public class RtspService {
 
             for (AuthUtils.AuthChallenge challenge : challenges) {
                 if (!AuthUtils.isValidChallenge(challenge)) {
-                    logger.debug("Skipping invalid challenge: {}", challenge);
+                    logger.info("Skipping invalid challenge: {}", challenge);
                     continue;
                 }
 
                 RTSPStream result = null;
                 if (challenge.type == AuthUtils.AuthType.DIGEST) {
-                    logger.debug("Attempting Digest authentication for: {}", rtspUrl);
+                    logger.info("Attempting Digest authentication for: {}", rtspUrl);
                     result = attemptDigestAuth(rtspUrl, username, password, challenge, socket, in, out);
                 } else if (challenge.type == AuthUtils.AuthType.BASIC) {
-                    logger.debug("Attempting Basic authentication for: {}", rtspUrl);
+                    logger.info("Attempting Basic authentication for: {}", rtspUrl);
                     result = attemptBasicAuth(rtspUrl, username, password, socket, in, out);
                 }
 
@@ -568,10 +564,10 @@ public class RtspService {
                 }
             }
 
-            logger.debug("All authentication attempts failed for: {}", rtspUrl);
+            logger.info("All authentication attempts failed for: {}", rtspUrl);
 
         } catch (Exception e) {
-            logger.debug("Error during RTSP authentication for {}: {}", rtspUrl, e.getMessage());
+            logger.info("Error during RTSP authentication for {}: {}", rtspUrl, e.getMessage());
         }
         return null;
     }
@@ -584,19 +580,19 @@ public class RtspService {
                                          Socket socket, BufferedReader in, OutputStream out) {
         try {
             if (challenge.realm == null || challenge.realm.isEmpty()) {
-                logger.debug("Digest challenge missing realm");
+                logger.info("Digest challenge missing realm");
                 return null;
             }
             if (challenge.nonce == null || challenge.nonce.isEmpty()) {
-                logger.debug("Digest challenge missing nonce");
+                logger.info("Digest challenge missing nonce");
                 return null;
             }
 
             // Send authenticated request
             String uri = extractUri(rtspUrl);
-            logger.debug("Extracted URI for digest: {}", uri);
-            logger.debug("Using credentials - Username: {}, Password: {} chars", username, password != null ? password.length() : 0);
-            logger.debug("Challenge details - Realm: {}, Nonce: {}, Opaque: {}, QOP: {}",
+            logger.info("Extracted URI for digest: {}", uri);
+            logger.info("Using credentials - Username: {}, Password: {} chars", username, password != null ? password.length() : 0);
+            logger.info("Challenge details - Realm: {}, Nonce: {}, Opaque: {}, QOP: {}",
                          challenge.realm, challenge.nonce, challenge.opaque, challenge.qop);
 
             String authHeader = AuthUtils.buildDigestAuthHeader(
@@ -610,10 +606,9 @@ public class RtspService {
                     "Accept: application/sdp\r\n" +
                     "\r\n";
 
-            logger.debug("========== RTSP DIGEST AUTH REQUEST ==========");
-            logger.debug("Request:\n{}", authRequest.replace("\r\n", "\n"));
-            logger.debug("Authorization Header: {}", authHeader);
-            logger.debug("==============================================");
+            logger.info("RTSP DIGEST AUTH REQUEST");
+            logger.info("Request:\n{}", authRequest.replace("\r\n", "\n"));
+            logger.info("Authorization Header: {}", authHeader);
 
             out.write(authRequest.getBytes());
             out.flush();
@@ -621,7 +616,7 @@ public class RtspService {
             return readAuthResponse(rtspUrl, in);
 
         } catch (Exception e) {
-            logger.debug("Error during Digest authentication for {}: {}", rtspUrl, e.getMessage());
+            logger.info("Error during Digest authentication for {}: {}", rtspUrl, e.getMessage());
         }
         return null;
     }
@@ -632,7 +627,7 @@ public class RtspService {
     private RTSPStream attemptBasicAuth(String rtspUrl, String username, String password,
                                         Socket socket, BufferedReader in, OutputStream out) {
         try {
-            logger.debug("Using credentials - Username: {}, Password: {} chars", username, password != null ? password.length() : 0);
+            logger.info("Using credentials - Username: {}, Password: {} chars", username, password != null ? password.length() : 0);
 
             String authHeader = AuthUtils.generateBasicAuth(username, password);
 
@@ -643,10 +638,9 @@ public class RtspService {
                     "Accept: application/sdp\r\n" +
                     "\r\n";
 
-            logger.debug("========== RTSP BASIC AUTH REQUEST ==========");
-            logger.debug("Request:\n{}", authRequest.replace("\r\n", "\n"));
-            logger.debug("Authorization Header: {}", authHeader);
-            logger.debug("=============================================");
+            logger.info("RTSP BASIC AUTH REQUEST");
+            logger.info("Request:\n{}", authRequest.replace("\r\n", "\n"));
+            logger.info("Authorization Header: {}", authHeader);
 
             out.write(authRequest.getBytes());
             out.flush();
@@ -654,7 +648,7 @@ public class RtspService {
             return readAuthResponse(rtspUrl, in);
 
         } catch (Exception e) {
-            logger.debug("Error during Basic authentication for {}: {}", rtspUrl, e.getMessage());
+            logger.info("Error during Basic authentication for {}: {}", rtspUrl, e.getMessage());
         }
         return null;
     }
@@ -665,11 +659,11 @@ public class RtspService {
     private RTSPStream readAuthResponse(String rtspUrl, BufferedReader in) throws Exception {
         String responseLine = in.readLine();
 
-        logger.debug("========== RTSP AUTH RESPONSE ==========");
-        logger.debug("Response Line: {}", responseLine);
+        logger.info("RTSP AUTH RESPONSE");
+        logger.info("Response Line: {}", responseLine);
 
         if (responseLine != null && responseLine.contains("200")) {
-            logger.debug("Got 200 OK with authentication, validating SDP: {}", rtspUrl);
+            logger.info("Got 200 OK with authentication, validating SDP: {}", rtspUrl);
 
             // Read headers to get Content-Length
             int contentLength = 0;
@@ -680,12 +674,12 @@ public class RtspService {
                     break; // End of headers
                 }
                 allHeaders.append(headerLine).append("\n");
-                logger.debug("Response Header: {}", headerLine);
+                logger.info("Response Header: {}", headerLine);
                 if (headerLine.startsWith("Content-Length:")) {
                     try {
                         contentLength = Integer.parseInt(headerLine.substring(15).trim());
                     } catch (NumberFormatException e) {
-                        logger.debug("Invalid Content-Length header");
+                        logger.info("Invalid Content-Length header");
                     }
                 }
             }
@@ -706,9 +700,8 @@ public class RtspService {
                 }
             }
 
-            logger.debug("========== SDP RESPONSE ==========");
-            logger.debug("SDP Body (length={}):\n{}", sdpBody.length(), sdpBody.toString());
-            logger.debug("==================================");
+            logger.info("SDP RESPONSE");
+            logger.info("SDP Body (length={}):\n{}", sdpBody.length(), sdpBody.toString());
 
             // Validate SDP content
             if (validateSdp(sdpBody.toString(), rtspUrl)) {
@@ -717,7 +710,7 @@ public class RtspService {
                 String sessionName = parseSdpSessionName(sdpBody.toString());
                 if (sessionName != null) {
                     stream.setSdpSessionName(sessionName);
-                    logger.debug("SDP session name extracted: {}", sessionName);
+                    logger.info("SDP session name extracted: {}", sessionName);
                 }
                 return stream;
             } else {
@@ -725,16 +718,15 @@ public class RtspService {
                 return null;
             }
         } else {
-            logger.debug("Authentication failed. Response: {}", responseLine);
+            logger.info("Authentication failed. Response: {}", responseLine);
             // Read and log all remaining headers for diagnosis
             String headerLine;
             while ((headerLine = in.readLine()) != null) {
                 if (headerLine.isEmpty()) {
                     break;
                 }
-                logger.debug("Response Header: {}", headerLine);
+                logger.info("Response Header: {}", headerLine);
             }
-            logger.debug("========================================");
         }
         return null;
     }
@@ -762,8 +754,8 @@ public class RtspService {
             OutputStream out = socket.getOutputStream();
             BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
 
-            logger.debug("========== RTP PACKET VALIDATION ==========");
-            logger.debug("URL: {}, Timeout: {}ms", rtspUrl, timeout);
+            logger.info("RTP PACKET VALIDATION");
+            logger.info("URL: {}, Timeout: {}ms", rtspUrl, timeout);
 
             // Step 1: DESCRIBE (unauthenticated first)
             int cseq = 1;
@@ -777,7 +769,7 @@ public class RtspService {
 
             String responseLine = in.readLine();
             if (responseLine == null) {
-                logger.debug("No response from DESCRIBE");
+                logger.info("No response from DESCRIBE");
                 return null;
             }
 
@@ -790,10 +782,10 @@ public class RtspService {
 
             // Handle authentication - retry DESCRIBE with credentials
             if (responseLine.contains("401")) {
-                logger.debug("RTP validation: 401 received, attempting authentication for {}", rtspUrl);
+                logger.info("RTP validation: 401 received, attempting authentication for {}", rtspUrl);
 
                 if (username == null || username.isEmpty()) {
-                    logger.debug("No credentials available for RTP authentication");
+                    logger.info("No credentials available for RTP authentication");
                     return null;
                 }
 
@@ -810,7 +802,7 @@ public class RtspService {
                 }
 
                 if (challenges.isEmpty()) {
-                    logger.debug("No WWW-Authenticate challenges found in 401 response");
+                    logger.info("No WWW-Authenticate challenges found in 401 response");
                     return null;
                 }
 
@@ -831,17 +823,17 @@ public class RtspService {
                             username, password, challenge.realm, challenge.nonce,
                             uri, "DESCRIBE", challenge.opaque
                         );
-                        logger.debug("RTP: Using Digest authentication");
+                        logger.info("RTP: Using Digest authentication");
                         break;
                     } else if (challenge.type == AuthUtils.AuthType.BASIC) {
                         authorizationHeader = AuthUtils.generateBasicAuth(username, password);
-                        logger.debug("RTP: Using Basic authentication");
+                        logger.info("RTP: Using Basic authentication");
                         break;
                     }
                 }
 
                 if (authorizationHeader == null) {
-                    logger.debug("Failed to build authorization header");
+                    logger.info("Failed to build authorization header");
                     return null;
                 }
 
@@ -866,12 +858,12 @@ public class RtspService {
 
                 responseLine = in.readLine();
                 if (responseLine == null || !responseLine.contains("200")) {
-                    logger.debug("Authenticated DESCRIBE failed: {}", responseLine);
+                    logger.info("Authenticated DESCRIBE failed: {}", responseLine);
                     return null;
                 }
-                logger.debug("RTP: Authenticated DESCRIBE succeeded");
+                logger.info("RTP: Authenticated DESCRIBE succeeded");
             } else if (!responseLine.contains("200")) {
-                logger.debug("DESCRIBE failed: {}", responseLine);
+                logger.info("DESCRIBE failed: {}", responseLine);
                 return null;
             }
 
@@ -892,7 +884,7 @@ public class RtspService {
 
             String sdpContent = sdp.toString();
             if (sdpContent.isEmpty()) {
-                logger.debug("No SDP received");
+                logger.info("No SDP received");
                 return null;
             }
 
@@ -918,7 +910,7 @@ public class RtspService {
 
             responseLine = in.readLine();
             if (responseLine == null || !responseLine.contains("200")) {
-                logger.debug("SETUP failed: {}", responseLine);
+                logger.info("SETUP failed: {}", responseLine);
                 return null;
             }
 
@@ -930,7 +922,7 @@ public class RtspService {
             }
 
             if (sessionId == null) {
-                logger.debug("No Session ID received");
+                logger.info("No Session ID received");
                 return null;
             }
 
@@ -952,7 +944,7 @@ public class RtspService {
             while ((line = in.readLine()) != null && !line.isEmpty()) {} // Skip headers
 
             if (responseLine == null || !responseLine.contains("200")) {
-                logger.debug("PLAY failed: {}", responseLine);
+                logger.info("PLAY failed: {}", responseLine);
                 return null;
             }
 
@@ -970,7 +962,7 @@ public class RtspService {
                     // Verify RTP packet (version should be 2)
                     if (packet.getLength() >= 12 && ((buffer[0] & 0xC0) >> 6) == 2) {
                         packetsReceived++;
-                        logger.debug("RTP packet {} received ({} bytes)", packetsReceived, packet.getLength());
+                        logger.info("RTP packet {} received ({} bytes)", packetsReceived, packet.getLength());
                     }
                 } catch (SocketTimeoutException e) {
                     break;
@@ -979,23 +971,20 @@ public class RtspService {
 
             if (packetsReceived >= 5) {
                 logger.info("✓ RTP validation SUCCESS: {} ({} packets)", rtspUrl, packetsReceived);
-                logger.debug("===========================================");
                 RTSPStream stream = new RTSPStream("Main", rtspUrl);
                 String sessionName = parseSdpSessionName(sdpContent);
                 if (sessionName != null) {
                     stream.setSdpSessionName(sessionName);
-                    logger.debug("SDP session name extracted: {}", sessionName);
+                    logger.info("SDP session name extracted: {}", sessionName);
                 }
                 return stream;
             } else {
-                logger.debug("✗ Insufficient RTP packets: {} (need 5)", packetsReceived);
-                logger.debug("===========================================");
+                logger.info("✗ Insufficient RTP packets: {} (need 5)", packetsReceived);
                 return null;
             }
 
         } catch (Exception e) {
-            logger.debug("RTP validation error: {}", e.getMessage());
-            logger.debug("===========================================");
+            logger.info("RTP validation error: {}", e.getMessage());
             return null;
         } finally {
             // Cleanup - send TEARDOWN with auth
@@ -1056,8 +1045,8 @@ public class RtspService {
                 authUrl = cleanUrl.replace("rtsp://", "rtsp://" + creds + "@");
             }
 
-            logger.debug("========== FRAME CAPTURE VALIDATION ==========");
-            logger.debug("URL: {}, Timeout: {}ms", rtspUrl, timeout);
+            logger.info("FRAME CAPTURE VALIDATION");
+            logger.info("URL: {}, Timeout: {}ms", rtspUrl, timeout);
 
             grabber = new FFmpegFrameGrabber(authUrl);
 
@@ -1077,34 +1066,29 @@ public class RtspService {
             long elapsedMs = System.currentTimeMillis() - startTime;
 
             if (frame != null && frame.image != null) {
-                logger.info("✓ Frame captured in {}ms - {}x{} pixels",
+                logger.info("Frame captured in {}ms - {}x{} pixels",
                            elapsedMs, frame.imageWidth, frame.imageHeight);
-                logger.debug("==============================================");
                 return new RTSPStream("Main", rtspUrl);
             } else {
-                logger.debug("✗ No valid frame after {}ms", elapsedMs);
-                logger.debug("==============================================");
+                logger.info("No valid frame after {}ms", elapsedMs);
                 return null;
             }
 
         } catch (org.bytedeco.javacv.FrameGrabber.Exception e) {
             long elapsedMs = System.currentTimeMillis() - startTime;
             String msg = e.getMessage() != null ? e.getMessage() : "";
-            logger.debug("✗ Frame capture failed after {}ms: {}", elapsedMs, msg);
-            logger.debug("==============================================");
+            logger.info("Frame capture failed after {}ms: {}", elapsedMs, msg);
             return null;
         } catch (Exception e) {
             long elapsedMs = System.currentTimeMillis() - startTime;
-            logger.debug("✗ Error after {}ms: {}", elapsedMs, e.getMessage());
-            logger.debug("==============================================");
+            logger.info("Error after {}ms: {}", elapsedMs, e.getMessage());
             return null;
         } finally {
             if (grabber != null) {
                 try {
-                    grabber.stop();
-                    grabber.release();
+                    grabber.close();
                 } catch (Exception e) {
-                    logger.debug("Cleanup error: {}", e.getMessage());
+                    logger.info("Cleanup error: {}", e.getMessage());
                 }
             }
         }
@@ -1130,11 +1114,11 @@ public class RtspService {
      */
     private boolean validateSdp(String sdpContent, String rtspUrl) {
         if (sdpContent == null || sdpContent.trim().isEmpty()) {
-            logger.debug("Empty SDP content for {}", rtspUrl);
+            logger.info("Empty SDP content for {}", rtspUrl);
             return false;
         }
 
-        logger.debug("Validating SDP content for {} - Length: {} bytes", rtspUrl, sdpContent.length());
+        logger.info("Validating SDP content for {} - Length: {} bytes", rtspUrl, sdpContent.length());
 
         // Basic SDP validation
         boolean hasVersion = false;
@@ -1149,13 +1133,13 @@ public class RtspService {
             // Check for SDP version (required - RFC 4566)
             if (line.startsWith("v=")) {
                 hasVersion = true;
-                logger.debug("SDP version line found: {}", line);
+                logger.info("SDP version line found: {}", line);
             }
 
             // Check for video media track (critical - proves video stream exists)
             if (line.startsWith("m=video")) {
                 hasVideoMedia = true;
-                logger.debug("SDP video media track found: {}", line);
+                logger.info("SDP video media track found: {}", line);
             }
 
             // Check for codec info (nice to have - indicates proper stream configuration)
@@ -1163,7 +1147,7 @@ public class RtspService {
                 (line.contains("H264") || line.contains("H265") || line.contains("HEVC") ||
                  line.contains("MPEG4") || line.contains("MJPEG") || line.contains("MP4V"))) {
                 hasCodecInfo = true;
-                logger.debug("SDP codec info found: {}", line);
+                logger.info("SDP codec info found: {}", line);
             }
         }
 
@@ -1181,7 +1165,7 @@ public class RtspService {
 
         // Log codec info status (informational only - not required for validation)
         if (!hasCodecInfo) {
-            logger.debug("SDP missing explicit codec info (a=rtpmap) for {} - Stream may still work", rtspUrl);
+            logger.info("SDP missing explicit codec info (a=rtpmap) for {} - Stream may still work", rtspUrl);
         }
 
         logger.info("SDP validation PASSED for {} - Version: {}, Video: {}, Codec: {}",
@@ -1235,7 +1219,7 @@ public class RtspService {
         }
 
         int rtspPort = rtspPorts.get(0); // Use first detected port
-        logger.debug("Using RTSP port {} for NVR channel iteration", rtspPort);
+        logger.info("Using RTSP port {} for NVR channel iteration", rtspPort);
 
         String manufacturer = device.getManufacturer();
         boolean isHikvision = manufacturer != null && manufacturer.toUpperCase().contains("HIKVISION");

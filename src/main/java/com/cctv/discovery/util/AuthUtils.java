@@ -407,12 +407,17 @@ public class AuthUtils {
 
         @Override
         public String toString() {
+            StringBuilder sb = new StringBuilder("AuthChallenge{");
             if (type == AuthType.BASIC) {
-                return "AuthChallenge{type=BASIC, realm='" + realm + "'}";
+                sb.append("type=BASIC, realm='").append(realm).append('\'');
             } else if (type == AuthType.DIGEST) {
-                return "AuthChallenge{type=DIGEST, realm='" + realm + "', nonce='" + nonce + "', qop='" + qop + "'}";
+                sb.append("type=DIGEST, realm='").append(realm).append('\'')
+                  .append(", nonce='").append(nonce).append('\'')
+                  .append(", qop='").append(qop).append('\'');
+            } else {
+                sb.append("type=").append(type);
             }
-            return "AuthChallenge{type=" + type + "}";
+            return sb.append('}').toString();
         }
 
         public boolean isValid() {
@@ -433,7 +438,11 @@ public class AuthUtils {
 
         @Override
         public String toString() {
-            return "DigestChallenge{realm='" + realm + "', nonce='" + nonce + "'}";
+            return new StringBuilder("DigestChallenge{")
+                    .append("realm='").append(realm).append('\'')
+                    .append(", nonce='").append(nonce).append('\'')
+                    .append('}')
+                    .toString();
         }
     }
 }

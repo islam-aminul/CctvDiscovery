@@ -96,9 +96,6 @@ public class MainController {
     private Label lblVerificationSummary;
 
     // RTSP Validation Method (used in verification modal and settings)
-    private RadioButton rbSdpOnly;
-    private RadioButton rbRtpPacket;
-    private RadioButton rbFrameCapture;
     private String selectedValidationMethod = "FRAME_CAPTURE";
 
     // Progress
@@ -570,7 +567,8 @@ public class MainController {
             }
         });
 
-        tvIpRanges.getColumns().addAll(colStartIp, colEndIp);
+        tvIpRanges.getColumns().add(colStartIp);
+        tvIpRanges.getColumns().add(colEndIp);
 
         Button btnAddRange = new Button("Add IP Range");
         btnAddRange.setPrefWidth(120);
@@ -816,7 +814,7 @@ public class MainController {
                     stage.getIcons().add(new javafx.scene.image.Image(iconStream));
                 }
             } catch (Exception ex) {
-                logger.debug("Could not load icon for verification method dialog", ex);
+                logger.info("Could not load icon for verification method dialog", ex);
             }
         });
 
@@ -858,11 +856,6 @@ public class MainController {
                 true
         );
         RadioButton rb3 = (RadioButton) card3.getUserData();
-
-        // Store references for use in configureRtspValidation
-        rbSdpOnly = rb1;
-        rbRtpPacket = rb2;
-        rbFrameCapture = rb3;
 
         // Select current method
         if ("SDP_ONLY".equals(selectedValidationMethod)) {
@@ -984,10 +977,6 @@ public class MainController {
         vbox.getChildren().addAll(lblTitle, btnStart);
         updateStartButtonState();
         return vbox;
-    }
-
-    private void onValidationMethodChanged() {
-        logger.info("RTSP validation method changed to: {}", selectedValidationMethod);
     }
 
     private VBox createExportSection() {
@@ -1131,7 +1120,12 @@ public class MainController {
             }
         });
 
-        tvResults.getColumns().addAll(colIp, colStatus, colName, colManufacturer, colStreams, colError);
+        tvResults.getColumns().add(colIp);
+        tvResults.getColumns().add(colStatus);
+        tvResults.getColumns().add(colName);
+        tvResults.getColumns().add(colManufacturer);
+        tvResults.getColumns().add(colStreams);
+        tvResults.getColumns().add(colError);
 
         // Add row factory for background colors only
         tvResults.setRowFactory(tv -> new TableRow<Device>() {
@@ -1262,21 +1256,6 @@ public class MainController {
         }
     }
 
-    private void toggleNetworkMode() {
-        boolean advanced = cbAdvancedMode.isSelected();
-        simpleNetworkBox.setVisible(!advanced);
-        simpleNetworkBox.setManaged(!advanced);
-        advancedNetworkBox.setVisible(advanced);
-        advancedNetworkBox.setManaged(advanced);
-
-        if (advanced) {
-            updateAdvancedIpCount();
-        } else {
-            updateIpCount();
-        }
-        updateStartButtonState();
-    }
-
     private void addIpRange() {
         ipRanges.add(new IpRangeItem("", ""));
         updateAdvancedIpCount();
@@ -1285,24 +1264,6 @@ public class MainController {
     private void addCidr() {
         cidrs.add(new CidrItem(""));
         updateAdvancedIpCount();
-    }
-
-    private boolean isDuplicateIpRange(String startIp, String endIp) {
-        for (IpRangeItem existing : ipRanges) {
-            if (existing.getStartIp().equals(startIp) && existing.getEndIp().equals(endIp)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private boolean isDuplicateCidr(String cidr) {
-        for (CidrItem existing : cidrs) {
-            if (existing.getCidr().equals(cidr)) {
-                return true;
-            }
-        }
-        return false;
     }
 
     /**
@@ -1366,7 +1327,7 @@ public class MainController {
                 int prefixLength = NetworkUtils.getNetworkPrefixLength(item.getNetworkInterface());
                 int subnetSize = NetworkUtils.countIPsFromPrefix(prefixLength);
                 count += subnetSize;
-                logger.debug("Interface {} has /{} prefix = {} usable IPs",
+                logger.info("Interface {} has /{} prefix = {} usable IPs",
                            item.getIpAddress(), prefixLength, subnetSize);
             }
         }
@@ -1462,7 +1423,7 @@ public class MainController {
                         inetAddr.getHostAddress().equals(ipAddress)) {
                         int prefixLength = NetworkUtils.getNetworkPrefixLength(ni);
                         int subnetSize = NetworkUtils.countIPsFromPrefix(prefixLength);
-                        logger.debug("Selected interface {} has /{} prefix = {} usable IPs",
+                        logger.info("Selected interface {} has /{} prefix = {} usable IPs",
                                    ipAddress, prefixLength, subnetSize);
                         return subnetSize;
                     }
@@ -1756,7 +1717,7 @@ public class MainController {
     }
 
     private void authenticateAndDiscoverStreams(Device device) {
-        logger.info("=== Starting authentication for device: {} ===", device.getIpAddress());
+        logger.info("Starting authentication for device: {}", device.getIpAddress());
         device.setStatus(Device.DeviceStatus.AUTHENTICATING);
         Platform.runLater(() -> tvResults.refresh());
 
@@ -1764,10 +1725,9 @@ public class MainController {
         boolean onvifSuccess = attemptOnvifAuthentication(device);
 
         // PRIORITY 2: Try RTSP URL Guessing (if ONVIF failed or no streams found)
-        boolean rtspSuccess = false;
         if (!onvifSuccess || device.getRtspStreams().isEmpty()) {
             logger.info("Falling back to RTSP URL guessing for {}", device.getIpAddress());
-            rtspSuccess = attemptRtspAuthentication(device);
+            attemptRtspAuthentication(device);
         }
 
         // PRIORITY 3: NVR/DVR Channel Iteration (if applicable and authenticated)
@@ -1782,7 +1742,7 @@ public class MainController {
         // Set final status
         if (device.getUsername() != null && !device.getRtspStreams().isEmpty()) {
             device.setStatus(Device.DeviceStatus.COMPLETED);
-            logger.info("=== Device {} authentication COMPLETED - {} streams found ===",
+            logger.info("Device {} authentication COMPLETED - {} streams found",
                     device.getIpAddress(), device.getRtspStreams().size());
         } else {
             // Check if this is likely NOT a camera (router, printer, NAS, web server, etc.)
@@ -1800,12 +1760,12 @@ public class MainController {
                 device.setStatus(Device.DeviceStatus.AUTH_FAILED);
                 device.setAuthFailed(false); // Not an auth failure - just not a camera
                 device.setErrorMessage("Unknown device type");
-                logger.info("=== Device {} marked as UNKNOWN DEVICE TYPE (not a camera) ===", device.getIpAddress());
+                logger.info("Device {} marked as UNKNOWN DEVICE TYPE (not a camera)", device.getIpAddress());
             } else {
                 device.setStatus(Device.DeviceStatus.AUTH_FAILED);
                 device.setAuthFailed(true);
                 device.setErrorMessage("Authentication failed with all credentials");
-                logger.warn("=== Device {} authentication FAILED ===", device.getIpAddress());
+                logger.warn("Device {} authentication FAILED", device.getIpAddress());
             }
         }
     }
@@ -1815,14 +1775,14 @@ public class MainController {
      * Tries service URL from WS-Discovery first, then constructs URLs from detected ports.
      */
     private boolean attemptOnvifAuthentication(Device device) {
-        logger.info("--- Attempting ONVIF authentication for {} ---", device.getIpAddress());
+        logger.info("Attempting ONVIF authentication for {}", device.getIpAddress());
 
         // Case 1: Service URL from WS-Discovery
         if (device.getOnvifServiceUrl() != null) {
             logger.info("Using ONVIF service URL from WS-Discovery: {}", device.getOnvifServiceUrl());
 
             for (Credential cred : credentials) {
-                logger.debug("Trying ONVIF with credential: {}", cred.getUsername());
+                logger.info("Trying ONVIF with credential: {}", cred.getUsername());
 
                 if (onvifService.getDeviceInformation(device, cred.getUsername(), cred.getPassword())) {
                     device.setUsername(cred.getUsername());
@@ -1867,7 +1827,7 @@ public class MainController {
                 logger.info("Trying ONVIF on port: {}", port);
 
                 for (Credential cred : credentials) {
-                    logger.debug("Trying constructed ONVIF URL with credential: {}", cred.getUsername());
+                    logger.info("Trying constructed ONVIF URL with credential: {}", cred.getUsername());
 
                     if (onvifService.discoverDeviceByPort(device, port, cred.getUsername(), cred.getPassword())) {
                         device.setUsername(cred.getUsername());
@@ -1914,7 +1874,7 @@ public class MainController {
      * Attempt RTSP URL guessing with all credentials.
      */
     private boolean attemptRtspAuthentication(Device device) {
-        logger.info("--- Attempting RTSP URL guessing for {} ---", device.getIpAddress());
+        logger.info("Attempting RTSP URL guessing for {}", device.getIpAddress());
 
         // Check if RTSP ports exist - if not, skip entirely
         if (device.getOpenRtspPorts() == null || device.getOpenRtspPorts().isEmpty()) {
@@ -1923,7 +1883,7 @@ public class MainController {
         }
 
         for (Credential cred : credentials) {
-            logger.debug("Trying RTSP discovery with credential: {}", cred.getUsername());
+            logger.info("Trying RTSP discovery with credential: {}", cred.getUsername());
 
             List<RTSPStream> streams = rtspService.discoverStreams(device, cred.getUsername(), cred.getPassword());
             if (!streams.isEmpty()) {
@@ -1971,7 +1931,7 @@ public class MainController {
                     stage.getIcons().add(new javafx.scene.image.Image(iconStream));
                 }
             } catch (Exception ex) {
-                logger.debug("Could not load icon for retry authentication dialog", ex);
+                logger.info("Could not load icon for retry authentication dialog", ex);
             }
         });
 
@@ -2035,7 +1995,7 @@ public class MainController {
 
                 // Retry authentication in background
                 executorService.submit(() -> {
-                    logger.info("=== Starting RETRY authentication for device: {} ===", device.getIpAddress());
+                    logger.info("Starting RETRY authentication for device: {}", device.getIpAddress());
 
                     // Reset device state
                     device.getRtspStreams().clear();
@@ -2147,7 +2107,7 @@ public class MainController {
                     stage.getIcons().add(new javafx.scene.image.Image(iconStream));
                 }
             } catch (Exception ex) {
-                logger.debug("Could not load icon for export dialog", ex);
+                logger.info("Could not load icon for export dialog", ex);
             }
         });
 
@@ -2245,7 +2205,7 @@ public class MainController {
                     stage.getIcons().add(new javafx.scene.image.Image(iconStream));
                 }
             } catch (Exception ex) {
-                logger.debug("Could not load icon for help dialog", ex);
+                logger.info("Could not load icon for help dialog", ex);
             }
         });
 
@@ -2386,7 +2346,7 @@ public class MainController {
                     fos.write(buffer, 0, bytesRead);
                 }
             }
-            logger.debug("Extracted resource: {} to {}", resourcePath, targetFile.getAbsolutePath());
+            logger.info("Extracted resource: {} to {}", resourcePath, targetFile.getAbsolutePath());
         }
 
         return targetFile;
@@ -2422,7 +2382,7 @@ public class MainController {
                 stage.getIcons().add(new javafx.scene.image.Image(iconStream));
             }
         } catch (Exception e) {
-            logger.debug("Could not load icon for alert dialog", e);
+            logger.info("Could not load icon for alert dialog", e);
         }
 
         alert.showAndWait();
@@ -2443,7 +2403,7 @@ public class MainController {
                     stage.getIcons().add(new javafx.scene.image.Image(iconStream));
                 }
             } catch (Exception ex) {
-                logger.debug("Could not load icon for network config dialog", ex);
+                logger.info("Could not load icon for network config dialog", ex);
             }
         });
 
@@ -2607,7 +2567,7 @@ public class MainController {
                     stage.getIcons().add(new javafx.scene.image.Image(iconStream));
                 }
             } catch (Exception ex) {
-                logger.debug("Could not load icon for credential management dialog", ex);
+                logger.info("Could not load icon for credential management dialog", ex);
             }
         });
 
@@ -2737,7 +2697,9 @@ public class MainController {
 
         @Override
         public String toString() {
-            return ipAddress + " - " + displayName;
+            return new StringBuilder()
+                    .append(ipAddress).append(" - ").append(displayName)
+                    .toString();
         }
     }
 

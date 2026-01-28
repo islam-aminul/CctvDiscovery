@@ -37,11 +37,15 @@ public class Credential implements Serializable {
 
     @Override
     public String toString() {
-        return username + " / " + maskPassword(password);
+        return new StringBuilder()
+                .append(username).append(" / ").append(maskPassword(password))
+                .toString();
     }
 
     public String toDisplayString() {
-        return username + " : " + password;
+        return new StringBuilder()
+                .append(username).append(" : ").append(password)
+                .toString();
     }
 
     private String maskPassword(String pwd) {

@@ -276,7 +276,7 @@ public class HostAuditService {
                         break;
                     }
                 } catch (Exception e) {
-                    logger.debug("Failed to connect to NTP server: {}", ntpServer);
+                    logger.info("Failed to connect to NTP server: {}", ntpServer);
                 }
             }
 

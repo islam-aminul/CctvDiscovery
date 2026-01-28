@@ -49,10 +49,10 @@ public class SettingsDialog extends Stage {
             java.io.InputStream iconStream = getClass().getResourceAsStream("/icon.png");
             if (iconStream != null) {
                 getIcons().add(new javafx.scene.image.Image(iconStream));
-                logger.debug("Settings dialog icon loaded successfully");
+                logger.info("Settings dialog icon loaded successfully");
             }
         } catch (Exception e) {
-            logger.debug("Could not load icon for settings dialog", e);
+            logger.info("Could not load icon for settings dialog", e);
         }
 
         // Initialize path pairs list

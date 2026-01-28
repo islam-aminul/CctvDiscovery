@@ -77,7 +77,7 @@ public class StreamAnalyzer {
             grabber.setImageWidth(0);
             grabber.setImageHeight(0);
 
-            logger.debug("Starting stream analysis for: {}", stream.getRtspUrl());
+            logger.info("Starting stream analysis for: {}", stream.getRtspUrl());
             grabber.start();
 
             // Extract basic metadata
@@ -105,7 +105,7 @@ public class StreamAnalyzer {
             String profileName = extractProfile(grabber);
             if (profileName != null) {
                 stream.setProfile(profileName);
-                logger.debug("Detected profile: {} for {}", profileName, stream.getRtspUrl());
+                logger.info("Detected profile: {} for {}", profileName, stream.getRtspUrl());
             }
 
             // Calculate bitrate by sampling frames
@@ -153,7 +153,7 @@ public class StreamAnalyzer {
                     grabber.stop();
                     grabber.release();
                 } catch (Exception e) {
-                    logger.debug("Error releasing grabber", e);
+                    logger.info("Error releasing grabber", e);
                 }
             }
         }
@@ -228,7 +228,7 @@ public class StreamAnalyzer {
 
             return null;
         } catch (Exception e) {
-            logger.debug("Could not extract profile: {}", e.getMessage());
+            logger.info("Could not extract profile: {}", e.getMessage());
             return null;
         }
     }
