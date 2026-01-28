@@ -62,8 +62,6 @@ public class MainController {
 
     // Network selection - Advanced mode
     private CheckBox cbAdvancedMode;
-    private VBox simpleNetworkBox;
-    private VBox advancedNetworkBox;
     private ListView<NetworkInterfaceItem> lvNetworkInterfaces;
     private ObservableList<NetworkInterfaceItem> networkInterfaces;
     private TableView<IpRangeItem> tvIpRanges;
@@ -254,8 +252,7 @@ public class MainController {
                 verificationSection,
                 discoverySection,
                 exportSection,
-                progressSection
-        );
+                progressSection);
 
         return vbox;
     }
@@ -338,8 +335,7 @@ public class MainController {
                 rbInterface, cbInterfaces,
                 rbManualRange, ipRangeBox,
                 rbCIDR, tfCIDR,
-                lblIpCount
-        );
+                lblIpCount);
 
         return vbox;
     }
@@ -396,7 +392,8 @@ public class MainController {
                     } else if (NetworkUtils.isValidIP(newVal.trim())) {
                         textField.setStyle("");
                     } else {
-                        textField.setStyle("-fx-border-color: #dc3545; -fx-border-width: 2px; -fx-background-color: #fff5f5;");
+                        textField.setStyle(
+                                "-fx-border-color: #dc3545; -fx-border-width: 2px; -fx-background-color: #fff5f5;");
                     }
                 });
 
@@ -442,11 +439,12 @@ public class MainController {
                     alert.setTitle("Duplicate IP Range");
                     alert.setHeaderText("This IP range already exists");
                     alert.setContentText(String.format("IP Range: %s - %s\n\nPlease enter a different IP range.",
-                                                       newValue, range.getEndIp()));
+                            newValue, range.getEndIp()));
                     alert.showAndWait();
 
                     // Apply error styling and revert to old value
-                    textField.setStyle("-fx-border-color: #dc3545; -fx-border-width: 2px; -fx-background-color: #fff5f5;");
+                    textField.setStyle(
+                            "-fx-border-color: #dc3545; -fx-border-width: 2px; -fx-background-color: #fff5f5;");
                     textField.setText(oldValue);
                     cancelEdit();
                     return;
@@ -460,8 +458,9 @@ public class MainController {
                             Alert warning = new Alert(Alert.AlertType.WARNING);
                             warning.setTitle("Overlapping IP Range");
                             warning.setHeaderText("This IP range overlaps with an existing range");
-                            warning.setContentText(String.format("New Range: %s - %s\nExisting Range: %s - %s\n\nThis is allowed but may cause redundant scanning.",
-                                                                 newValue, range.getEndIp(), other.getStartIp(), other.getEndIp()));
+                            warning.setContentText(String.format(
+                                    "New Range: %s - %s\nExisting Range: %s - %s\n\nThis is allowed but may cause redundant scanning.",
+                                    newValue, range.getEndIp(), other.getStartIp(), other.getEndIp()));
                             warning.showAndWait();
                             break; // Only show warning once
                         }
@@ -489,7 +488,8 @@ public class MainController {
                     } else if (NetworkUtils.isValidIP(newVal.trim())) {
                         textField.setStyle("");
                     } else {
-                        textField.setStyle("-fx-border-color: #dc3545; -fx-border-width: 2px; -fx-background-color: #fff5f5;");
+                        textField.setStyle(
+                                "-fx-border-color: #dc3545; -fx-border-width: 2px; -fx-background-color: #fff5f5;");
                     }
                 });
 
@@ -535,11 +535,12 @@ public class MainController {
                     alert.setTitle("Duplicate IP Range");
                     alert.setHeaderText("This IP range already exists");
                     alert.setContentText(String.format("IP Range: %s - %s\n\nPlease enter a different IP range.",
-                                                       range.getStartIp(), newValue));
+                            range.getStartIp(), newValue));
                     alert.showAndWait();
 
                     // Apply error styling and revert to old value
-                    textField.setStyle("-fx-border-color: #dc3545; -fx-border-width: 2px; -fx-background-color: #fff5f5;");
+                    textField.setStyle(
+                            "-fx-border-color: #dc3545; -fx-border-width: 2px; -fx-background-color: #fff5f5;");
                     textField.setText(oldValue);
                     cancelEdit();
                     return;
@@ -553,8 +554,9 @@ public class MainController {
                             Alert warning = new Alert(Alert.AlertType.WARNING);
                             warning.setTitle("Overlapping IP Range");
                             warning.setHeaderText("This IP range overlaps with an existing range");
-                            warning.setContentText(String.format("New Range: %s - %s\nExisting Range: %s - %s\n\nThis is allowed but may cause redundant scanning.",
-                                                                 range.getStartIp(), newValue, other.getStartIp(), other.getEndIp()));
+                            warning.setContentText(String.format(
+                                    "New Range: %s - %s\nExisting Range: %s - %s\n\nThis is allowed but may cause redundant scanning.",
+                                    range.getStartIp(), newValue, other.getStartIp(), other.getEndIp()));
                             warning.showAndWait();
                             break; // Only show warning once
                         }
@@ -612,7 +614,8 @@ public class MainController {
                     } else if (NetworkUtils.isValidCIDR(newVal.trim())) {
                         textField.setStyle("");
                     } else {
-                        textField.setStyle("-fx-border-color: #dc3545; -fx-border-width: 2px; -fx-background-color: #fff5f5;");
+                        textField.setStyle(
+                                "-fx-border-color: #dc3545; -fx-border-width: 2px; -fx-background-color: #fff5f5;");
                     }
                 });
 
@@ -657,11 +660,13 @@ public class MainController {
                     Alert alert = new Alert(Alert.AlertType.ERROR);
                     alert.setTitle("Duplicate CIDR");
                     alert.setHeaderText("This CIDR notation already exists");
-                    alert.setContentText(String.format("CIDR: %s\n\nPlease enter a different CIDR notation.", newValue));
+                    alert.setContentText(
+                            String.format("CIDR: %s\n\nPlease enter a different CIDR notation.", newValue));
                     alert.showAndWait();
 
                     // Apply error styling and revert to old value
-                    textField.setStyle("-fx-border-color: #dc3545; -fx-border-width: 2px; -fx-background-color: #fff5f5;");
+                    textField.setStyle(
+                            "-fx-border-color: #dc3545; -fx-border-width: 2px; -fx-background-color: #fff5f5;");
                     textField.setText(oldValue);
                     cancelEdit();
                     return;
@@ -705,8 +710,7 @@ public class MainController {
                 lblInterfaces, lvNetworkInterfaces,
                 lblRanges, tvIpRanges, rangeButtons,
                 lblCidrs, tvCidrs, cidrButtons,
-                lblAdvancedIpCount
-        );
+                lblAdvancedIpCount);
 
         return vbox;
     }
@@ -821,7 +825,8 @@ public class MainController {
         VBox content = new VBox(12);
         content.setPadding(new Insets(15));
 
-        Label lblIntro = new Label("Choose how the tool confirms a camera is working.\nMore thorough methods take longer but give more reliable results.");
+        Label lblIntro = new Label(
+                "Choose how the tool confirms a camera is working.\nMore thorough methods take longer but give more reliable results.");
         lblIntro.setWrapText(true);
         lblIntro.setStyle("-fx-font-size: 11px; -fx-text-fill: #555;");
 
@@ -833,8 +838,7 @@ public class MainController {
                 "Quick Check",
                 "Fastest option \u2014 checks if camera responds to\nconnection requests only. Some cameras may appear\nworking even if the video feed has issues.",
                 "~3 seconds per camera  |  ~60% accuracy",
-                false
-        );
+                false);
         RadioButton rb1 = (RadioButton) card1.getUserData();
 
         // Card 2: Stream Test (RTP_PACKET)
@@ -843,8 +847,7 @@ public class MainController {
                 "Stream Test",
                 "Balanced option \u2014 verifies the camera is actively\nsending video data. Good for quick audits where\nsome uncertainty is acceptable.",
                 "~5 seconds per camera  |  ~90% accuracy",
-                false
-        );
+                false);
         RadioButton rb2 = (RadioButton) card2.getUserData();
 
         // Card 3: Video Capture (FRAME_CAPTURE) - Recommended
@@ -853,8 +856,7 @@ public class MainController {
                 "Video Capture",
                 "Most reliable \u2014 actually captures a video frame to\nconfirm the camera is fully operational. Best for\nofficial audits and compliance reports.",
                 "~10 seconds per camera  |  ~98% accuracy",
-                true
-        );
+                true);
         RadioButton rb3 = (RadioButton) card3.getUserData();
 
         // Select current method
@@ -889,10 +891,12 @@ public class MainController {
             Button okBtn = (Button) dialog.getDialogPane().lookupButton(okButton);
             Button cancelBtn = (Button) dialog.getDialogPane().lookupButton(cancelButton);
             if (okBtn != null) {
-                okBtn.setStyle("-fx-background-color: #28a745; -fx-text-fill: white; -fx-font-weight: bold; -fx-pref-width: 80px; -fx-pref-height: 30px;");
+                okBtn.setStyle(
+                        "-fx-background-color: #28a745; -fx-text-fill: white; -fx-font-weight: bold; -fx-pref-width: 80px; -fx-pref-height: 30px;");
             }
             if (cancelBtn != null) {
-                cancelBtn.setStyle("-fx-background-color: #6c757d; -fx-text-fill: white; -fx-font-weight: bold; -fx-pref-width: 80px; -fx-pref-height: 30px;");
+                cancelBtn.setStyle(
+                        "-fx-background-color: #6c757d; -fx-text-fill: white; -fx-font-weight: bold; -fx-pref-width: 80px; -fx-pref-height: 30px;");
             }
         });
 
@@ -912,7 +916,8 @@ public class MainController {
         }
     }
 
-    private VBox createVerificationCard(ToggleGroup group, String title, String description, String stats, boolean recommended) {
+    private VBox createVerificationCard(ToggleGroup group, String title, String description, String stats,
+            boolean recommended) {
         VBox card = new VBox(4);
         card.setPadding(new Insets(10));
         card.setStyle(getUnselectedCardStyle());
@@ -930,7 +935,8 @@ public class MainController {
 
         if (recommended) {
             Label badge = new Label("Recommended");
-            badge.setStyle("-fx-background-color: #28a745; -fx-text-fill: white; -fx-font-size: 9px; -fx-font-weight: bold; -fx-padding: 2 6; -fx-background-radius: 3;");
+            badge.setStyle(
+                    "-fx-background-color: #28a745; -fx-text-fill: white; -fx-font-size: 9px; -fx-font-weight: bold; -fx-padding: 2 6; -fx-background-radius: 3;");
             titleRow.getChildren().add(badge);
         }
 
@@ -1283,16 +1289,17 @@ public class MainController {
 
     /**
      * Check if two IP ranges overlap
+     * 
      * @param start1 Start IP of first range
-     * @param end1 End IP of first range
+     * @param end1   End IP of first range
      * @param start2 Start IP of second range
-     * @param end2 End IP of second range
+     * @param end2   End IP of second range
      * @return true if ranges overlap
      */
     private boolean isOverlappingIpRange(String start1, String end1, String start2, String end2) {
         // Validate all IPs first
         if (!NetworkUtils.isValidIP(start1) || !NetworkUtils.isValidIP(end1) ||
-            !NetworkUtils.isValidIP(start2) || !NetworkUtils.isValidIP(end2)) {
+                !NetworkUtils.isValidIP(start2) || !NetworkUtils.isValidIP(end2)) {
             return false;
         }
 
@@ -1328,7 +1335,7 @@ public class MainController {
                 int subnetSize = NetworkUtils.countIPsFromPrefix(prefixLength);
                 count += subnetSize;
                 logger.info("Interface {} has /{} prefix = {} usable IPs",
-                           item.getIpAddress(), prefixLength, subnetSize);
+                        item.getIpAddress(), prefixLength, subnetSize);
             }
         }
 
@@ -1420,11 +1427,11 @@ public class MainController {
                 for (InterfaceAddress addr : ni.getInterfaceAddresses()) {
                     InetAddress inetAddr = addr.getAddress();
                     if (inetAddr instanceof java.net.Inet4Address &&
-                        inetAddr.getHostAddress().equals(ipAddress)) {
+                            inetAddr.getHostAddress().equals(ipAddress)) {
                         int prefixLength = NetworkUtils.getNetworkPrefixLength(ni);
                         int subnetSize = NetworkUtils.countIPsFromPrefix(prefixLength);
                         logger.info("Selected interface {} has /{} prefix = {} usable IPs",
-                                   ipAddress, prefixLength, subnetSize);
+                                ipAddress, prefixLength, subnetSize);
                         return subnetSize;
                     }
                 }
@@ -1581,7 +1588,7 @@ public class MainController {
             RtspService.setDiscoveryConfig(discoveryConfig);
 
             logger.info("RTSP validation configured: method={}, timeout={}ms (0=default)",
-                       method, customTimeout);
+                    method, customTimeout);
 
         } catch (Exception e) {
             logger.error("Error configuring RTSP validation, using defaults", e);
@@ -1601,19 +1608,18 @@ public class MainController {
             Platform.runLater(() -> lblProgress.setText("No ONVIF devices found via multicast. Running port scan..."));
         } else {
             // Ask user
-            final boolean[] result = {false};
+            final boolean[] result = { false };
             Platform.runLater(() -> {
                 Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
                 alert.setTitle("WS-Discovery Complete");
                 alert.setHeaderText("Found " + wsDevices.size() + " device(s) via ONVIF WS-Discovery");
                 alert.setContentText(
                         "Expected more devices?\n\n" +
-                        "Port scanning can find:\n" +
-                        "• Devices without ONVIF support\n" +
-                        "• Devices where IGMP/multicast is blocked\n" +
-                        "• Devices on non-standard ports\n\n" +
-                        "Do you want to perform port scan?"
-                );
+                                "Port scanning can find:\n" +
+                                "• Devices without ONVIF support\n" +
+                                "• Devices where IGMP/multicast is blocked\n" +
+                                "• Devices on non-standard ports\n\n" +
+                                "Do you want to perform port scan?");
                 Optional<ButtonType> response = alert.showAndWait();
                 synchronized (result) {
                     result[0] = response.isPresent() && response.get() == ButtonType.OK;
@@ -1654,7 +1660,7 @@ public class MainController {
 
         // Phase 3: Authentication & Stream Discovery
         int total = finalDevices.size();
-        int[] current = {0};
+        int[] current = { 0 };
 
         for (Device device : finalDevices) {
             authenticateAndDiscoverStreams(device);
@@ -1772,7 +1778,8 @@ public class MainController {
 
     /**
      * Attempt ONVIF authentication with all credentials.
-     * Tries service URL from WS-Discovery first, then constructs URLs from detected ports.
+     * Tries service URL from WS-Discovery first, then constructs URLs from detected
+     * ports.
      */
     private boolean attemptOnvifAuthentication(Device device) {
         logger.info("Attempting ONVIF authentication for {}", device.getIpAddress());
@@ -1804,7 +1811,8 @@ public class MainController {
                         // Lookup manufacturer from ONVIF-retrieved MAC if not already known
                         if (device.getMacAddress() != null &&
                                 (device.getManufacturer() == null || "Unknown".equals(device.getManufacturer()))) {
-                            String manufacturer = MacLookupService.getInstance().lookupManufacturer(device.getMacAddress());
+                            String manufacturer = MacLookupService.getInstance()
+                                    .lookupManufacturer(device.getMacAddress());
                             if (manufacturer != null && !"Unknown".equals(manufacturer)) {
                                 device.setManufacturer(manufacturer);
                                 logger.info("Manufacturer from ONVIF MAC: {}", manufacturer);
@@ -1850,7 +1858,8 @@ public class MainController {
                             // Lookup manufacturer from ONVIF-retrieved MAC if not already known
                             if (device.getMacAddress() != null &&
                                     (device.getManufacturer() == null || "Unknown".equals(device.getManufacturer()))) {
-                                String manufacturer = MacLookupService.getInstance().lookupManufacturer(device.getMacAddress());
+                                String manufacturer = MacLookupService.getInstance()
+                                        .lookupManufacturer(device.getMacAddress());
                                 if (manufacturer != null && !"Unknown".equals(manufacturer)) {
                                     device.setManufacturer(manufacturer);
                                     logger.info("Manufacturer from ONVIF MAC: {}", manufacturer);
@@ -1963,10 +1972,12 @@ public class MainController {
             Button cancelBtn = (Button) dialog.getDialogPane().lookupButton(cancelButton);
 
             if (retryBtn != null) {
-                retryBtn.setStyle("-fx-background-color: #28a745; -fx-text-fill: white; -fx-font-weight: bold; -fx-pref-width: 80px; -fx-pref-height: 30px;");
+                retryBtn.setStyle(
+                        "-fx-background-color: #28a745; -fx-text-fill: white; -fx-font-weight: bold; -fx-pref-width: 80px; -fx-pref-height: 30px;");
             }
             if (cancelBtn != null) {
-                cancelBtn.setStyle("-fx-background-color: #6c757d; -fx-text-fill: white; -fx-font-weight: bold; -fx-pref-width: 80px; -fx-pref-height: 30px;");
+                cancelBtn.setStyle(
+                        "-fx-background-color: #6c757d; -fx-text-fill: white; -fx-font-weight: bold; -fx-pref-width: 80px; -fx-pref-height: 30px;");
             }
         });
 
@@ -1983,8 +1994,8 @@ public class MainController {
 
                 if (alreadyUsed) {
                     showAlert("Credential Already Used",
-                        "This credential was already tried during discovery and failed.\nPlease enter a different username or password.",
-                        Alert.AlertType.WARNING);
+                            "This credential was already tried during discovery and failed.\nPlease enter a different username or password.",
+                            Alert.AlertType.WARNING);
                     return;
                 }
 
@@ -2066,7 +2077,8 @@ public class MainController {
                 // Simple mode: single source
                 if (rbCIDR != null && rbCIDR.isSelected() && tfCIDR != null) {
                     ips = NetworkUtils.parseCIDR(tfCIDR.getText());
-                } else if (rbManualRange != null && rbManualRange.isSelected() && tfStartIP != null && tfEndIP != null) {
+                } else if (rbManualRange != null && rbManualRange.isSelected() && tfStartIP != null
+                        && tfEndIP != null) {
                     ips = NetworkUtils.parseIPRange(tfStartIP.getText(), tfEndIP.getText());
                 } else if (rbInterface != null && rbInterface.isSelected() && cbInterfaces != null) {
                     // Extract CIDR from interface - simplified to /24
@@ -2075,7 +2087,7 @@ public class MainController {
                     if (selected != null) {
                         String[] parts = selected.split(" - ");
                         if (parts.length >= 1) {
-                            String ip = parts[0];  // IP is now first part
+                            String ip = parts[0]; // IP is now first part
                             String[] octets = ip.split("\\.");
                             if (octets.length == 4) {
                                 String network = octets[0] + "." + octets[1] + "." + octets[2] + ".0/24";
@@ -2117,10 +2129,12 @@ public class MainController {
             Button cancelBtn = (Button) siteDialog.getDialogPane().lookupButton(ButtonType.CANCEL);
 
             if (okBtn != null) {
-                okBtn.setStyle("-fx-background-color: #28a745; -fx-text-fill: white; -fx-font-weight: bold; -fx-pref-width: 80px; -fx-pref-height: 30px;");
+                okBtn.setStyle(
+                        "-fx-background-color: #28a745; -fx-text-fill: white; -fx-font-weight: bold; -fx-pref-width: 80px; -fx-pref-height: 30px;");
             }
             if (cancelBtn != null) {
-                cancelBtn.setStyle("-fx-background-color: #6c757d; -fx-text-fill: white; -fx-font-weight: bold; -fx-pref-width: 80px; -fx-pref-height: 30px;");
+                cancelBtn.setStyle(
+                        "-fx-background-color: #6c757d; -fx-text-fill: white; -fx-font-weight: bold; -fx-pref-width: 80px; -fx-pref-height: 30px;");
             }
         });
 
@@ -2166,16 +2180,17 @@ public class MainController {
         if (file != null) {
             try {
                 // Export with auto-generated password protection and host audit data
-                excelExporter.exportToExcel(new ArrayList<>(devices), siteId.get(), null, null, file, generatedPassword, hostAuditData);
+                excelExporter.exportToExcel(new ArrayList<>(devices), siteId.get(), null, null, file, generatedPassword,
+                        hostAuditData);
 
                 // Show success WITHOUT password (authority will derive it)
                 showAlert("Export Complete",
-                    "Report exported successfully to:\n" + file.getAbsolutePath() +
-                    "\n\n🔒 WORKSHEET PROTECTED" +
-                    "\n\nThe worksheet has been password-protected." +
-                    "\nYour supervisor can access the file using the standard procedure." +
-                    "\n\nSubmit this report to your authority.",
-                    Alert.AlertType.INFORMATION);
+                        "Report exported successfully to:\n" + file.getAbsolutePath() +
+                                "\n\n🔒 WORKSHEET PROTECTED" +
+                                "\n\nThe worksheet has been password-protected." +
+                                "\nYour supervisor can access the file using the standard procedure." +
+                                "\n\nSubmit this report to your authority.",
+                        Alert.AlertType.INFORMATION);
 
                 logger.info("Excel export completed successfully for site: {}", siteId.get());
             } catch (Exception e) {
@@ -2216,38 +2231,39 @@ public class MainController {
 
         Label quickGuide = new Label(
                 "Quick Start Guide:\n" +
-                "1. Network Selection:\n" +
-                "   • Simple Mode: Choose network interface, manual IP range, or CIDR\n" +
-                "   • Advanced Mode: Enable to select multiple sources\n" +
-                "2. Add Credentials (Required - Max 4):\n" +
-                "   • Default username 'admin' is pre-filled\n" +
-                "   • Enter password and click 'Add Credential'\n" +
-                "   • Right-click credentials to Edit or Delete\n" +
-                "3. Verification Method:\n" +
-                "   • Quick Check: Fast (~3s), ~60% accurate\n" +
-                "   • Stream Test: Medium (~5s), ~90% accurate\n" +
-                "   • Video Capture: Thorough (~10s), ~98% accurate (Default)\n" +
-                "4. Configure Settings (Optional):\n" +
-                "   • Click 'Settings' to configure custom ports and RTSP paths\n" +
-                "5. Start Discovery:\n" +
-                "   • Click 'Start Discovery' and monitor progress\n" +
-                "6. View Results:\n" +
-                "   • Color-coded: Green (success), Yellow (in progress),\n" +
-                "     Red (failed), Gray (not camera), Blue (discovered)\n" +
-                "   • Right-click failed devices to retry with different credentials\n" +
-                "7. Export Results:\n" +
-                "   • Enter Site ID and click 'Export to Excel'"
-        );
+                        "1. Network Selection:\n" +
+                        "   • Simple Mode: Choose network interface, manual IP range, or CIDR\n" +
+                        "   • Advanced Mode: Enable to select multiple sources\n" +
+                        "2. Add Credentials (Required - Max 4):\n" +
+                        "   • Default username 'admin' is pre-filled\n" +
+                        "   • Enter password and click 'Add Credential'\n" +
+                        "   • Right-click credentials to Edit or Delete\n" +
+                        "3. Verification Method:\n" +
+                        "   • Quick Check: Fast (~3s), ~60% accurate\n" +
+                        "   • Stream Test: Medium (~5s), ~90% accurate\n" +
+                        "   • Video Capture: Thorough (~10s), ~98% accurate (Default)\n" +
+                        "4. Configure Settings (Optional):\n" +
+                        "   • Click 'Settings' to configure custom ports and RTSP paths\n" +
+                        "5. Start Discovery:\n" +
+                        "   • Click 'Start Discovery' and monitor progress\n" +
+                        "6. View Results:\n" +
+                        "   • Color-coded: Green (success), Yellow (in progress),\n" +
+                        "     Red (failed), Gray (not camera), Blue (discovered)\n" +
+                        "   • Right-click failed devices to retry with different credentials\n" +
+                        "7. Export Results:\n" +
+                        "   • Enter Site ID and click 'Export to Excel'");
         quickGuide.setWrapText(true);
         quickGuide.setStyle("-fx-font-size: 10px;");
 
         // User Manual and Close buttons - horizontally aligned
         Button btnUserManual = new Button("Open User Manual");
-        btnUserManual.setStyle("-fx-background-color: #0078d4; -fx-text-fill: white; -fx-font-weight: bold; -fx-pref-height: 30px;");
+        btnUserManual.setStyle(
+                "-fx-background-color: #0078d4; -fx-text-fill: white; -fx-font-weight: bold; -fx-pref-height: 30px;");
         btnUserManual.setOnAction(e -> openUserManual());
 
         Button btnCloseHelp = new Button("Close");
-        btnCloseHelp.setStyle("-fx-background-color: #ffc107; -fx-text-fill: black; -fx-font-weight: bold; -fx-pref-width: 80px; -fx-pref-height: 30px;");
+        btnCloseHelp.setStyle(
+                "-fx-background-color: #ffc107; -fx-text-fill: black; -fx-font-weight: bold; -fx-pref-width: 80px; -fx-pref-height: 30px;");
         btnCloseHelp.setOnAction(e -> {
             dialog.setResult(null);
             dialog.close();
@@ -2293,21 +2309,21 @@ public class MainController {
 
             // Extract all images
             String[] imageFiles = {
-                "main-window.png",
-                "header-buttons.png",
-                "network-simple-mode.png",
-                "network-advanced-mode.png",
-                "credentials-section.png",
-                "credentials-context-menu.png",
-                "settings-dialog.png",
-                "settings-onvif-ports.png",
-                "settings-rtsp-ports.png",
-                "settings-rtsp-paths.png",
-                "discovery-progress.png",
-                "results-table-colored.png",
-                "retry-authentication.png",
-                "export-dialog.png",
-                "host-audit-sheet.png"
+                    "main-window.png",
+                    "header-buttons.png",
+                    "network-simple-mode.png",
+                    "network-advanced-mode.png",
+                    "credentials-section.png",
+                    "credentials-context-menu.png",
+                    "settings-dialog.png",
+                    "settings-onvif-ports.png",
+                    "settings-rtsp-ports.png",
+                    "settings-rtsp-paths.png",
+                    "discovery-progress.png",
+                    "results-table-colored.png",
+                    "retry-authentication.png",
+                    "export-dialog.png",
+                    "host-audit-sheet.png"
             };
 
             for (String imageFile : imageFiles) {
@@ -2320,8 +2336,8 @@ public class MainController {
                 logger.info("User manual opened in browser: {}", manualFile.getAbsolutePath());
             } else {
                 showAlert("Cannot Open Manual",
-                    "Unable to open browser. Please manually open:\n" + manualFile.getAbsolutePath(),
-                    Alert.AlertType.WARNING);
+                        "Unable to open browser. Please manually open:\n" + manualFile.getAbsolutePath(),
+                        Alert.AlertType.WARNING);
             }
 
         } catch (Exception e) {
@@ -2450,10 +2466,12 @@ public class MainController {
             Button cancelBtn = (Button) dialog.getDialogPane().lookupButton(cancelButton);
 
             if (okBtn != null) {
-                okBtn.setStyle("-fx-background-color: #28a745; -fx-text-fill: white; -fx-font-weight: bold; -fx-pref-width: 80px; -fx-pref-height: 30px;");
+                okBtn.setStyle(
+                        "-fx-background-color: #28a745; -fx-text-fill: white; -fx-font-weight: bold; -fx-pref-width: 80px; -fx-pref-height: 30px;");
             }
             if (cancelBtn != null) {
-                cancelBtn.setStyle("-fx-background-color: #6c757d; -fx-text-fill: white; -fx-font-weight: bold; -fx-pref-width: 80px; -fx-pref-height: 30px;");
+                cancelBtn.setStyle(
+                        "-fx-background-color: #6c757d; -fx-text-fill: white; -fx-font-weight: bold; -fx-pref-width: 80px; -fx-pref-height: 30px;");
             }
         });
 
@@ -2518,7 +2536,8 @@ public class MainController {
             }
 
             if (sourceCount > 0) {
-                lblNetworkSummary.setText(String.format("Advanced: %d source(s), %d possible IPs", sourceCount, totalIps));
+                lblNetworkSummary
+                        .setText(String.format("Advanced: %d source(s), %d possible IPs", sourceCount, totalIps));
                 lblNetworkSummary.setStyle("-fx-font-style: italic; -fx-text-fill: #0078d4;");
                 networkConfigured = true;
             } else {
@@ -2535,7 +2554,8 @@ public class MainController {
             } else if (rbManualRange != null && rbManualRange.isSelected() &&
                     NetworkUtils.isValidIP(tfStartIP.getText()) && NetworkUtils.isValidIP(tfEndIP.getText())) {
                 int count = NetworkUtils.countIPsInRange(tfStartIP.getText(), tfEndIP.getText());
-                lblNetworkSummary.setText(String.format("Range: %s - %s (%d IPs)", tfStartIP.getText(), tfEndIP.getText(), count));
+                lblNetworkSummary.setText(
+                        String.format("Range: %s - %s (%d IPs)", tfStartIP.getText(), tfEndIP.getText(), count));
                 lblNetworkSummary.setStyle("-fx-font-style: italic; -fx-text-fill: #0078d4;");
                 networkConfigured = true;
             } else if (rbCIDR != null && rbCIDR.isSelected() && NetworkUtils.isValidCIDR(tfCIDR.getText())) {
@@ -2601,8 +2621,7 @@ public class MainController {
                 lblPassword, tfPassword,
                 btnAddCredential,
                 new Separator(),
-                lblList, lvCredentials
-        );
+                lblList, lvCredentials);
 
         dialog.getDialogPane().setContent(content);
 
@@ -2614,7 +2633,8 @@ public class MainController {
         dialog.setOnShowing(dialogEvent -> {
             Button okBtn = (Button) dialog.getDialogPane().lookupButton(okButton);
             if (okBtn != null) {
-                okBtn.setStyle("-fx-background-color: #0078d4; -fx-text-fill: white; -fx-font-weight: bold; -fx-pref-width: 80px; -fx-pref-height: 30px;");
+                okBtn.setStyle(
+                        "-fx-background-color: #0078d4; -fx-text-fill: white; -fx-font-weight: bold; -fx-pref-width: 80px; -fx-pref-height: 30px;");
             }
         });
 
@@ -2668,7 +2688,8 @@ public class MainController {
         private final NetworkInterface networkInterface;
         private boolean selected;
 
-        public NetworkInterfaceItem(String displayName, String ipAddress, NetworkInterface networkInterface, boolean selected) {
+        public NetworkInterfaceItem(String displayName, String ipAddress, NetworkInterface networkInterface,
+                boolean selected) {
             this.displayName = displayName;
             this.ipAddress = ipAddress;
             this.networkInterface = networkInterface;
