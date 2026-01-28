@@ -276,10 +276,13 @@
                                         <exclude>META-INF/NOTICE.txt</exclude>
                                         <exclude>META-INF/LICENSE</exclude>
                                         <exclude>META-INF/NOTICE</exclude>
+                                        <exclude>META-INF/DEPENDENCIES</exclude>
+                                        <exclude>META-INF/MANIFEST.MF</exclude>
                                         <exclude>META-INF/AL2.0</exclude>
                                         <exclude>META-INF/LGPL2.1</exclude>
                                         <!-- Exclude Java 9+ module descriptors (breaks Java 8 fat JAR) -->
                                         <exclude>module-info.class</exclude>
+                                        <exclude>META-INF/versions/**/module-info.class</exclude>
                                         <!-- Exclude GraalVM native-image configs (not needed for JVM, cause shade overlap warnings) -->
                                         <exclude>META-INF/native-image/**</exclude>
                                     </excludes>
