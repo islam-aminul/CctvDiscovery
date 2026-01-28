@@ -18,6 +18,7 @@ import java.net.DatagramPacket;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import org.bytedeco.javacv.FFmpegFrameGrabber;
+import org.bytedeco.javacv.FFmpegLogCallback;
 import org.bytedeco.javacv.Frame;
 import org.bytedeco.ffmpeg.global.avutil;
 
@@ -41,9 +42,11 @@ public class RtspService {
     private static RtspDiscoveryConfig discoveryConfig = new RtspDiscoveryConfig();
 
     static {
-        // Suppress FFmpeg native stderr noise (H264 decoder warnings, 401 retries, etc.)
-        // AV_LOG_ERROR = 16: only show errors, hide warnings/info/debug from native FFmpeg
-        avutil.av_log_set_level(avutil.AV_LOG_ERROR);
+        // Route FFmpeg native logs through SLF4J instead of raw stderr.
+        // AV_LOG_WARNING = 24: capture warnings and errors (H264 decoder, 401 retries, etc.)
+        // Logback routes FFmpegLogCallback logger to file only (not console).
+        avutil.av_log_set_level(avutil.AV_LOG_WARNING);
+        FFmpegLogCallback.set();
         loadRtspTemplates();
     }
 

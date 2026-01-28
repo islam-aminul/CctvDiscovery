@@ -3,6 +3,7 @@ package com.cctv.discovery.discovery;
 import com.cctv.discovery.model.Device;
 import com.cctv.discovery.model.RTSPStream;
 import org.bytedeco.javacv.FFmpegFrameGrabber;
+import org.bytedeco.javacv.FFmpegLogCallback;
 import org.bytedeco.javacv.Frame;
 import org.bytedeco.ffmpeg.global.avutil;
 import org.slf4j.Logger;
@@ -19,8 +20,11 @@ public class StreamAnalyzer {
     private static final Logger logger = LoggerFactory.getLogger(StreamAnalyzer.class);
 
     static {
-        // Suppress FFmpeg native stderr noise (H264 decoder warnings, corrupt frame messages, etc.)
-        avutil.av_log_set_level(avutil.AV_LOG_ERROR);
+        // Route FFmpeg native logs through SLF4J instead of raw stderr.
+        // AV_LOG_WARNING = 24: capture warnings and errors for diagnostics.
+        // Logback routes FFmpegLogCallback logger to file only (not console).
+        avutil.av_log_set_level(avutil.AV_LOG_WARNING);
+        FFmpegLogCallback.set();
     }
 
     private static final int MAX_PARALLEL_STREAMS = 8;
