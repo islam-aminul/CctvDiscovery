@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -24,7 +25,7 @@
             margin: 0 auto;
             background-color: white;
             padding: 40px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
             border-radius: 8px;
         }
 
@@ -120,7 +121,7 @@
             height: auto;
             border: 1px solid #ddd;
             border-radius: 5px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
         }
 
         .screenshot-caption {
@@ -178,7 +179,8 @@
             color: #155724;
         }
 
-        ol, ul {
+        ol,
+        ul {
             margin-left: 30px;
             margin-bottom: 15px;
         }
@@ -278,11 +280,12 @@
         }
     </style>
 </head>
+
 <body>
     <div class="container">
         <header>
             <h1>CCTV Discovery & Audit Tool</h1>
-            <p class="subtitle">Comprehensive User Manual - Version 2.0.0</p>
+            <p class="subtitle">Comprehensive User Manual - Version 1.1.4</p>
             <p class="subtitle">Consultancy Services Ltd.</p>
         </header>
 
@@ -294,37 +297,44 @@
                 <li><a href="#main-window">3. Main Window Layout</a></li>
                 <li><a href="#network-selection">4. Network Selection</a></li>
                 <li><a href="#credentials">5. Credential Management</a></li>
-                <li><a href="#settings">6. Settings Configuration</a></li>
-                <li><a href="#discovery">7. Running Discovery</a></li>
-                <li><a href="#results">8. Viewing and Understanding Results</a></li>
-                <li><a href="#retry">9. Retry Authentication</a></li>
-                <li><a href="#export">10. Exporting to Excel</a></li>
-                <li><a href="#troubleshooting">11. Troubleshooting</a></li>
-                <li><a href="#faq">12. Frequently Asked Questions</a></li>
+                <li><a href="#verification">6. Verification Method</a></li>
+                <li><a href="#settings">7. Settings Configuration</a></li>
+                <li><a href="#discovery">8. Running Discovery</a></li>
+                <li><a href="#results">9. Viewing and Understanding Results</a></li>
+                <li><a href="#retry">10. Retry Authentication</a></li>
+                <li><a href="#export">11. Exporting to Excel</a></li>
+                <li><a href="#troubleshooting">12. Troubleshooting</a></li>
+                <li><a href="#faq">13. Frequently Asked Questions</a></li>
             </ul>
         </nav>
 
         <section id="overview">
             <h2>1. Overview</h2>
             <p>
-                The CCTV Discovery & Audit Tool is an advanced network scanning application designed to automatically discover,
-                authenticate, and audit IP cameras, NVRs (Network Video Recorders), and DVRs (Digital Video Recorders) on your network.
-                It employs multiple industry-standard protocols and intelligent detection mechanisms to identify CCTV devices and their configurations.
+                The CCTV Discovery & Audit Tool is an advanced network scanning application designed to automatically
+                discover,
+                authenticate, and audit IP cameras, NVRs (Network Video Recorders), and DVRs (Digital Video Recorders)
+                on your network.
+                It employs multiple industry-standard protocols and intelligent detection mechanisms to identify CCTV
+                devices and their configurations.
             </p>
 
             <h3>Key Features</h3>
             <div class="feature-grid">
                 <div class="feature-card">
                     <h4>Multi-Protocol Discovery</h4>
-                    <p>Utilizes ONVIF (WS-Discovery), RTSP stream analysis, and HTTP detection to identify devices across various manufacturers</p>
+                    <p>Utilizes ONVIF (WS-Discovery), RTSP stream analysis, and HTTP detection to identify devices
+                        across various manufacturers</p>
                 </div>
                 <div class="feature-card">
                     <h4>Advanced Network Selection</h4>
-                    <p>Simple and Advanced modes supporting single or multiple network interfaces, IP ranges, and CIDR notations</p>
+                    <p>Simple and Advanced modes supporting single or multiple network interfaces, IP ranges, and CIDR
+                        notations</p>
                 </div>
                 <div class="feature-card">
                     <h4>Stream Analysis</h4>
-                    <p>Automatic RTSP stream detection with codec (H.264, H.265, MJPEG) and resolution analysis using JavaCV</p>
+                    <p>Automatic RTSP stream detection with codec (H.264, H.265, MJPEG) and resolution analysis using
+                        JavaCV</p>
                 </div>
                 <div class="feature-card">
                     <h4>Multiple Credentials</h4>
@@ -332,11 +342,13 @@
                 </div>
                 <div class="feature-card">
                     <h4>Customizable Settings</h4>
-                    <p>Configure custom ONVIF/RTSP ports and manufacturer-specific RTSP paths for non-standard cameras</p>
+                    <p>Configure custom ONVIF/RTSP ports and manufacturer-specific RTSP paths for non-standard cameras
+                    </p>
                 </div>
                 <div class="feature-card">
                     <h4>Intelligent Device Classification</h4>
-                    <p>Distinguishes between cameras, non-camera devices (routers, web servers), and authentication failures</p>
+                    <p>Distinguishes between cameras, non-camera devices (routers, web servers), and authentication
+                        failures</p>
                 </div>
                 <div class="feature-card">
                     <h4>Color-Coded Results</h4>
@@ -344,17 +356,21 @@
                 </div>
                 <div class="feature-card">
                     <h4>Host Audit Capability</h4>
-                    <p>Comprehensive system information gathering including OS details, CPU, memory, and NTP time drift analysis</p>
+                    <p>Comprehensive system information gathering including OS details, CPU, memory, and NTP time drift
+                        analysis</p>
                 </div>
                 <div class="feature-card">
                     <h4>Excel Export</h4>
-                    <p>Dual-sheet Excel reports with CCTV Audit and Host Audit information for comprehensive documentation</p>
+                    <p>Dual-sheet Excel reports with CCTV Audit and Host Audit information for comprehensive
+                        documentation</p>
                 </div>
             </div>
 
             <div class="note">
-                <strong>Note:</strong> This tool requires Java 8 or higher and is designed for authorized network security
-                assessments, camera inventory management, and network auditing purposes only. Always obtain proper authorization
+                <strong>Note:</strong> This tool requires Java 8 or higher and is designed for authorized network
+                security
+                assessments, camera inventory management, and network auditing purposes only. Always obtain proper
+                authorization
                 before scanning any network.
             </div>
         </section>
@@ -369,7 +385,8 @@
                 <li><strong>Memory:</strong> Minimum 2GB RAM (4GB+ recommended for large networks)</li>
                 <li><strong>Network:</strong> Active network connection with access to target camera network</li>
                 <li><strong>Screen Resolution:</strong> 1366x768 or higher (1920x1080 recommended)</li>
-                <li><strong>Permissions:</strong> Administrator/root privileges may be required for ICMP ping and raw socket operations</li>
+                <li><strong>Permissions:</strong> Administrator/root privileges may be required for ICMP ping and raw
+                    socket operations</li>
             </ul>
 
             <h3>Installation</h3>
@@ -379,20 +396,24 @@
                 <li>Run the application:
                     <ul>
                         <li><strong>Windows:</strong> Double-click <code>CctvDiscovery.exe</code></li>
-                        <li><strong>Linux/Mac:</strong> Execute <code>java -jar cctv-discovery-1.0.0-SNAPSHOT.jar</code> from terminal</li>
+                        <li><strong>Linux/Mac:</strong> Execute <code>java -jar cctv-discovery-1.0.0-SNAPSHOT.jar</code>
+                            from terminal</li>
                     </ul>
                 </li>
             </ol>
 
             <h3>First Launch</h3>
             <p>
-                Upon first launch, the application will create a <code>user-settings.properties</code> file in the application
-                directory. This file stores your custom port configurations and RTSP path settings, which persist across sessions.
+                Upon first launch, the application will create a <code>user-settings.properties</code> file in the
+                application
+                directory. This file stores your custom port configurations and RTSP path settings, which persist across
+                sessions.
             </p>
 
             <div class="screenshot">
                 <img src="images/main-window.png" alt="Main Application Window">
-                <p class="screenshot-caption">Figure 1: Main Application Window - Left panel for controls, right panel for results</p>
+                <p class="screenshot-caption">Figure 1: Main Application Window - Left panel for controls, right panel
+                    for results</p>
             </div>
         </section>
 
@@ -407,8 +428,10 @@
                 Located at the top of the window, the header contains the application title and two essential buttons:
             </p>
             <ul>
-                <li><strong>Settings (Blue Button):</strong> Opens the configuration dialog for customizing ONVIF ports, RTSP ports, and manufacturer-specific RTSP paths</li>
-                <li><strong>Help (Teal Button):</strong> Displays a quick start guide dialog and provides access to this comprehensive user manual</li>
+                <li><strong>Settings (Blue Button):</strong> Opens the configuration dialog for customizing ONVIF ports,
+                    RTSP ports, and manufacturer-specific RTSP paths</li>
+                <li><strong>Help (Teal Button):</strong> Displays a quick start guide dialog and provides access to this
+                    comprehensive user manual</li>
             </ul>
 
             <div class="screenshot">
@@ -420,15 +443,21 @@
             <p>The left panel is organized into five main sections for systematic workflow:</p>
 
             <ol>
-                <li><strong>Network Selection:</strong> Configure target network ranges using Simple or Advanced mode</li>
-                <li><strong>Credentials:</strong> Manage up to 4 authentication credential pairs with add/edit/delete capabilities</li>
-                <li><strong>Discovery:</strong> Start/stop the discovery process with the green "Start Discovery" button</li>
-                <li><strong>Progress:</strong> Monitor real-time progress with a teal-colored progress bar and status label</li>
-                <li><strong>Export:</strong> Enter site details and export results to Excel after discovery completes</li>
+                <li><strong>Network Selection:</strong> Configure target network ranges using Simple or Advanced mode
+                </li>
+                <li><strong>Credentials:</strong> Manage up to 4 authentication credential pairs with add/edit/delete
+                    capabilities</li>
+                <li><strong>Verification Method:</strong> Choose how to validate discovered cameras (Quick Check vs
+                    Stream Test vs Video Capture)</li>
+                <li><strong>Discovery:</strong> Start/stop the discovery process with the green "Start Discovery" button
+                </li>
+                <li><strong>Export:</strong> Enter site details and export results to Excel after discovery completes
+                </li>
             </ol>
 
             <div class="tip">
-                <strong>Pro Tip:</strong> Summary information is displayed in blue text throughout the left panel, providing
+                <strong>Pro Tip:</strong> Summary information is displayed in blue text throughout the left panel,
+                providing
                 quick confirmation of your configuration choices.
             </div>
 
@@ -437,7 +466,8 @@
             <ul>
                 <li><strong>Status:</strong> Current device state (COMPLETED, AUTHENTICATING, AUTH_FAILED, etc.)</li>
                 <li><strong>IP Address:</strong> Device IP address on the network</li>
-                <li><strong>MAC Address:</strong> Hardware MAC address (used for manufacturer identification via OUI lookup)</li>
+                <li><strong>MAC Address:</strong> Hardware MAC address (used for manufacturer identification via OUI
+                    lookup)</li>
                 <li><strong>Manufacturer:</strong> Camera manufacturer (e.g., Hikvision, Dahua, Axis)</li>
                 <li><strong>Model:</strong> Specific device model (if available via ONVIF GetDeviceInformation)</li>
                 <li><strong>HTTP Port(s):</strong> Open HTTP ports (comma-separated if multiple)</li>
@@ -447,7 +477,8 @@
             </ul>
 
             <div class="note">
-                <strong>Note:</strong> Right-click on any device row to access context menu options, including "Retry with Different Credentials"
+                <strong>Note:</strong> Right-click on any device row to access context menu options, including "Retry
+                with Different Credentials"
                 for failed authentication attempts.
             </div>
         </section>
@@ -455,7 +486,8 @@
         <section id="network-selection">
             <h2>4. Network Selection</h2>
             <p>
-                The Network Selection section offers flexible options for defining which IP addresses to scan. It operates in
+                The Network Selection section offers flexible options for defining which IP addresses to scan. It
+                operates in
                 two distinct modes: Simple Mode and Advanced Mode.
             </p>
 
@@ -471,13 +503,16 @@
 
             <h4>Option 1: Network Interface</h4>
             <p>
-                Select a network interface from the dropdown menu. The application will automatically scan the entire subnet
+                Select a network interface from the dropdown menu. The application will automatically scan the entire
+                subnet
                 associated with the selected interface's IP address.
             </p>
             <ul>
                 <li><strong>Use Case:</strong> Scanning your directly connected local network</li>
-                <li><strong>Example:</strong> Select "Ethernet - 192.168.1.100" → Scans 192.168.1.0/24 (192.168.1.1 - 192.168.1.254)</li>
-                <li><strong>Detection:</strong> Application automatically detects all available network interfaces and displays them with their current IP addresses</li>
+                <li><strong>Example:</strong> Select "Ethernet - 192.168.1.100" → Scans 192.168.1.0/24 (192.168.1.1 -
+                    192.168.1.254)</li>
+                <li><strong>Detection:</strong> Application automatically detects all available network interfaces and
+                    displays them with their current IP addresses</li>
             </ul>
 
             <h4>Option 2: Manual IP Range</h4>
@@ -487,13 +522,16 @@
             <ul>
                 <li><strong>Start IP:</strong> Enter the first IP address (e.g., 192.168.10.1)</li>
                 <li><strong>End IP:</strong> Enter the last IP address (e.g., 192.168.10.50)</li>
-                <li><strong>Use Case:</strong> Scanning a specific subset of a larger network or a known camera range</li>
-                <li><strong>Validation:</strong> Application validates that End IP is greater than Start IP and both are in the same subnet</li>
+                <li><strong>Use Case:</strong> Scanning a specific subset of a larger network or a known camera range
+                </li>
+                <li><strong>Validation:</strong> Application validates that End IP is greater than Start IP and both are
+                    in the same subnet</li>
             </ul>
 
             <h4>Option 3: CIDR Notation</h4>
             <p>
-                Use CIDR (Classless Inter-Domain Routing) notation for network professionals who prefer subnet mask notation.
+                Use CIDR (Classless Inter-Domain Routing) notation for network professionals who prefer subnet mask
+                notation.
             </p>
             <ul>
                 <li><strong>Format:</strong> IP/prefix (e.g., 192.168.1.0/24)</li>
@@ -508,32 +546,40 @@
             </ul>
 
             <div class="tip">
-                <strong>Helpful Feature:</strong> The application displays "Possible IPs: X" in centered, italic text below
+                <strong>Helpful Feature:</strong> The application displays "Possible IPs: X" in centered, italic text
+                below
                 your selection, helping you estimate scan time. Larger ranges will take proportionally longer.
             </div>
 
             <h3>Advanced Mode</h3>
             <p>
-                Enable Advanced Mode by checking the "Advanced Mode" checkbox. This powerful feature allows you to select
-                <strong>multiple</strong> network sources simultaneously, combining interfaces, ranges, and CIDRs in a single scan.
+                Enable Advanced Mode by checking the "Advanced Mode" checkbox. This powerful feature allows you to
+                select
+                <strong>multiple</strong> network sources simultaneously, combining interfaces, ranges, and CIDRs in a
+                single scan.
             </p>
 
             <div class="screenshot">
                 <img src="images/network-advanced-mode.png" alt="Network Advanced Mode">
-                <p class="screenshot-caption">Figure 4: Network Selection in Advanced Mode - Combine multiple sources</p>
+                <p class="screenshot-caption">Figure 4: Network Selection in Advanced Mode - Combine multiple sources
+                </p>
             </div>
 
             <h4>Advanced Mode Capabilities</h4>
             <ul>
-                <li><strong>Multiple Interfaces:</strong> Select multiple network interfaces to scan all connected networks simultaneously</li>
-                <li><strong>Multiple IP Ranges:</strong> Define multiple custom IP ranges (click "Add Range" multiple times)</li>
+                <li><strong>Multiple Interfaces:</strong> Select multiple network interfaces to scan all connected
+                    networks simultaneously</li>
+                <li><strong>Multiple IP Ranges:</strong> Define multiple custom IP ranges (click "Add Range" multiple
+                    times)</li>
                 <li><strong>Multiple CIDRs:</strong> Specify multiple CIDR blocks (click "Add CIDR" multiple times)</li>
                 <li><strong>Mixed Sources:</strong> Combine interfaces + ranges + CIDRs in any combination</li>
-                <li><strong>Deduplication:</strong> Application automatically removes duplicate IPs across all sources</li>
+                <li><strong>Deduplication:</strong> Application automatically removes duplicate IPs across all sources
+                </li>
             </ul>
 
             <div class="success">
-                <strong>Advanced Use Case:</strong> Scan three office networks (10.0.1.0/24, 10.0.2.0/24), one warehouse network
+                <strong>Advanced Use Case:</strong> Scan three office networks (10.0.1.0/24, 10.0.2.0/24), one warehouse
+                network
                 (192.168.100.0/24), and a specific DMZ range (172.16.5.10 - 172.16.5.20) all in one discovery operation.
             </div>
 
@@ -542,13 +588,17 @@
                 Below your selections, a blue text summary displays your current configuration:
             </p>
             <ul>
-                <li><strong>Simple Mode:</strong> "Network: [interface name]" or "Range: [start] - [end]" or "CIDR: [notation]"</li>
-                <li><strong>Advanced Mode:</strong> "Networks: [count] interfaces, [count] ranges, [count] CIDRs selected"</li>
+                <li><strong>Simple Mode:</strong> "Network: [interface name]" or "Range: [start] - [end]" or "CIDR:
+                    [notation]"</li>
+                <li><strong>Advanced Mode:</strong> "Networks: [count] interfaces, [count] ranges, [count] CIDRs
+                    selected"</li>
             </ul>
 
             <div class="warning">
-                <strong>Performance Warning:</strong> Scanning very large networks (&gt;/16 or 65,000+ IPs) can take significant time
-                (30-60+ minutes) and may trigger network security monitoring systems. Always ensure you have proper authorization
+                <strong>Performance Warning:</strong> Scanning very large networks (&gt;/16 or 65,000+ IPs) can take
+                significant time
+                (30-60+ minutes) and may trigger network security monitoring systems. Always ensure you have proper
+                authorization
                 before initiating large scans.
             </div>
         </section>
@@ -556,7 +606,8 @@
         <section id="credentials">
             <h2>5. Credential Management</h2>
             <p>
-                The Credentials section allows you to manage up to 4 different username/password combinations. During discovery,
+                The Credentials section allows you to manage up to 4 different username/password combinations. During
+                discovery,
                 all credentials will be tested against each discovered device until one succeeds or all fail.
             </p>
 
@@ -575,8 +626,10 @@
             </ol>
 
             <div class="note">
-                <strong>Note:</strong> The default username "admin" is pre-filled as it's the most common default for IP cameras
-                across all manufacturers. You must add <strong>at least one credential</strong> before starting discovery.
+                <strong>Note:</strong> The default username "admin" is pre-filled as it's the most common default for IP
+                cameras
+                across all manufacturers. You must add <strong>at least one credential</strong> before starting
+                discovery.
             </div>
 
             <h3>Credential Display Format</h3>
@@ -609,13 +662,16 @@
 
             <h3>Credential Testing Order</h3>
             <p>
-                During authentication, credentials are tested in the order they appear in the list (top to bottom). If the first
-                credential succeeds, remaining credentials are not tested for that device. This optimizes performance when you
+                During authentication, credentials are tested in the order they appear in the list (top to bottom). If
+                the first
+                credential succeeds, remaining credentials are not tested for that device. This optimizes performance
+                when you
                 have a primary credential that works for most cameras.
             </p>
 
             <div class="tip">
-                <strong>Best Practice:</strong> Place the most commonly used credential first in the list for optimal performance.
+                <strong>Best Practice:</strong> Place the most commonly used credential first in the list for optimal
+                performance.
                 The summary displays "Credentials: X added" in blue text to confirm your configuration.
             </div>
 
@@ -667,22 +723,89 @@
             </table>
 
             <div class="warning">
-                <strong>Security Warning:</strong> Default credentials are a major security risk. Always change default passwords
-                on production camera systems. This tool is designed to help identify cameras still using default credentials
+                <strong>Security Warning:</strong> Default credentials are a major security risk. Always change default
+                passwords
+                on production camera systems. This tool is designed to help identify cameras still using default
+                credentials
                 so they can be secured.
             </div>
         </section>
 
-        <section id="settings">
-            <h2>6. Settings Configuration</h2>
+        <section id="verification">
+            <h2>6. Verification Method</h2>
             <p>
-                The Settings dialog provides advanced configuration options for customizing port scanning and RTSP path discovery.
+                The <strong>Verification Method</strong> section allows you to choose how the tool confirms that a
+                discovered camera is working.
+                This setting balances scan speed against verification accuracy.
+            </p>
+
+            <div class="screenshot">
+                <img src="images/verification-dialog.png" alt="Verification Method Dialog"
+                    onerror="this.onerror=null; this.src='https://via.placeholder.com/600x400?text=Verification+Method+Dialog';">
+                <p class="screenshot-caption">Figure 7: Verification Method selection dialog</p>
+            </div>
+
+            <h3>Available Methods</h3>
+            <p>
+                Click the <strong>Set Verification Method</strong> button to choose one of the following options:
+            </p>
+
+            <h4>1. Quick Check (SDP_ONLY)</h4>
+            <p>
+                <strong>Fastest option.</strong> The tool checks if the camera responds to RTSP connection requests
+                (DESCRIBE command) and returns a valid Session Description Protocol (SDP).
+            </p>
+            <ul>
+                <li><strong>Speed:</strong> ~3 seconds per camera</li>
+                <li><strong>Accuracy:</strong> ~60%</li>
+                <li><strong>Pros:</strong> Very fast scanning of large networks</li>
+                <li><strong>Cons:</strong> Some cameras may appear "working" even if the video feed is black or broken
+                </li>
+            </ul>
+
+            <h4>2. Stream Test (RTP_PACKET)</h4>
+            <p>
+                <strong>Balanced option.</strong> The tool establishes a connection and waits to receive actual video
+                data packets (RTP) from the camera.
+            </p>
+            <ul>
+                <li><strong>Speed:</strong> ~5 seconds per camera</li>
+                <li><strong>Accuracy:</strong> ~90%</li>
+                <li><strong>Pros:</strong> Verifies the camera is actively sending data</li>
+                <li><strong>Cons:</strong> Slower than Quick Check</li>
+            </ul>
+
+            <h4>3. Video Capture (FRAME_CAPTURE) - Recommended</h4>
+            <p>
+                <strong>Most reliable option.</strong> The tool actually captures and decodes a video frame from the
+                stream. This is the default setting.
+            </p>
+            <ul>
+                <li><strong>Speed:</strong> ~10 seconds per camera</li>
+                <li><strong>Accuracy:</strong> ~98%</li>
+                <li><strong>Pros:</strong> Confirms the stream is viewable and not just connected; Best for official
+                    audits</li>
+                <li><strong>Cons:</strong> Slowest method; requires more CPU/network resources</li>
+            </ul>
+
+            <div class="tip">
+                <strong>Recommendation:</strong> Use <strong>Quick Check</strong> for initial large-scale discovery,
+                then switch to
+                <strong>Video Capture</strong> for a final compliance audit of identified devices.
+            </div>
+        </section>
+
+        <section id="settings">
+            <h2>7. Settings Configuration</h2>
+            <p>
+                The Settings dialog provides advanced configuration options for customizing port scanning and RTSP path
+                discovery.
                 Access it by clicking the blue <strong>Settings</strong> button in the header.
             </p>
 
             <div class="screenshot">
                 <img src="images/settings-dialog.png" alt="Settings Dialog">
-                <p class="screenshot-caption">Figure 7: Settings Dialog with three configuration sections</p>
+                <p class="screenshot-caption">Figure 8: Settings Dialog with three configuration sections</p>
             </div>
 
             <h3>When to Use Custom Settings</h3>
@@ -702,7 +825,7 @@
 
             <div class="screenshot">
                 <img src="images/settings-onvif-ports.png" alt="ONVIF Ports Configuration">
-                <p class="screenshot-caption">Figure 8: ONVIF Ports configuration field</p>
+                <p class="screenshot-caption">Figure 9: ONVIF Ports configuration field</p>
             </div>
 
             <h4>Configuring ONVIF Ports</h4>
@@ -713,18 +836,20 @@
             </ul>
 
             <div class="note">
-                <strong>Technical Note:</strong> ONVIF discovery occurs in two phases: (1) WS-Discovery multicast probe on
+                <strong>Technical Note:</strong> ONVIF discovery occurs in two phases: (1) WS-Discovery multicast probe
+                on
                 239.255.255.250:3702, (2) HTTP requests to ONVIF service URLs on these ports.
             </div>
 
             <h3>Section 2: RTSP Ports Configuration</h3>
             <p>
-                RTSP (Real-Time Streaming Protocol) is used for video stream access. Default ports are: <strong>554, 8554</strong>
+                RTSP (Real-Time Streaming Protocol) is used for video stream access. Default ports are: <strong>554,
+                    8554</strong>
             </p>
 
             <div class="screenshot">
                 <img src="images/settings-rtsp-ports.png" alt="RTSP Ports Configuration">
-                <p class="screenshot-caption">Figure 9: RTSP Ports configuration field</p>
+                <p class="screenshot-caption">Figure 10: RTSP Ports configuration field</p>
             </div>
 
             <h4>Configuring RTSP Ports</h4>
@@ -735,31 +860,40 @@
             </ul>
 
             <div class="tip">
-                <strong>Performance Tip:</strong> Adding many custom ports increases scan time proportionally. Only add ports
+                <strong>Performance Tip:</strong> Adding many custom ports increases scan time proportionally. Only add
+                ports
                 you know are in use on your network.
             </div>
 
             <h3>Section 3: Custom RTSP Path Pairs</h3>
             <p>
-                Camera manufacturers use different URL path formats for accessing RTSP streams. While the application includes
-                extensive defaults for major manufacturers, you can add custom paths for uncommon or proprietary systems.
+                Camera manufacturers use different URL path formats for accessing RTSP streams. While the application
+                includes
+                extensive defaults for major manufacturers, you can add custom paths for uncommon or proprietary
+                systems.
             </p>
 
             <div class="screenshot">
                 <img src="images/settings-rtsp-paths.png" alt="RTSP Path Pairs Configuration">
-                <p class="screenshot-caption">Figure 10: Custom RTSP Path Pairs configuration section</p>
+                <p class="screenshot-caption">Figure 11: Custom RTSP Path Pairs configuration section</p>
             </div>
 
             <h4>Understanding Stream Types</h4>
             <ul>
-                <li><strong>Main Stream (Primary):</strong> High-quality stream, typically 1080p or 4K resolution, higher bitrate, used for recording</li>
-                <li><strong>Sub Stream (Secondary):</strong> Lower-quality stream, typically 480p or 720p, lower bitrate, used for live monitoring to save bandwidth</li>
+                <li><strong>Main Stream (Primary):</strong> High-quality stream, typically 1080p or 4K resolution,
+                    higher bitrate, used for recording</li>
+                <li><strong>Sub Stream (Secondary):</strong> Lower-quality stream, typically 480p or 720p, lower
+                    bitrate, used for live monitoring to save bandwidth</li>
             </ul>
 
             <h4>Adding Custom Path Pairs</h4>
             <ol>
-                <li>Enter the <strong>Main Stream Path</strong> in the left field (e.g., <code>/h264/ch1/main/av_stream</code>)</li>
-                <li>Enter the <strong>Sub Stream Path</strong> in the right field (e.g., <code>/h264/ch1/sub/av_stream</code>)</li>
+                <li>Enter the <strong>Main Stream Path</strong> in the left field (e.g.,
+                    <code>/h264/ch1/main/av_stream</code>)
+                </li>
+                <li>Enter the <strong>Sub Stream Path</strong> in the right field (e.g.,
+                    <code>/h264/ch1/sub/av_stream</code>)
+                </li>
                 <li>Click the blue <strong>"Add Path Pair"</strong> button</li>
                 <li>The path pair appears in the list view below</li>
                 <li>Repeat to add multiple custom path pairs</li>
@@ -809,7 +943,8 @@
 
             <h4>Multi-Channel NVR/DVR Paths</h4>
             <p>
-                For NVR/DVR systems with multiple channels, paths typically include channel numbers. The application automatically
+                For NVR/DVR systems with multiple channels, paths typically include channel numbers. The application
+                automatically
                 iterates through common channel ranges when a manufacturer is identified.
             </p>
             <ul>
@@ -833,7 +968,8 @@
             </ol>
 
             <div class="note">
-                <strong>Persistence:</strong> All settings are saved to <code>user-settings.properties</code> in the application
+                <strong>Persistence:</strong> All settings are saved to <code>user-settings.properties</code> in the
+                application
                 directory and automatically loaded on next startup. Settings persist across application restarts.
             </div>
 
@@ -849,31 +985,37 @@
             </ol>
 
             <div class="warning">
-                <strong>Warning:</strong> Reset to Defaults is immediate and cannot be undone. Any custom RTSP path pairs you
+                <strong>Warning:</strong> Reset to Defaults is immediate and cannot be undone. Any custom RTSP path
+                pairs you
                 added will be permanently deleted.
             </div>
         </section>
 
         <section id="discovery">
-            <h2>7. Running Discovery</h2>
+            <h2>8. Running Discovery</h2>
             <p>
-                Once you've configured the network selection and added at least one credential, you're ready to initiate the
+                Once you've configured the network selection and added at least one credential, you're ready to initiate
+                the
                 discovery process. This section explains the complete workflow and what happens behind the scenes.
             </p>
 
             <h3>RTSP Validation Method Selection</h3>
             <p>
-                Before starting discovery, you can choose how RTSP stream URLs are validated. This setting is located in the
-                <strong>Discovery</strong> section above the "Start Discovery" button. Three validation methods are available:
+                Before starting discovery, you can choose how RTSP stream URLs are validated. This setting is located in
+                the
+                <strong>Discovery</strong> section above the "Start Discovery" button. Three validation methods are
+                available:
             </p>
 
             <h4>1. SDP Only (Fast, ~60% accurate)</h4>
             <ul>
                 <li><strong>Speed:</strong> 3 seconds per URL</li>
                 <li><strong>Accuracy:</strong> ~60%</li>
-                <li><strong>Method:</strong> Sends RTSP DESCRIBE request and parses SDP (Session Description Protocol) metadata</li>
+                <li><strong>Method:</strong> Sends RTSP DESCRIBE request and parses SDP (Session Description Protocol)
+                    metadata</li>
                 <li><strong>Pros:</strong> Fastest validation method</li>
-                <li><strong>Cons:</strong> Many cameras return valid SDP for ANY path, including invalid ones. Query parameters and URL fragments may be ignored, resulting in false positives</li>
+                <li><strong>Cons:</strong> Many cameras return valid SDP for ANY path, including invalid ones. Query
+                    parameters and URL fragments may be ignored, resulting in false positives</li>
                 <li><strong>Use When:</strong> Speed is critical and you can tolerate false positives</li>
             </ul>
 
@@ -881,9 +1023,12 @@
             <ul>
                 <li><strong>Speed:</strong> 5 seconds per URL</li>
                 <li><strong>Accuracy:</strong> ~90%</li>
-                <li><strong>Method:</strong> Full RTSP session (DESCRIBE → SETUP → PLAY), then listens for actual RTP packets over UDP</li>
-                <li><strong>Pros:</strong> Verifies that the stream actually works and delivers video data. Confirms query parameters are honored</li>
-                <li><strong>Cons:</strong> Slower than SDP. May miss some edge cases where RTP packets are delayed or corrupt</li>
+                <li><strong>Method:</strong> Full RTSP session (DESCRIBE → SETUP → PLAY), then listens for actual RTP
+                    packets over UDP</li>
+                <li><strong>Pros:</strong> Verifies that the stream actually works and delivers video data. Confirms
+                    query parameters are honored</li>
+                <li><strong>Cons:</strong> Slower than SDP. May miss some edge cases where RTP packets are delayed or
+                    corrupt</li>
                 <li><strong>Use When:</strong> You need a balance between speed and accuracy</li>
             </ul>
 
@@ -891,21 +1036,26 @@
             <ul>
                 <li><strong>Speed:</strong> 10 seconds per URL</li>
                 <li><strong>Accuracy:</strong> ~98%</li>
-                <li><strong>Method:</strong> Uses FFmpeg to actually decode and capture a video frame from the stream</li>
-                <li><strong>Pros:</strong> Highest accuracy. Verifies the video stream is fully decodable and playable. Near-perfect confirmation</li>
+                <li><strong>Method:</strong> Uses FFmpeg to actually decode and capture a video frame from the stream
+                </li>
+                <li><strong>Pros:</strong> Highest accuracy. Verifies the video stream is fully decodable and playable.
+                    Near-perfect confirmation</li>
                 <li><strong>Cons:</strong> Slowest method. Discovery takes longer with large networks</li>
-                <li><strong>Use When:</strong> Accuracy is critical and you can afford the extra time (recommended for production audits)</li>
+                <li><strong>Use When:</strong> Accuracy is critical and you can afford the extra time (recommended for
+                    production audits)</li>
             </ul>
 
             <div class="tip">
-                <strong>Performance Comparison:</strong> For a network with 20 cameras and 5 RTSP paths per camera (100 URLs total):<br>
+                <strong>Performance Comparison:</strong> For a network with 20 cameras and 5 RTSP paths per camera (100
+                URLs total):<br>
                 • SDP Only: ~5 minutes<br>
                 • RTP Packet: ~8 minutes<br>
                 • Frame Capture: ~17 minutes
             </div>
 
             <div class="note">
-                <strong>Recommendation:</strong> Frame Capture (Default) is recommended for most use cases as it provides the most
+                <strong>Recommendation:</strong> Frame Capture (Default) is recommended for most use cases as it
+                provides the most
                 reliable results. Use SDP Only for quick preliminary scans or when time is extremely limited.
             </div>
 
@@ -930,7 +1080,8 @@
 
             <div class="screenshot">
                 <img src="images/discovery-progress.png" alt="Discovery Progress">
-                <p class="screenshot-caption">Figure 11: Discovery in progress with teal progress bar and status updates</p>
+                <p class="screenshot-caption">Figure 11: Discovery in progress with teal progress bar and status updates
+                </p>
             </div>
 
             <h3>Discovery Process Phases</h3>
@@ -962,12 +1113,14 @@
                 <li><strong>Multicast Probe:</strong> Sent to 239.255.255.250:3702</li>
                 <li><strong>Wait Period:</strong> 3 seconds for devices to respond</li>
                 <li><strong>Response Parsing:</strong> Extracts ONVIF service URLs, manufacturer, model</li>
-                <li><strong>Device Services:</strong> Attempts to contact ONVIF device service on detected HTTP ports</li>
+                <li><strong>Device Services:</strong> Attempts to contact ONVIF device service on detected HTTP ports
+                </li>
                 <li><strong>Progress:</strong> "Discovering ONVIF devices..."</li>
             </ul>
 
             <div class="note">
-                <strong>Technical Detail:</strong> ONVIF WS-Discovery uses SOAP over UDP multicast. Not all cameras respond
+                <strong>Technical Detail:</strong> ONVIF WS-Discovery uses SOAP over UDP multicast. Not all cameras
+                respond
                 to WS-Discovery (some require direct ONVIF service URL access), so the application tries both methods.
             </div>
 
@@ -975,7 +1128,8 @@
             <p><strong>Purpose:</strong> Authenticate with discovered devices and locate RTSP streams</p>
             <ul>
                 <li><strong>Credential Testing:</strong> Each credential tested in order until success or all fail</li>
-                <li><strong>Authentication Methods:</strong> ONVIF authentication (HTTP Digest) and RTSP authentication</li>
+                <li><strong>Authentication Methods:</strong> ONVIF authentication (HTTP Digest) and RTSP authentication
+                </li>
                 <li><strong>Path Testing Strategy:</strong>
                     <ul>
                         <li>If manufacturer identified → Test manufacturer-specific paths first</li>
@@ -984,12 +1138,14 @@
                         <li>For NVRs → Iterate through channel numbers (1-16 or 101-132)</li>
                     </ul>
                 </li>
-                <li><strong>Smart Caching:</strong> Successful paths cached per manufacturer for faster subsequent discoveries</li>
+                <li><strong>Smart Caching:</strong> Successful paths cached per manufacturer for faster subsequent
+                    discoveries</li>
                 <li><strong>Progress:</strong> "Authenticating devices... X/Y" → "Discovering streams... X/Y"</li>
             </ul>
 
             <h4>Phase 5: Stream Analysis</h4>
-            <p><strong>Purpose:</strong> Extract codec, resolution, and framerate information from discovered streams</p>
+            <p><strong>Purpose:</strong> Extract codec, resolution, and framerate information from discovered streams
+            </p>
             <ul>
                 <li><strong>Method:</strong> JavaCV (FFmpeg) opens RTSP stream and analyzes video packets</li>
                 <li><strong>Extracted Information:</strong>
@@ -1018,8 +1174,10 @@
                 <li><span class="status-indicator status-pending">SCANNING</span> Port scanning in progress</li>
                 <li><span class="status-indicator status-authenticating">AUTHENTICATING</span> Testing credentials</li>
                 <li><span class="status-indicator status-pending">ANALYZING</span> Stream analysis in progress</li>
-                <li><span class="status-indicator status-completed">COMPLETED</span> Successfully discovered with streams</li>
-                <li><span class="status-indicator status-auth-failed">AUTH_FAILED</span> Authentication failed or unknown device</li>
+                <li><span class="status-indicator status-completed">COMPLETED</span> Successfully discovered with
+                    streams</li>
+                <li><span class="status-indicator status-auth-failed">AUTH_FAILED</span> Authentication failed or
+                    unknown device</li>
             </ul>
 
             <h3>Discovery Completion</h3>
@@ -1052,21 +1210,24 @@
             </ol>
 
             <div class="warning">
-                <strong>Important:</strong> Stopping discovery mid-process does not save partial results. You must complete
+                <strong>Important:</strong> Stopping discovery mid-process does not save partial results. You must
+                complete
                 a full discovery to export results.
             </div>
         </section>
 
         <section id="results">
-            <h2>8. Viewing and Understanding Results</h2>
+            <h2>9. Viewing and Understanding Results</h2>
             <p>
-                After discovery completes, all discovered devices are displayed in a color-coded, sortable table in the right panel.
+                After discovery completes, all discovered devices are displayed in a color-coded, sortable table in the
+                right panel.
                 Understanding the color coding and status indicators is key to quickly assessing your camera network.
             </p>
 
             <div class="screenshot">
                 <img src="images/results-table-colored.png" alt="Color-Coded Results Table">
-                <p class="screenshot-caption">Figure 12: Discovery results with color-coded rows indicating device status</p>
+                <p class="screenshot-caption">Figure 12: Discovery results with color-coded rows indicating device
+                    status</p>
             </div>
 
             <h3>Color-Coded Row System</h3>
@@ -1112,7 +1273,8 @@
             </table>
 
             <div class="success">
-                <strong>Quick Interpretation:</strong> Green = Good (camera working), Red = Credentials failed, Gray = Not a camera, Blue = In progress
+                <strong>Quick Interpretation:</strong> Green = Good (camera working), Red = Credentials failed, Gray =
+                Not a camera, Blue = In progress
             </div>
 
             <h3>Understanding Device Status</h3>
@@ -1132,7 +1294,8 @@
                 <li>Device identified as camera via ONVIF or RTSP port detection</li>
                 <li>All provided credentials failed to authenticate</li>
                 <li>Error Message column shows "Authentication failed with all credentials"</li>
-                <li><strong>Action Required:</strong> Add correct credentials and use "Retry Authentication" feature</li>
+                <li><strong>Action Required:</strong> Add correct credentials and use "Retry Authentication" feature
+                </li>
             </ul>
 
             <h4>AUTH_FAILED - Unknown Device Type (Gray Rows)</h4>
@@ -1147,8 +1310,10 @@
             </ul>
 
             <div class="note">
-                <strong>Intelligence Feature:</strong> The application intelligently distinguishes between cameras with wrong
-                credentials (red) and non-camera devices (gray), preventing false positives and focusing your attention on
+                <strong>Intelligence Feature:</strong> The application intelligently distinguishes between cameras with
+                wrong
+                credentials (red) and non-camera devices (gray), preventing false positives and focusing your attention
+                on
                 actual camera authentication issues.
             </div>
 
@@ -1191,18 +1356,21 @@
 
             <h4>RTSP Stream(s) Column</h4>
             <p>
-                Displays the <strong>count</strong> of discovered RTSP streams. The actual stream URLs are included in the
+                Displays the <strong>count</strong> of discovered RTSP streams. The actual stream URLs are included in
+                the
                 Excel export for security reasons (not displayed in UI).
             </p>
             <ul>
                 <li><strong>Green text:</strong> Number &gt; 0 (streams found)</li>
                 <li><strong>Red text:</strong> 0 (no streams found)</li>
             </ul>
-            <p><strong>Example:</strong> <span style="color: #155724;">2</span> indicates 2 streams (typically main + sub)</p>
+            <p><strong>Example:</strong> <span style="color: #155724;">2</span> indicates 2 streams (typically main +
+                sub)</p>
 
             <h4>Credential Used Column</h4>
             <p>
-                Shows which username:password combination successfully authenticated with the device. Helps you track which
+                Shows which username:password combination successfully authenticated with the device. Helps you track
+                which
                 credentials are in use across your camera infrastructure.
             </p>
             <p><strong>Example:</strong> <code>admin:12345</code></p>
@@ -1245,34 +1413,40 @@
 
             <h3>Context Menu Actions</h3>
             <p>
-                Right-click on any row to access additional actions (see next section on Retry Authentication for details).
+                Right-click on any row to access additional actions (see next section on Retry Authentication for
+                details).
             </p>
         </section>
 
         <section id="retry">
-            <h2>9. Retry Authentication</h2>
+            <h2>10. Retry Authentication</h2>
             <p>
-                The Retry Authentication feature allows you to re-attempt authentication on devices that failed initially,
-                without re-running the entire discovery process. This is particularly useful when you obtain correct credentials
+                The Retry Authentication feature allows you to re-attempt authentication on devices that failed
+                initially,
+                without re-running the entire discovery process. This is particularly useful when you obtain correct
+                credentials
                 after the initial scan.
             </p>
 
             <div class="screenshot">
                 <img src="images/retry-authentication.png" alt="Retry Authentication Context Menu">
-                <p class="screenshot-caption">Figure 13: Right-click context menu with "Retry with Different Credentials" option</p>
+                <p class="screenshot-caption">Figure 13: Right-click context menu with "Retry with Different
+                    Credentials" option</p>
             </div>
 
             <h3>When to Use Retry Authentication</h3>
             <p>Use this feature when:</p>
             <ul>
-                <li>Device shows <span class="status-indicator status-auth-failed">AUTH_FAILED</span> with red background (credential failure)</li>
+                <li>Device shows <span class="status-indicator status-auth-failed">AUTH_FAILED</span> with red
+                    background (credential failure)</li>
                 <li>You've obtained the correct credentials after the initial scan</li>
                 <li>You want to test a different credential without re-scanning the entire network</li>
                 <li>A camera's password was recently changed and you need to update it</li>
             </ul>
 
             <div class="note">
-                <strong>Important:</strong> Retry Authentication is NOT available for devices marked as "Unknown device type"
+                <strong>Important:</strong> Retry Authentication is NOT available for devices marked as "Unknown device
+                type"
                 (gray rows), as these are confirmed non-camera devices.
             </div>
 
@@ -1332,7 +1506,8 @@
             </ol>
 
             <div class="tip">
-                <strong>Batch Workflow:</strong> After obtaining multiple passwords, add them all to the credential list,
+                <strong>Batch Workflow:</strong> After obtaining multiple passwords, add them all to the credential
+                list,
                 then retry each failed device. This is much faster than re-running full discovery.
             </div>
 
@@ -1368,23 +1543,27 @@
 
             <h3>Limitations</h3>
             <ul>
-                <li>Cannot retry devices marked as "Unknown device type" (gray rows) - these are confirmed non-cameras</li>
+                <li>Cannot retry devices marked as "Unknown device type" (gray rows) - these are confirmed non-cameras
+                </li>
                 <li>Retry only tests authentication; does not re-scan ports or re-detect manufacturer</li>
                 <li>Original port and manufacturer detection is reused</li>
                 <li>Must have at least one credential in the credential list to retry</li>
             </ul>
 
             <div class="warning">
-                <strong>Security Note:</strong> Multiple failed authentication attempts may trigger account lockouts or security
+                <strong>Security Note:</strong> Multiple failed authentication attempts may trigger account lockouts or
+                security
                 alerts on some camera systems. Exercise caution when retrying multiple times with different credentials.
             </div>
         </section>
 
         <section id="export">
-            <h2>10. Exporting to Excel</h2>
+            <h2>11. Exporting to Excel</h2>
             <p>
-                After discovery completes, you can export the results to a comprehensive Excel file containing two sheets:
-                CCTV Audit (camera details) and Host Audit (system information). This provides complete documentation for
+                After discovery completes, you can export the results to a comprehensive Excel file containing two
+                sheets:
+                CCTV Audit (camera details) and Host Audit (system information). This provides complete documentation
+                for
                 network auditing and camera inventory management.
             </p>
 
@@ -1401,8 +1580,10 @@
             <h4>Step 1: Enter Site Information</h4>
             <p>In the Export section (bottom of left panel), provide:</p>
             <ul>
-                <li><strong>Site ID:</strong> Identifier for the location (e.g., "Building A", "Main Office", "NYC-DC1")</li>
-                <li><strong>Premise Name:</strong> Full name of the premises (e.g., "Acme Corporation Headquarters")</li>
+                <li><strong>Site ID:</strong> Identifier for the location (e.g., "Building A", "Main Office", "NYC-DC1")
+                </li>
+                <li><strong>Premise Name:</strong> Full name of the premises (e.g., "Acme Corporation Headquarters")
+                </li>
                 <li><strong>Operator Name:</strong> Name of person conducting the audit (e.g., "John Smith")</li>
             </ul>
 
@@ -1603,11 +1784,13 @@
                 <li><strong>Documentation:</strong> Complete record of the system used for the audit</li>
                 <li><strong>Troubleshooting:</strong> System specifications if issues arise</li>
                 <li><strong>Compliance:</strong> Audit trail showing who performed the scan and when</li>
-                <li><strong>Time Validation:</strong> NTP drift detection helps identify system clock issues that could affect logs</li>
+                <li><strong>Time Validation:</strong> NTP drift detection helps identify system clock issues that could
+                    affect logs</li>
             </ul>
 
             <div class="tip">
-                <strong>NTP Time Drift:</strong> Significant time drift (&gt;5 seconds) can cause issues with SSL certificate
+                <strong>NTP Time Drift:</strong> Significant time drift (&gt;5 seconds) can cause issues with SSL
+                certificate
                 validation and log correlation. The Host Audit sheet flags this automatically.
             </div>
 
@@ -1622,10 +1805,13 @@
 
             <h4>Common Operations</h4>
             <ul>
-                <li><strong>Filtering:</strong> Use auto-filter dropdowns to show only specific manufacturers, statuses, or subnets</li>
+                <li><strong>Filtering:</strong> Use auto-filter dropdowns to show only specific manufacturers, statuses,
+                    or subnets</li>
                 <li><strong>Sorting:</strong> Click column headers to sort by any field</li>
-                <li><strong>Conditional Formatting:</strong> Add custom formatting rules to highlight specific conditions</li>
-                <li><strong>Pivot Tables:</strong> Create pivot tables for statistical analysis (e.g., cameras by manufacturer)</li>
+                <li><strong>Conditional Formatting:</strong> Add custom formatting rules to highlight specific
+                    conditions</li>
+                <li><strong>Pivot Tables:</strong> Create pivot tables for statistical analysis (e.g., cameras by
+                    manufacturer)</li>
                 <li><strong>Annotations:</strong> Use the Notes column to add manual observations</li>
             </ul>
 
@@ -1637,7 +1823,8 @@
             </ul>
 
             <div class="warning">
-                <strong>Security Warning:</strong> Excel files contain sensitive information including IP addresses, credentials,
+                <strong>Security Warning:</strong> Excel files contain sensitive information including IP addresses,
+                credentials,
                 and RTSP URLs with embedded passwords. Protect these files appropriately:
                 <ul>
                     <li>Store in secure locations with access controls</li>
@@ -1665,7 +1852,7 @@
         </section>
 
         <section id="troubleshooting">
-            <h2>11. Troubleshooting</h2>
+            <h2>12. Troubleshooting</h2>
             <p>
                 This section covers common issues encountered during operation and their solutions.
             </p>
@@ -1783,7 +1970,9 @@
             <ul>
                 <li><strong>Java Not Installed:</strong>
                     <ul>
-                        <li>Install Java 8 JRE or higher from <a href="https://www.oracle.com/java/technologies/downloads/">Oracle</a> or <a href="https://adoptium.net/">Adoptium</a></li>
+                        <li>Install Java 8 JRE or higher from <a
+                                href="https://www.oracle.com/java/technologies/downloads/">Oracle</a> or <a
+                                href="https://adoptium.net/">Adoptium</a></li>
                         <li>Verify installation: Open terminal/cmd and run <code>java -version</code></li>
                     </ul>
                 </li>
@@ -1808,7 +1997,9 @@
                     <ul>
                         <li>Close other applications to free RAM</li>
                         <li>Reduce network range size (scan smaller subnets)</li>
-                        <li>For very large networks, increase Java heap: <code>java -Xmx4G -jar cctv-discovery.jar</code></li>
+                        <li>For very large networks, increase Java heap:
+                            <code>java -Xmx4G -jar cctv-discovery.jar</code>
+                        </li>
                     </ul>
                 </li>
                 <li><strong>Network Timeout Issues:</strong>
@@ -1944,7 +2135,8 @@
             <p>Common log patterns:</p>
             <ul>
                 <li><code>Discovered device via WS-Discovery: 192.168.1.100</code> - ONVIF device found</li>
-                <li><code>Authentication successful for 192.168.1.100 with credentials admin:*****</code> - Login succeeded</li>
+                <li><code>Authentication successful for 192.168.1.100 with credentials admin:*****</code> - Login
+                    succeeded</li>
                 <li><code>SSL error for http://192.168.1.1:80/onvif/device_service</code> - Non-camera device</li>
                 <li><code>All RTSP credential combinations failed for 192.168.1.100</code> - Wrong password</li>
             </ul>
@@ -1962,13 +2154,16 @@
         </section>
 
         <section id="faq">
-            <h2>12. Frequently Asked Questions</h2>
+            <h2>13. Frequently Asked Questions</h2>
 
             <h4>Q: Is this tool legal to use?</h4>
             <p>
-                <strong>A:</strong> Yes, <strong>ONLY</strong> on networks you own or have explicit written authorization to scan.
-                Unauthorized network scanning may violate laws such as the Computer Fraud and Abuse Act (CFAA) in the United States,
-                Computer Misuse Act in the UK, or similar legislation in other jurisdictions. This tool is designed for legitimate
+                <strong>A:</strong> Yes, <strong>ONLY</strong> on networks you own or have explicit written
+                authorization to scan.
+                Unauthorized network scanning may violate laws such as the Computer Fraud and Abuse Act (CFAA) in the
+                United States,
+                Computer Misuse Act in the UK, or similar legislation in other jurisdictions. This tool is designed for
+                legitimate
                 network administration, security auditing, and camera inventory management by authorized personnel.
             </p>
 
@@ -1977,7 +2172,8 @@
                 <strong>A:</strong> The tool supports:
             </p>
             <ul>
-                <li><strong>ONVIF (Profile S/T):</strong> WS-Discovery multicast, GetDeviceInformation, GetStreamUri</li>
+                <li><strong>ONVIF (Profile S/T):</strong> WS-Discovery multicast, GetDeviceInformation, GetStreamUri
+                </li>
                 <li><strong>RTSP:</strong> All versions, supports H.264, H.265 (HEVC), MJPEG, MPEG4 codecs</li>
                 <li><strong>HTTP/HTTPS:</strong> For ONVIF device services and web interface detection</li>
                 <li><strong>Authentication:</strong> HTTP Basic and Digest authentication</li>
@@ -1993,14 +2189,18 @@
                 <li>Large network (/16, 65,534 IPs): 30-60 minutes</li>
             </ul>
             <p>
-                Factors affecting speed: network latency, number of live devices, number of credentials, RTSP stream analysis time.
+                Factors affecting speed: network latency, number of live devices, number of credentials, RTSP stream
+                analysis time.
             </p>
 
             <h4>Q: Can I scan multiple networks simultaneously?</h4>
             <p>
-                <strong>A:</strong> Yes, using Advanced Mode! Enable the "Advanced Mode" checkbox in the Network Selection section,
-                then select multiple interfaces, add multiple IP ranges, and/or add multiple CIDR blocks. The tool will scan all
-                specified networks in a single discovery operation, automatically deduplicating any overlapping IP addresses.
+                <strong>A:</strong> Yes, using Advanced Mode! Enable the "Advanced Mode" checkbox in the Network
+                Selection section,
+                then select multiple interfaces, add multiple IP ranges, and/or add multiple CIDR blocks. The tool will
+                scan all
+                specified networks in a single discovery operation, automatically deduplicating any overlapping IP
+                addresses.
             </p>
 
             <h4>Q: Does the tool work with all camera brands?</h4>
@@ -2008,23 +2208,30 @@
                 <strong>A:</strong> The tool works with most IP cameras that support standard protocols:
             </p>
             <ul>
-                <li><strong>Full Support:</strong> Hikvision, Dahua, Axis, Hanwha, Uniview, Amcrest, Vivotek, Bosch, Sony, Panasonic</li>
-                <li><strong>Partial Support:</strong> Brands using ONVIF or RTSP (may require custom paths in Settings)</li>
+                <li><strong>Full Support:</strong> Hikvision, Dahua, Axis, Hanwha, Uniview, Amcrest, Vivotek, Bosch,
+                    Sony, Panasonic</li>
+                <li><strong>Partial Support:</strong> Brands using ONVIF or RTSP (may require custom paths in Settings)
+                </li>
                 <li><strong>No Support:</strong> Cameras using proprietary protocols only (rare in modern cameras)</li>
             </ul>
-            <p>For cameras with non-standard RTSP paths, consult manufacturer documentation and add custom paths in Settings.</p>
+            <p>For cameras with non-standard RTSP paths, consult manufacturer documentation and add custom paths in
+                Settings.</p>
 
             <h4>Q: How are MAC addresses resolved?</h4>
             <p>
-                <strong>A:</strong> MAC addresses are resolved using ARP (Address Resolution Protocol) for devices on the same
-                subnet. The operating system's ARP cache is queried for each discovered IP. For devices on different subnets
+                <strong>A:</strong> MAC addresses are resolved using ARP (Address Resolution Protocol) for devices on
+                the same
+                subnet. The operating system's ARP cache is queried for each discovered IP. For devices on different
+                subnets
                 (routed networks), MAC address may not be available and will appear blank in results.
             </p>
 
             <h4>Q: Can I save discovered device lists for later use?</h4>
             <p>
-                <strong>A:</strong> Yes, export to Excel after each scan. The Excel file serves as a permanent record with full
-                device details including credentials and RTSP URLs. The application does not maintain an internal database of
+                <strong>A:</strong> Yes, export to Excel after each scan. The Excel file serves as a permanent record
+                with full
+                device details including credentials and RTSP URLs. The application does not maintain an internal
+                database of
                 previous scans - each discovery is independent.
             </p>
 
@@ -2033,8 +2240,10 @@
                 <strong>A:</strong> The tool requires the following network access:
             </p>
             <ul>
-                <li><strong>ICMP Echo Request (Ping):</strong> For host discovery (may require admin/root on Linux/Mac)</li>
-                <li><strong>TCP Connections:</strong> To HTTP ports (80, 8080, 8000, custom) and RTSP ports (554, 8554, custom)</li>
+                <li><strong>ICMP Echo Request (Ping):</strong> For host discovery (may require admin/root on Linux/Mac)
+                </li>
+                <li><strong>TCP Connections:</strong> To HTTP ports (80, 8080, 8000, custom) and RTSP ports (554, 8554,
+                    custom)</li>
                 <li><strong>UDP Multicast:</strong> To 239.255.255.250:3702 for ONVIF WS-Discovery</li>
                 <li><strong>UDP Unicast:</strong> To NTP servers (pool.ntp.org:123) for time drift calculation</li>
             </ul>
@@ -2042,8 +2251,10 @@
 
             <h4>Q: Is my data sent anywhere or stored remotely?</h4>
             <p>
-                <strong>A:</strong> <strong>NO.</strong> The tool operates entirely offline and locally. All data remains on your
-                local machine. No information is transmitted to external servers, cloud services, or third parties. The only
+                <strong>A:</strong> <strong>NO.</strong> The tool operates entirely offline and locally. All data
+                remains on your
+                local machine. No information is transmitted to external servers, cloud services, or third parties. The
+                only
                 outbound connections are:
             </p>
             <ul>
@@ -2053,7 +2264,8 @@
 
             <h4>Q: Why do some cameras show "Unknown device type" instead of "AUTH_FAILED"?</h4>
             <p>
-                <strong>A:</strong> The tool intelligently distinguishes between cameras and non-camera devices. A device is marked
+                <strong>A:</strong> The tool intelligently distinguishes between cameras and non-camera devices. A
+                device is marked
                 "Unknown device type" (gray row) when:
             </p>
             <ul>
@@ -2062,52 +2274,65 @@
                 <li>ONVIF device service requests fail (404, SSL errors, no response)</li>
             </ul>
             <p>
-                These devices are typically routers, switches, web servers, or other non-camera equipment. Actual cameras with
-                wrong credentials show "AUTH_FAILED" (red row) with error message "Authentication failed with all credentials".
+                These devices are typically routers, switches, web servers, or other non-camera equipment. Actual
+                cameras with
+                wrong credentials show "AUTH_FAILED" (red row) with error message "Authentication failed with all
+                credentials".
             </p>
 
             <h4>Q: Can I customize the Excel export format?</h4>
             <p>
-                <strong>A:</strong> The export format is fixed to ensure consistency and include all necessary fields. However,
-                after export you can freely modify the Excel file to add custom columns, formatting, or data. The file is a
+                <strong>A:</strong> The export format is fixed to ensure consistency and include all necessary fields.
+                However,
+                after export you can freely modify the Excel file to add custom columns, formatting, or data. The file
+                is a
                 standard .xlsx format compatible with all spreadsheet software.
             </p>
 
             <h4>Q: What happens if discovery is interrupted (power loss, network failure)?</h4>
             <p>
-                <strong>A:</strong> Partial results are not saved. If discovery is stopped (manually or due to crash/shutdown),
+                <strong>A:</strong> Partial results are not saved. If discovery is stopped (manually or due to
+                crash/shutdown),
                 you will need to restart the discovery process from the beginning. To minimize risk:
             </p>
             <ul>
                 <li>Ensure stable power and network connectivity before starting large scans</li>
                 <li>Use UPS for critical scans</li>
-                <li>For very large networks, consider scanning in smaller subnets and combining Excel exports manually</li>
+                <li>For very large networks, consider scanning in smaller subnets and combining Excel exports manually
+                </li>
             </ul>
 
             <h4>Q: Does the tool support IPv6?</h4>
             <p>
-                <strong>A:</strong> Currently, the tool supports IPv4 only. Most IP cameras currently use IPv4, and IPv6 adoption
+                <strong>A:</strong> Currently, the tool supports IPv4 only. Most IP cameras currently use IPv4, and IPv6
+                adoption
                 in CCTV systems is still limited. IPv6 support may be added in future versions.
             </p>
 
             <h4>Q: Can I run the tool on a schedule or automate it?</h4>
             <p>
-                <strong>A:</strong> The current version is a GUI application designed for interactive use. Command-line automation
-                is not currently supported. For scheduled audits, you would need to run the tool manually and save results.
+                <strong>A:</strong> The current version is a GUI application designed for interactive use. Command-line
+                automation
+                is not currently supported. For scheduled audits, you would need to run the tool manually and save
+                results.
             </p>
 
             <h4>Q: Why do RTSP URLs in the Excel export include credentials?</h4>
             <p>
-                <strong>A:</strong> RTSP URLs include credentials in the format <code>rtsp://username:password@ip:port/path</code>
-                so they can be used directly in VMS software, media players (VLC), or command-line tools without separately
+                <strong>A:</strong> RTSP URLs include credentials in the format
+                <code>rtsp://username:password@ip:port/path</code>
+                so they can be used directly in VMS software, media players (VLC), or command-line tools without
+                separately
                 entering authentication. This is standard RTSP URL format. Protect Excel files accordingly to prevent
                 credential exposure.
             </p>
 
             <h4>Q: What is NTP time drift and why is it important?</h4>
             <p>
-                <strong>A:</strong> NTP time drift is the difference between your computer's system time and actual time from
-                authoritative NTP servers. The Host Audit sheet measures this drift. Significant drift (&gt;5 seconds) can cause:
+                <strong>A:</strong> NTP time drift is the difference between your computer's system time and actual time
+                from
+                authoritative NTP servers. The Host Audit sheet measures this drift. Significant drift (&gt;5 seconds)
+                can cause:
             </p>
             <ul>
                 <li>SSL/TLS certificate validation failures (certificates have validity time windows)</li>
@@ -2118,8 +2343,10 @@
 
             <h4>Q: Can I contribute custom RTSP paths for other users?</h4>
             <p>
-                <strong>A:</strong> Custom RTSP paths are saved locally in your <code>user-settings.properties</code> file and
-                not shared. If you discover working paths for uncommon camera models, consider documenting them and sharing
+                <strong>A:</strong> Custom RTSP paths are saved locally in your <code>user-settings.properties</code>
+                file and
+                not shared. If you discover working paths for uncommon camera models, consider documenting them and
+                sharing
                 with your organization or community forums.
             </p>
 
@@ -2140,9 +2367,11 @@
 
         <footer>
             <p>&copy; 2026 Consultancy Services Ltd. All rights reserved.</p>
-            <p>CCTV Discovery & Audit Tool - Version 2.0.0</p>
-            <p>For support and inquiries: <a href="mailto:support@consultancyservices.com">support@consultancyservices.com</a></p>
+            <p>CCTV Discovery & Audit Tool - Version 1.1.4</p>
+            <p>For support and inquiries: <a
+                    href="mailto:support@consultancyservices.com">support@consultancyservices.com</a></p>
         </footer>
     </div>
 </body>
+
 </html>
