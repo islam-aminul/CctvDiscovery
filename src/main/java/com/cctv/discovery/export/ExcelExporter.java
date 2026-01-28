@@ -168,7 +168,9 @@ public class ExcelExporter {
         // Stream columns
         if (stream != null) {
             createCell(row, 11, stream.getStreamName(), dataStyle);
-            createCell(row, 12, stream.getRtspUrl(), dataStyle);
+            // Build RTSP URL with credentials embedded
+            String rtspUrlWithCredentials = buildRtspUrlWithCredentials(stream.getRtspUrl(), device.getUsername(), device.getPassword());
+            createCell(row, 12, rtspUrlWithCredentials, dataStyle);
 
             // Per-cell compliance flagging based on individual issues
             String issues = stream.getComplianceIssues();
@@ -205,6 +207,38 @@ public class ExcelExporter {
         Cell cell = row.createCell(column);
         cell.setCellValue(value != null ? value : "");
         cell.setCellStyle(style);
+    }
+
+    /**
+     * Build RTSP URL with embedded credentials.
+     * Converts rtsp://host:port/path to rtsp://username:password@host:port/path
+     *
+     * @param rtspUrl Original RTSP URL
+     * @param username Device username (may be null)
+     * @param password Device password (may be null)
+     * @return RTSP URL with credentials embedded, or original URL if no credentials
+     */
+    private String buildRtspUrlWithCredentials(String rtspUrl, String username, String password) {
+        if (rtspUrl == null || rtspUrl.isEmpty()) {
+            return rtspUrl;
+        }
+
+        // Only add credentials if both username and password are present
+        if (username == null || username.isEmpty() || password == null || password.isEmpty()) {
+            return rtspUrl;
+        }
+
+        // Check if URL already has credentials (contains @ before the first /)
+        if (rtspUrl.matches("rtsp://[^/]*@.*")) {
+            return rtspUrl;
+        }
+
+        // Insert credentials after rtsp://
+        if (rtspUrl.startsWith("rtsp://")) {
+            return "rtsp://" + username + ":" + password + "@" + rtspUrl.substring(7);
+        }
+
+        return rtspUrl;
     }
 
     private CellStyle createWarningStyle(Workbook workbook) {

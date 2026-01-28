@@ -1,0 +1,913 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CCTV Discovery Tool - User Manual</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.7;
+            color: #333;
+            background-color: #f5f5f5;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            padding: 40px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        h1 {
+            color: #2c5f2d;
+            text-align: center;
+            margin-bottom: 10px;
+            font-size: 2.2em;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 1.1em;
+        }
+
+        h2 {
+            color: #2c5f2d;
+            margin-top: 40px;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #2c5f2d;
+        }
+
+        h3 {
+            color: #4a7c4b;
+            margin-top: 25px;
+            margin-bottom: 15px;
+        }
+
+        p {
+            margin-bottom: 15px;
+        }
+
+        .toc {
+            background: #f0f7f0;
+            padding: 25px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+        }
+
+        .toc h2 {
+            margin-top: 0;
+            border-bottom: none;
+            padding-bottom: 0;
+        }
+
+        .toc ul {
+            list-style: none;
+            padding-left: 0;
+        }
+
+        .toc li {
+            margin: 8px 0;
+        }
+
+        .toc a {
+            color: #2c5f2d;
+            text-decoration: none;
+        }
+
+        .toc a:hover {
+            text-decoration: underline;
+        }
+
+        .toc ul ul {
+            padding-left: 20px;
+            margin-top: 5px;
+        }
+
+        .toc ul ul li {
+            margin: 5px 0;
+            font-size: 0.95em;
+        }
+
+        img {
+            max-width: 100%;
+            height: auto;
+            display: block;
+            margin: 20px auto;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        .img-caption {
+            text-align: center;
+            font-style: italic;
+            color: #666;
+            margin-top: -10px;
+            margin-bottom: 20px;
+            font-size: 0.9em;
+        }
+
+        .step-box {
+            background: #e8f5e9;
+            border-left: 4px solid #2c5f2d;
+            padding: 15px 20px;
+            margin: 20px 0;
+            border-radius: 0 5px 5px 0;
+        }
+
+        .step-box h4 {
+            color: #2c5f2d;
+            margin-bottom: 10px;
+        }
+
+        .warning-box {
+            background: #fff3e0;
+            border-left: 4px solid #ff9800;
+            padding: 15px 20px;
+            margin: 20px 0;
+            border-radius: 0 5px 5px 0;
+        }
+
+        .warning-box h4 {
+            color: #e65100;
+            margin-bottom: 10px;
+        }
+
+        .info-box {
+            background: #e3f2fd;
+            border-left: 4px solid #2196f3;
+            padding: 15px 20px;
+            margin: 20px 0;
+            border-radius: 0 5px 5px 0;
+        }
+
+        .info-box h4 {
+            color: #1565c0;
+            margin-bottom: 10px;
+        }
+
+        .tip-box {
+            background: #f3e5f5;
+            border-left: 4px solid #9c27b0;
+            padding: 15px 20px;
+            margin: 20px 0;
+            border-radius: 0 5px 5px 0;
+        }
+
+        .tip-box h4 {
+            color: #7b1fa2;
+            margin-bottom: 10px;
+        }
+
+        ul, ol {
+            margin-left: 25px;
+            margin-bottom: 15px;
+        }
+
+        li {
+            margin-bottom: 8px;
+        }
+
+        .color-indicator {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border-radius: 3px;
+            vertical-align: middle;
+            margin-right: 8px;
+            border: 1px solid #ccc;
+        }
+
+        .color-green { background-color: #c8e6c9; }
+        .color-yellow { background-color: #fff9c4; }
+        .color-red { background-color: #ffcdd2; }
+        .color-blue { background-color: #bbdefb; }
+        .color-gray { background-color: #e0e0e0; }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+
+        th, td {
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: left;
+        }
+
+        th {
+            background-color: #2c5f2d;
+            color: white;
+        }
+
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+
+        code {
+            background: #f5f5f5;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Consolas', monospace;
+            font-size: 0.9em;
+        }
+
+        .button-example {
+            display: inline-block;
+            padding: 8px 16px;
+            border-radius: 5px;
+            color: white;
+            font-weight: bold;
+            margin: 5px;
+        }
+
+        .btn-blue { background-color: #2196f3; }
+        .btn-green { background-color: #4caf50; }
+        .btn-orange { background-color: #ff9800; }
+        .btn-red { background-color: #f44336; }
+
+        footer {
+            text-align: center;
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #ddd;
+            color: #666;
+            font-size: 0.9em;
+        }
+
+        @media print {
+            body {
+                background: white;
+                padding: 0;
+            }
+            .container {
+                box-shadow: none;
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>CCTV Discovery Tool</h1>
+        <p class="subtitle">User Manual - Complete Guide for Beginners</p>
+
+        <!-- Table of Contents -->
+        <div class="toc">
+            <h2>Table of Contents</h2>
+            <ul>
+                <li><a href="#introduction">1. Introduction</a></li>
+                <li><a href="#getting-started">2. Getting Started</a>
+                    <ul>
+                        <li><a href="#installation">2.1 Installation</a></li>
+                        <li><a href="#first-launch">2.2 First Launch</a></li>
+                    </ul>
+                </li>
+                <li><a href="#main-window">3. Understanding the Main Window</a></li>
+                <li><a href="#step-by-step">4. Step-by-Step Guide</a>
+                    <ul>
+                        <li><a href="#step1-network">4.1 Step 1: Select Network</a></li>
+                        <li><a href="#step2-credentials">4.2 Step 2: Set Credentials</a></li>
+                        <li><a href="#step3-verification">4.3 Step 3: Choose Verification Method</a></li>
+                        <li><a href="#step4-discovery">4.4 Step 4: Start Discovery</a></li>
+                        <li><a href="#step5-results">4.5 Step 5: Review Results</a></li>
+                        <li><a href="#step6-export">4.6 Step 6: Export Report</a></li>
+                    </ul>
+                </li>
+                <li><a href="#understanding-results">5. Understanding the Results</a>
+                    <ul>
+                        <li><a href="#color-codes">5.1 Color Codes</a></li>
+                        <li><a href="#status-meanings">5.2 Status Meanings</a></li>
+                        <li><a href="#retry-failed">5.3 Retrying Failed Devices</a></li>
+                    </ul>
+                </li>
+                <li><a href="#settings">6. Settings</a>
+                    <ul>
+                        <li><a href="#settings-ports">6.1 Port Configuration</a></li>
+                        <li><a href="#settings-rtsp-paths">6.2 Custom RTSP Paths</a></li>
+                        <li><a href="#settings-validation">6.3 RTSP Validation Method</a></li>
+                    </ul>
+                </li>
+                <li><a href="#excel-report">7. Understanding the Excel Report</a></li>
+                <li><a href="#troubleshooting">8. Troubleshooting</a></li>
+                <li><a href="#faq">9. Frequently Asked Questions</a></li>
+            </ul>
+        </div>
+
+        <!-- 1. Introduction -->
+        <h2 id="introduction">1. Introduction</h2>
+        <p>Welcome to the CCTV Discovery Tool! This application helps you find and audit CCTV cameras and recording devices (NVRs/DVRs) on your network. Whether you're a security professional, IT administrator, or facility manager, this tool makes it easy to:</p>
+        <ul>
+            <li>Discover all CCTV cameras connected to your network</li>
+            <li>Verify that cameras are working properly</li>
+            <li>Collect important information about each camera (brand, model, video quality)</li>
+            <li>Generate professional Excel reports for audits and documentation</li>
+        </ul>
+
+        <div class="info-box">
+            <h4>What You'll Need</h4>
+            <ul>
+                <li>A Windows computer connected to the same network as your cameras</li>
+                <li>Camera login credentials (username and password)</li>
+                <li>Basic knowledge of your network (IP addresses or network range)</li>
+            </ul>
+        </div>
+
+        <!-- 2. Getting Started -->
+        <h2 id="getting-started">2. Getting Started</h2>
+
+        <h3 id="installation">2.1 Installation</h3>
+        <p>The CCTV Discovery Tool comes as a portable application - no installation required!</p>
+
+        <div class="step-box">
+            <h4>How to Set Up</h4>
+            <ol>
+                <li>Download the application ZIP file</li>
+                <li>Extract (unzip) the contents to any folder on your computer</li>
+                <li>You should see two items:
+                    <ul>
+                        <li><strong>CctvDiscovery.exe</strong> - The main application</li>
+                        <li><strong>jre folder</strong> - Required files (do not delete)</li>
+                    </ul>
+                </li>
+            </ol>
+        </div>
+
+        <img src="images/folder-structure.png" alt="Application folder structure">
+        <p class="img-caption">The application folder contains the executable and jre folder</p>
+
+        <h3 id="first-launch">2.2 First Launch</h3>
+        <p>To start the application:</p>
+        <ol>
+            <li>Double-click on <strong>CctvDiscovery.exe</strong></li>
+            <li>Wait a few seconds for the application to load</li>
+            <li>The main window will appear, ready for use</li>
+        </ol>
+
+        <div class="warning-box">
+            <h4>Important Notes</h4>
+            <ul>
+                <li>Keep the <strong>jre</strong> folder in the same location as the .exe file</li>
+                <li>Do not rename or move files within the jre folder</li>
+                <li>If Windows shows a security warning, click "Run anyway" - the application is safe</li>
+            </ul>
+        </div>
+
+        <!-- 3. Main Window -->
+        <h2 id="main-window">3. Understanding the Main Window</h2>
+        <p>When you open the application, you'll see the main window divided into two areas:</p>
+
+        <img src="images/main-window.png" alt="Main application window">
+        <p class="img-caption">The main window of CCTV Discovery Tool</p>
+
+        <h3>Left Panel - Control Area</h3>
+        <p>This is where you configure and control the discovery process. It's organized into 5 simple steps:</p>
+        <ol>
+            <li><strong>Network Selection</strong> - Choose which network to scan</li>
+            <li><strong>Credentials</strong> - Enter camera login details</li>
+            <li><strong>Verification Method</strong> - Select how thoroughly to check cameras</li>
+            <li><strong>Start Discovery</strong> - Begin the scanning process</li>
+            <li><strong>Export</strong> - Save results to Excel</li>
+        </ol>
+
+        <h3>Right Panel - Results Table</h3>
+        <p>This area shows all discovered devices with important details:</p>
+        <ul>
+            <li><strong>IP Address</strong> - The device's network address</li>
+            <li><strong>Status</strong> - Current state of the device check</li>
+            <li><strong>Device Name</strong> - Name assigned to the camera</li>
+            <li><strong>Manufacturer</strong> - Brand of the camera (e.g., Hikvision, Dahua)</li>
+            <li><strong>Streams</strong> - Number of video streams found</li>
+            <li><strong>Error</strong> - Any problems encountered</li>
+        </ul>
+
+        <h3>Top Right Buttons</h3>
+        <img src="images/header-buttons.png" alt="Settings and Help buttons">
+        <p class="img-caption">Settings and Help buttons in the top-right corner</p>
+
+        <ul>
+            <li><span class="button-example btn-blue">Settings</span> - Opens advanced configuration options</li>
+            <li><span class="button-example btn-green">Help</span> - Opens this user manual</li>
+        </ul>
+
+        <!-- 4. Step-by-Step Guide -->
+        <h2 id="step-by-step">4. Step-by-Step Guide</h2>
+        <p>Follow these steps to discover and audit cameras on your network:</p>
+
+        <h3 id="step1-network">4.1 Step 1: Select Network</h3>
+        <p>First, you need to tell the tool where to look for cameras. Click the <strong>"Select Network"</strong> button to open the network configuration dialog.</p>
+
+        <h4>Simple Mode (Recommended for Beginners)</h4>
+        <img src="images/network-simple-mode.png" alt="Network selection - Simple Mode">
+        <p class="img-caption">Simple Mode for network selection</p>
+
+        <p>In Simple Mode, you have three options:</p>
+
+        <div class="step-box">
+            <h4>Option A: Network Interface (Easiest)</h4>
+            <p>Select your network adapter from the dropdown list. The tool will automatically scan the entire network connected to that adapter.</p>
+        </div>
+
+        <div class="step-box">
+            <h4>Option B: Manual IP Range</h4>
+            <p>Enter a specific range of IP addresses to scan:</p>
+            <ul>
+                <li><strong>Start IP:</strong> The first IP address (e.g., 192.168.1.1)</li>
+                <li><strong>End IP:</strong> The last IP address (e.g., 192.168.1.254)</li>
+            </ul>
+        </div>
+
+        <div class="step-box">
+            <h4>Option C: CIDR Notation</h4>
+            <p>For technical users, enter a CIDR range like <code>192.168.1.0/24</code></p>
+        </div>
+
+        <h4>Advanced Mode (For Complex Networks)</h4>
+        <img src="images/network-advanced-mode.png" alt="Network selection - Advanced Mode">
+        <p class="img-caption">Advanced Mode allows scanning multiple network ranges</p>
+
+        <p>Advanced Mode is useful when you need to scan multiple networks or specific IP ranges. You can:</p>
+        <ul>
+            <li>Select multiple network interfaces</li>
+            <li>Add multiple IP ranges</li>
+            <li>Add multiple CIDR notations</li>
+            <li>See the total number of IPs to be scanned</li>
+        </ul>
+
+        <div class="tip-box">
+            <h4>Tip: How Many IPs to Scan?</h4>
+            <p>The "Possible IPs" counter shows how many addresses will be checked. Scanning more IPs takes longer. For a typical office network, 254 IPs (a /24 network) takes about 2-5 minutes.</p>
+        </div>
+
+        <h3 id="step2-credentials">4.2 Step 2: Set Credentials</h3>
+        <p>Most cameras require a username and password to access. Click <strong>"Set Credentials"</strong> to enter login details.</p>
+
+        <img src="images/credentials-section.png" alt="Credentials management dialog">
+        <p class="img-caption">Adding camera credentials</p>
+
+        <div class="step-box">
+            <h4>How to Add Credentials</h4>
+            <ol>
+                <li>Enter the <strong>Username</strong> (e.g., "admin")</li>
+                <li>Enter the <strong>Password</strong></li>
+                <li>Click <strong>"Add Credential"</strong></li>
+                <li>Repeat for other username/password combinations (up to 4)</li>
+                <li>Click <strong>"OK"</strong> when finished</li>
+            </ol>
+        </div>
+
+        <div class="info-box">
+            <h4>Why Multiple Credentials?</h4>
+            <p>Different cameras on your network might have different passwords. You can add up to 4 credential pairs, and the tool will try each one until it finds one that works.</p>
+        </div>
+
+        <p>To edit or remove credentials, right-click on any entry in the list:</p>
+        <img src="images/credentials-context-menu.png" alt="Credentials context menu">
+        <p class="img-caption">Right-click to edit or delete credentials</p>
+
+        <div class="warning-box">
+            <h4>Common Default Credentials</h4>
+            <p>Many cameras use factory default usernames and passwords. Common ones include:</p>
+            <ul>
+                <li>Username: <code>admin</code> | Password: <code>admin</code></li>
+                <li>Username: <code>admin</code> | Password: <code>12345</code></li>
+                <li>Username: <code>admin</code> | Password: <code>admin123</code></li>
+            </ul>
+            <p><strong>Security Note:</strong> If cameras still use default passwords, they should be changed immediately!</p>
+        </div>
+
+        <h3 id="step3-verification">4.3 Step 3: Choose Verification Method</h3>
+        <p>Click <strong>"Set Verification Method"</strong> to choose how thoroughly the tool checks each camera.</p>
+
+        <img src="images/verification-dialog.png" alt="Verification method selection">
+        <p class="img-caption">Choose how to verify cameras are working</p>
+
+        <table>
+            <tr>
+                <th>Method</th>
+                <th>Speed</th>
+                <th>Accuracy</th>
+                <th>Best For</th>
+            </tr>
+            <tr>
+                <td><strong>Quick Check</strong></td>
+                <td>~3 seconds per camera</td>
+                <td>~60%</td>
+                <td>Fast preliminary scans</td>
+            </tr>
+            <tr>
+                <td><strong>Stream Test</strong></td>
+                <td>~5 seconds per camera</td>
+                <td>~90%</td>
+                <td>Routine checks</td>
+            </tr>
+            <tr>
+                <td><strong>Video Capture</strong> (Recommended)</td>
+                <td>~10 seconds per camera</td>
+                <td>~98%</td>
+                <td>Official audits and reports</td>
+            </tr>
+        </table>
+
+        <div class="tip-box">
+            <h4>Recommendation</h4>
+            <p><strong>Video Capture</strong> is recommended for audit purposes because it actually captures a video frame from each camera, confirming it's truly working. Use Quick Check only for initial network surveys.</p>
+        </div>
+
+        <h3 id="step4-discovery">4.4 Step 4: Start Discovery</h3>
+        <p>Once you've configured the network and credentials, click <strong>"Start Discovery"</strong> to begin scanning.</p>
+
+        <img src="images/discovery-progress.png" alt="Discovery in progress">
+        <p class="img-caption">Discovery in progress showing port scanning phase</p>
+
+        <p>The discovery process goes through several phases:</p>
+        <ol>
+            <li><strong>Port Scanning</strong> - Finding devices that might be cameras</li>
+            <li><strong>Device Identification</strong> - Determining what type of device each one is</li>
+            <li><strong>Authentication</strong> - Logging into each camera with your credentials</li>
+            <li><strong>Stream Analysis</strong> - Checking video streams and quality</li>
+        </ol>
+
+        <img src="images/discovery-progress-2.png" alt="Discovery processing devices">
+        <p class="img-caption">Processing discovered devices and checking their status</p>
+
+        <div class="info-box">
+            <h4>During Discovery</h4>
+            <ul>
+                <li>The progress bar shows overall completion</li>
+                <li>Status text describes what's currently happening</li>
+                <li>Devices appear in the table as they're discovered</li>
+                <li>Row colors change to show each device's status</li>
+            </ul>
+        </div>
+
+        <h3 id="step5-results">4.5 Step 5: Review Results</h3>
+        <p>When discovery completes, you'll see all found devices in the results table:</p>
+
+        <img src="images/results-table-colored.png" alt="Results table with color coding">
+        <p class="img-caption">Completed discovery showing devices with different statuses</p>
+
+        <p>The progress bar will show "Discovery complete!" with the number of devices found.</p>
+
+        <h3 id="step6-export">4.6 Step 6: Export Report</h3>
+        <p>To save your results, click the green <strong>"Export to Excel"</strong> button.</p>
+
+        <img src="images/export-dialog.png" alt="Export dialog">
+        <p class="img-caption">Enter the Site ID for your report</p>
+
+        <div class="step-box">
+            <h4>Export Steps</h4>
+            <ol>
+                <li>Click <strong>"Export to Excel"</strong></li>
+                <li>Enter a <strong>Site ID</strong> (required) - this identifies the location being audited</li>
+                <li>Click <strong>"OK"</strong></li>
+                <li>Choose where to save the Excel file</li>
+                <li>The report will be generated and saved</li>
+            </ol>
+        </div>
+
+        <!-- 5. Understanding Results -->
+        <h2 id="understanding-results">5. Understanding the Results</h2>
+
+        <h3 id="color-codes">5.1 Color Codes</h3>
+        <p>The results table uses colors to quickly show device status:</p>
+
+        <table>
+            <tr>
+                <th>Color</th>
+                <th>Meaning</th>
+                <th>What to Do</th>
+            </tr>
+            <tr>
+                <td><span class="color-indicator color-green"></span> Green</td>
+                <td>Completed Successfully</td>
+                <td>Camera is working! No action needed.</td>
+            </tr>
+            <tr>
+                <td><span class="color-indicator color-yellow"></span> Yellow</td>
+                <td>In Progress</td>
+                <td>Currently being checked. Wait for it to finish.</td>
+            </tr>
+            <tr>
+                <td><span class="color-indicator color-red"></span> Red</td>
+                <td>Authentication Failed</td>
+                <td>Wrong username/password. Try different credentials.</td>
+            </tr>
+            <tr>
+                <td><span class="color-indicator color-blue"></span> Blue</td>
+                <td>Pending</td>
+                <td>Waiting to be processed.</td>
+            </tr>
+            <tr>
+                <td><span class="color-indicator color-gray"></span> Gray</td>
+                <td>Error/Unknown</td>
+                <td>Problem connecting to device. Check if it's online.</td>
+            </tr>
+        </table>
+
+        <h3 id="status-meanings">5.2 Status Meanings</h3>
+        <table>
+            <tr>
+                <th>Status</th>
+                <th>Description</th>
+            </tr>
+            <tr>
+                <td>PENDING</td>
+                <td>Device is waiting to be processed</td>
+            </tr>
+            <tr>
+                <td>SCANNING</td>
+                <td>Checking device ports and protocols</td>
+            </tr>
+            <tr>
+                <td>AUTHENTICATING</td>
+                <td>Trying to log in with provided credentials</td>
+            </tr>
+            <tr>
+                <td>ANALYZING</td>
+                <td>Checking video streams and quality</td>
+            </tr>
+            <tr>
+                <td>COMPLETED</td>
+                <td>Successfully checked - camera is working</td>
+            </tr>
+            <tr>
+                <td>AUTH_FAILED</td>
+                <td>Could not log in - credentials incorrect</td>
+            </tr>
+            <tr>
+                <td>ERROR</td>
+                <td>Something went wrong during checking</td>
+            </tr>
+        </table>
+
+        <h3 id="retry-failed">5.3 Retrying Failed Devices</h3>
+        <p>If some cameras show "AUTH_FAILED", you can retry them with different credentials:</p>
+
+        <img src="images/retry-authentication.png" alt="Retry authentication option">
+        <p class="img-caption">Right-click on a failed device to retry with different credentials</p>
+
+        <div class="step-box">
+            <h4>How to Retry</h4>
+            <ol>
+                <li>Right-click on a device with AUTH_FAILED status</li>
+                <li>Select <strong>"Retry with Different Credential"</strong></li>
+                <li>Enter the correct username and password</li>
+                <li>The device will be checked again with the new credentials</li>
+            </ol>
+        </div>
+
+        <!-- 6. Settings -->
+        <h2 id="settings">6. Settings</h2>
+        <p>Click the <strong>"Settings"</strong> button in the top-right corner to access advanced options.</p>
+
+        <h3 id="settings-ports">6.1 Port Configuration</h3>
+        <img src="images/settings-dialog.png" alt="Settings - Ports tab">
+        <p class="img-caption">Port configuration settings</p>
+
+        <p>Most users don't need to change these settings. Only modify them if your cameras use non-standard ports:</p>
+        <ul>
+            <li><strong>HTTP Ports:</strong> Used for web interfaces (default: 80, 8080, 8000, 8081)</li>
+            <li><strong>RTSP Ports:</strong> Used for video streaming (default: 554, 8554)</li>
+        </ul>
+
+        <div class="info-box">
+            <h4>When to Change Ports</h4>
+            <p>Only change port settings if you know your cameras are configured to use different ports. Contact your IT administrator if you're unsure.</p>
+        </div>
+
+        <h3 id="settings-rtsp-paths">6.2 Custom RTSP Paths</h3>
+        <img src="images/settings-rtsp-paths.png" alt="Settings - RTSP Paths tab">
+        <p class="img-caption">Custom RTSP path configuration</p>
+
+        <p>RTSP paths tell the tool where to find video streams on each camera. The tool already knows paths for common camera brands, but you can add custom paths for unusual cameras.</p>
+
+        <div class="step-box">
+            <h4>Adding Custom Paths</h4>
+            <ol>
+                <li>Enter the <strong>Main Stream Path</strong> (high quality video)</li>
+                <li>Enter the <strong>Sub Stream Path</strong> (lower quality/bandwidth)</li>
+                <li>Click <strong>"Add Path Pair"</strong></li>
+            </ol>
+        </div>
+
+        <div class="tip-box">
+            <h4>Tip: Finding RTSP Paths</h4>
+            <p>If you don't know your camera's RTSP path, check the camera manufacturer's documentation or search online for "[Camera Model] RTSP URL".</p>
+        </div>
+
+        <h3 id="settings-validation">6.3 RTSP Validation Method</h3>
+        <img src="images/settings-rtsp-validation.png" alt="Settings - RTSP Validation tab">
+        <p class="img-caption">RTSP validation method settings</p>
+
+        <p>This setting controls how the tool verifies RTSP streams. It's similar to the Verification Method but provides more technical control:</p>
+
+        <ul>
+            <li><strong>SDP Only:</strong> Fastest, but may show non-working streams as valid</li>
+            <li><strong>RTP Packet:</strong> Balanced speed and accuracy</li>
+            <li><strong>Frame Capture:</strong> Most accurate, confirms actual video works</li>
+        </ul>
+
+        <!-- 7. Excel Report -->
+        <h2 id="excel-report">7. Understanding the Excel Report</h2>
+        <p>The exported Excel report contains comprehensive information about all discovered devices.</p>
+
+        <h3>CCTV Report Sheet</h3>
+        <p>The main sheet contains the following columns:</p>
+        <table>
+            <tr>
+                <th>Column</th>
+                <th>Description</th>
+            </tr>
+            <tr>
+                <td>IP</td>
+                <td>Device's network address</td>
+            </tr>
+            <tr>
+                <td>MAC</td>
+                <td>Hardware address (unique identifier)</td>
+            </tr>
+            <tr>
+                <td>Name</td>
+                <td>Device name (if configured)</td>
+            </tr>
+            <tr>
+                <td>Type</td>
+                <td>Camera, NVR, DVR, etc.</td>
+            </tr>
+            <tr>
+                <td>Manufacturer</td>
+                <td>Brand name (Hikvision, Dahua, etc.)</td>
+            </tr>
+            <tr>
+                <td>Model</td>
+                <td>Specific model number</td>
+            </tr>
+            <tr>
+                <td>Serial Number</td>
+                <td>Device serial number</td>
+            </tr>
+            <tr>
+                <td>Time Diff</td>
+                <td>Time difference from computer (in seconds)</td>
+            </tr>
+            <tr>
+                <td>Username</td>
+                <td>Login username used</td>
+            </tr>
+            <tr>
+                <td>Password</td>
+                <td>Login password used</td>
+            </tr>
+            <tr>
+                <td>Error</td>
+                <td>Any error messages</td>
+            </tr>
+            <tr>
+                <td>Stream Name</td>
+                <td>Name of the video stream</td>
+            </tr>
+            <tr>
+                <td>RTSP URL</td>
+                <td>Full video stream URL with credentials</td>
+            </tr>
+            <tr>
+                <td>Resolution</td>
+                <td>Video resolution (e.g., 1920x1080)</td>
+            </tr>
+            <tr>
+                <td>Codec</td>
+                <td>Video format (H.264, H.265, etc.)</td>
+            </tr>
+            <tr>
+                <td>Profile</td>
+                <td>Codec profile (Baseline, Main, High)</td>
+            </tr>
+            <tr>
+                <td>Bitrate</td>
+                <td>Data rate in kbps</td>
+            </tr>
+            <tr>
+                <td>FPS</td>
+                <td>Frames per second</td>
+            </tr>
+        </table>
+
+        <div class="warning-box">
+            <h4>Security Warning</h4>
+            <p>The Excel report contains <strong>plaintext passwords</strong> and full RTSP URLs with embedded credentials. Handle this file with care and store it securely. The report is password-protected to prevent accidental editing.</p>
+        </div>
+
+        <h3>Host Report Sheet</h3>
+        <p>The second sheet contains information about the computer used for the audit, including:</p>
+        <ul>
+            <li>Computer name and operating system</li>
+            <li>Hardware specifications (CPU, memory)</li>
+            <li>Network adapters and IP addresses</li>
+            <li>System time and NTP synchronization status</li>
+        </ul>
+
+        <!-- 8. Troubleshooting -->
+        <h2 id="troubleshooting">8. Troubleshooting</h2>
+
+        <h3>No Devices Found</h3>
+        <div class="step-box">
+            <h4>Possible Causes and Solutions</h4>
+            <ul>
+                <li><strong>Wrong network selected:</strong> Make sure you selected the correct network interface or IP range</li>
+                <li><strong>Firewall blocking:</strong> Temporarily disable Windows Firewall or add an exception for the tool</li>
+                <li><strong>Cameras on different network:</strong> Ensure your computer is on the same network/VLAN as the cameras</li>
+                <li><strong>Cameras powered off:</strong> Verify cameras have power and network connectivity</li>
+            </ul>
+        </div>
+
+        <h3>All Devices Show AUTH_FAILED</h3>
+        <div class="step-box">
+            <h4>Possible Causes and Solutions</h4>
+            <ul>
+                <li><strong>Wrong credentials:</strong> Double-check usernames and passwords</li>
+                <li><strong>Caps Lock on:</strong> Passwords are case-sensitive</li>
+                <li><strong>Account locked:</strong> Too many failed attempts may lock the camera account</li>
+                <li><strong>Different passwords:</strong> Different cameras may have different passwords - try adding multiple credential pairs</li>
+            </ul>
+        </div>
+
+        <h3>Discovery Takes Too Long</h3>
+        <div class="step-box">
+            <h4>Possible Causes and Solutions</h4>
+            <ul>
+                <li><strong>Too many IPs:</strong> Reduce the IP range to scan</li>
+                <li><strong>Slow network:</strong> Network congestion can slow down scanning</li>
+                <li><strong>Use Quick Check:</strong> Switch to Quick Check verification method for faster results</li>
+            </ul>
+        </div>
+
+        <h3>Application Won't Start</h3>
+        <div class="step-box">
+            <h4>Possible Causes and Solutions</h4>
+            <ul>
+                <li><strong>Missing jre folder:</strong> Ensure the jre folder is in the same directory as the .exe</li>
+                <li><strong>Antivirus blocking:</strong> Add an exception for CctvDiscovery.exe in your antivirus</li>
+                <li><strong>Windows SmartScreen:</strong> Click "More info" then "Run anyway" if Windows blocks the app</li>
+            </ul>
+        </div>
+
+        <!-- 9. FAQ -->
+        <h2 id="faq">9. Frequently Asked Questions</h2>
+
+        <h3>Q: Is this tool safe to use?</h3>
+        <p>Yes, the CCTV Discovery Tool only reads information from cameras - it doesn't modify any settings or configurations on your devices.</p>
+
+        <h3>Q: Will this tool work with any camera brand?</h3>
+        <p>The tool works with most ONVIF-compliant cameras and has specific support for popular brands including Hikvision, Dahua, Axis, CP Plus, Uniview, Hanwha/Samsung, Amcrest, Foscam, Vivotek, Bosch, Sony, and Panasonic.</p>
+
+        <h3>Q: How do I know which credentials to use?</h3>
+        <p>Use the username and password that you would use to log into the camera's web interface. If you don't know these, contact your IT administrator or check if default credentials are still in use (though defaults should be changed for security).</p>
+
+        <h3>Q: Can I scan cameras on a different network/VLAN?</h3>
+        <p>You need network connectivity to the cameras. If they're on a different VLAN, you'll need either:</p>
+        <ul>
+            <li>A computer connected to that VLAN</li>
+            <li>Routing configured between VLANs</li>
+            <li>A VPN connection to that network</li>
+        </ul>
+
+        <h3>Q: What does "Time Diff" mean in the report?</h3>
+        <p>This shows how many seconds the camera's clock differs from your computer's clock. Large differences can cause issues with video recording timestamps and should be corrected.</p>
+
+        <h3>Q: Why are some values highlighted in red in the Excel report?</h3>
+        <p>Red highlighting indicates potential compliance issues:</p>
+        <ul>
+            <li>Non-standard resolution</li>
+            <li>Codec other than H.264</li>
+            <li>High profile codec (may require transcoding)</li>
+            <li>Bitrate above 512kbps (high bandwidth usage)</li>
+        </ul>
+
+        <h3>Q: Can I use the RTSP URLs from the report to view cameras?</h3>
+        <p>Yes! The RTSP URLs in the report include credentials and can be used directly in video players like VLC Media Player. Simply copy the URL and open it with "Media > Open Network Stream" in VLC.</p>
+
+        <h3>Q: How do I unlock the Excel report to edit it?</h3>
+        <p>The report is protected to prevent accidental changes. The password is automatically generated based on the number of devices and the date. Contact your administrator if you need to modify the report.</p>
+
+        <footer>
+            <p>CCTV Discovery Tool - User Manual</p>
+            <p>For support, contact your system administrator.</p>
+        </footer>
+    </div>
+</body>
+</html>
