@@ -4,6 +4,7 @@ import com.cctv.discovery.model.Device;
 import com.cctv.discovery.model.RTSPStream;
 import org.bytedeco.javacv.FFmpegFrameGrabber;
 import org.bytedeco.javacv.Frame;
+import org.bytedeco.ffmpeg.global.avutil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -16,6 +17,11 @@ import java.util.concurrent.*;
  */
 public class StreamAnalyzer {
     private static final Logger logger = LoggerFactory.getLogger(StreamAnalyzer.class);
+
+    static {
+        // Suppress FFmpeg native stderr noise (H264 decoder warnings, corrupt frame messages, etc.)
+        avutil.av_log_set_level(avutil.AV_LOG_ERROR);
+    }
 
     private static final int MAX_PARALLEL_STREAMS = 8;
     private static final int ANALYSIS_DURATION_SECONDS = 10;

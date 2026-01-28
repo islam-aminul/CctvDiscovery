@@ -19,6 +19,7 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import org.bytedeco.javacv.FFmpegFrameGrabber;
 import org.bytedeco.javacv.Frame;
+import org.bytedeco.ffmpeg.global.avutil;
 
 /**
  * RTSP service for stream discovery, URL guessing, and authentication.
@@ -40,6 +41,9 @@ public class RtspService {
     private static RtspDiscoveryConfig discoveryConfig = new RtspDiscoveryConfig();
 
     static {
+        // Suppress FFmpeg native stderr noise (H264 decoder warnings, 401 retries, etc.)
+        // AV_LOG_ERROR = 16: only show errors, hide warnings/info/debug from native FFmpeg
+        avutil.av_log_set_level(avutil.AV_LOG_ERROR);
         loadRtspTemplates();
     }
 
@@ -970,7 +974,7 @@ public class RtspService {
             }
 
             if (packetsReceived >= 5) {
-                logger.info("✓ RTP validation SUCCESS: {} ({} packets)", rtspUrl, packetsReceived);
+                logger.info("RTP validation SUCCESS: {} ({} packets)", rtspUrl, packetsReceived);
                 RTSPStream stream = new RTSPStream("Main", rtspUrl);
                 String sessionName = parseSdpSessionName(sdpContent);
                 if (sessionName != null) {
@@ -979,7 +983,7 @@ public class RtspService {
                 }
                 return stream;
             } else {
-                logger.info("✗ Insufficient RTP packets: {} (need 5)", packetsReceived);
+                logger.info("Insufficient RTP packets: {} (need 5)", packetsReceived);
                 return null;
             }
 
