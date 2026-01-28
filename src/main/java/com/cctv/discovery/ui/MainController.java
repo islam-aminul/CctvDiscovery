@@ -27,10 +27,12 @@ import javafx.stage.Stage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.net.InetAddress;
 import java.net.InterfaceAddress;
 import java.net.NetworkInterface;
@@ -2318,28 +2320,8 @@ public class MainController {
                 imagesDir.mkdirs();
             }
 
-            // Extract all images
-            String[] imageFiles = {
-                    "main-window.png",
-                    "header-buttons.png",
-                    "network-simple-mode.png",
-                    "network-advanced-mode.png",
-                    "credentials-section.png",
-                    "credentials-context-menu.png",
-                    "settings-dialog.png",
-                    "settings-onvif-ports.png",
-                    "settings-rtsp-ports.png",
-                    "settings-rtsp-paths.png",
-                    "discovery-progress.png",
-                    "results-table-colored.png",
-                    "retry-authentication.png",
-                    "export-dialog.png",
-                    "host-audit-sheet.png"
-            };
-
-            for (String imageFile : imageFiles) {
-                extractResource("/help/images/" + imageFile, imagesDir, imageFile);
-            }
+            // Extract all images listed in index.txt
+            extractHelpImages(imagesDir);
 
             // Open in default browser
             if (java.awt.Desktop.isDesktopSupported()) {
@@ -2377,6 +2359,27 @@ public class MainController {
         }
 
         return targetFile;
+    }
+
+    /**
+     * Extracts all help images listed in the index.txt file.
+     * This approach avoids hardcoding image filenames and automatically includes
+     * any new images added to the resources/help/images folder.
+     */
+    private void extractHelpImages(File imagesDir) {
+        try (InputStream indexStream = getClass().getResourceAsStream("/help/images/index.txt");
+             BufferedReader reader = new BufferedReader(new InputStreamReader(indexStream))) {
+
+            String imageName;
+            while ((imageName = reader.readLine()) != null) {
+                imageName = imageName.trim();
+                if (!imageName.isEmpty() && !imageName.startsWith("#")) {
+                    extractResource("/help/images/" + imageName, imagesDir, imageName);
+                }
+            }
+        } catch (Exception e) {
+            logger.warn("Could not read help images index, falling back to empty images folder", e);
+        }
     }
 
     private void disableInputs() {
