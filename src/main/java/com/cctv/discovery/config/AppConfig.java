@@ -178,6 +178,10 @@ public class AppConfig {
         return getProperty("app.version");
     }
 
+    public String getAppOrganization() {
+        return getProperty("app.organization");
+    }
+
     // Network Discovery
     public int getOnvifPort() {
         return getInt("discovery.onvif.port", 3702);
