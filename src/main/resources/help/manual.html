@@ -380,34 +380,32 @@
 
             <h3>System Requirements</h3>
             <ul>
-                <li><strong>Operating System:</strong> Windows 7/8/10/11, Linux (Ubuntu 18.04+), macOS 10.14+</li>
-                <li><strong>Java Runtime:</strong> Java 8 (JRE 1.8) or higher</li>
-                <li><strong>Memory:</strong> Minimum 2GB RAM (4GB+ recommended for large networks)</li>
+                <li><strong>Operating System:</strong> Windows 10 or Windows 11 (64-bit)</li>
+                <li><strong>Memory:</strong> Minimum 8GB RAM recommended</li>
                 <li><strong>Network:</strong> Active network connection with access to target camera network</li>
-                <li><strong>Screen Resolution:</strong> 1366x768 or higher (1920x1080 recommended)</li>
-                <li><strong>Permissions:</strong> Administrator/root privileges may be required for ICMP ping and raw
-                    socket operations</li>
+                <li><strong>Permissions:</strong> Standard User account (Administrator privileges NOT required)</li>
             </ul>
 
             <h3>Installation</h3>
+            <p>The application is provided as a portable compressed archive. No installation is required.</p>
+
+            <div class="screenshot">
+                <img src="images/folder-structure.png" alt="Application Folder Structure"
+                    onerror="this.onerror=null; this.src='https://via.placeholder.com/600x200?text=Folder+Structure';">
+                <p class="screenshot-caption">Figure 1: Extracted Application Folder Structure</p>
+            </div>
+
             <ol>
-                <li>Extract the application ZIP file to a desired location on your computer</li>
-                <li>Ensure Java 8 JRE or higher is installed (verify with <code>java -version</code>)</li>
-                <li>Run the application:
-                    <ul>
-                        <li><strong>Windows:</strong> Double-click <code>CctvDiscovery.exe</code></li>
-                        <li><strong>Linux/Mac:</strong> Execute <code>java -jar cctv-discovery-1.0.0-SNAPSHOT.jar</code>
-                            from terminal</li>
-                    </ul>
-                </li>
+                <li>Download the <code>CctvDiscovery-dist.zip</code> file.</li>
+                <li>Right-click the ZIP file and select <strong>Extract All...</strong> to a folder of your choice
+                    (e.g., Desktop or Documents).</li>
+                <li>Open the extracted folder.</li>
+                <li>Double-click <strong>CctvDiscovery.exe</strong> to launch.</li>
             </ol>
 
             <h3>First Launch</h3>
             <p>
-                Upon first launch, the application will create a <code>user-settings.properties</code> file in the
-                application
-                directory. This file stores your custom port configurations and RTSP path settings, which persist across
-                sessions.
+                Launch the application by double-clicking the executable. The main window will appear, ready for use.
             </p>
 
             <div class="screenshot">
