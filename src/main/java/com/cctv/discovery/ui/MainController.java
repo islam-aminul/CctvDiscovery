@@ -27,10 +27,12 @@ import javafx.stage.Stage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.net.InetAddress;
 import java.net.InterfaceAddress;
 import java.net.NetworkInterface;
@@ -2318,24 +2320,26 @@ public class MainController {
                 imagesDir.mkdirs();
             }
 
-            // Extract all images
-            String[] imageFiles = {
-                    "main-window.png",
-                    "header-buttons.png",
-                    "network-simple-mode.png",
-                    "network-advanced-mode.png",
-                    "credentials-section.png",
-                    "credentials-context-menu.png",
-                    "settings-dialog.png",
-                    "settings-onvif-ports.png",
-                    "settings-rtsp-ports.png",
-                    "settings-rtsp-paths.png",
-                    "discovery-progress.png",
-                    "results-table-colored.png",
-                    "retry-authentication.png",
-                    "export-dialog.png",
-                    "host-audit-sheet.png"
-            };
+            // Extract all images dynamically from image-list.txt
+            List<String> imageFiles = new ArrayList<>();
+            try (InputStream listStream = getClass().getResourceAsStream("/help/images/image-list.txt");
+                    BufferedReader reader = listStream != null ? new BufferedReader(new InputStreamReader(listStream))
+                            : null) {
+                if (reader != null) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        line = line.trim();
+                        if (!line.isEmpty() && !line.startsWith("#")) {
+                            imageFiles.add(line);
+                        }
+                    }
+                    logger.info("Found {} images to extract from image-list.txt", imageFiles.size());
+                } else {
+                    logger.warn("image-list.txt not found, no images will be extracted");
+                }
+            } catch (Exception e) {
+                logger.warn("Error reading image-list.txt: {}", e.getMessage());
+            }
 
             for (String imageFile : imageFiles) {
                 extractResource("/help/images/" + imageFile, imagesDir, imageFile);

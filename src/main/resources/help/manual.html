@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -25,7 +26,7 @@
             background: white;
             padding: 40px;
             border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
         }
 
         h1 {
@@ -108,7 +109,7 @@
             margin: 20px auto;
             border: 1px solid #ddd;
             border-radius: 5px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
         }
 
         .img-caption {
@@ -172,7 +173,8 @@
             margin-bottom: 10px;
         }
 
-        ul, ol {
+        ul,
+        ol {
             margin-left: 25px;
             margin-bottom: 15px;
         }
@@ -191,11 +193,25 @@
             border: 1px solid #ccc;
         }
 
-        .color-green { background-color: #c8e6c9; }
-        .color-yellow { background-color: #fff9c4; }
-        .color-red { background-color: #ffcdd2; }
-        .color-blue { background-color: #bbdefb; }
-        .color-gray { background-color: #e0e0e0; }
+        .color-green {
+            background-color: #c8e6c9;
+        }
+
+        .color-yellow {
+            background-color: #fff9c4;
+        }
+
+        .color-red {
+            background-color: #ffcdd2;
+        }
+
+        .color-blue {
+            background-color: #bbdefb;
+        }
+
+        .color-gray {
+            background-color: #e0e0e0;
+        }
 
         table {
             width: 100%;
@@ -203,7 +219,8 @@
             margin: 20px 0;
         }
 
-        th, td {
+        th,
+        td {
             border: 1px solid #ddd;
             padding: 12px;
             text-align: left;
@@ -235,10 +252,21 @@
             margin: 5px;
         }
 
-        .btn-blue { background-color: #2196f3; }
-        .btn-green { background-color: #4caf50; }
-        .btn-orange { background-color: #ff9800; }
-        .btn-red { background-color: #f44336; }
+        .btn-blue {
+            background-color: #2196f3;
+        }
+
+        .btn-green {
+            background-color: #4caf50;
+        }
+
+        .btn-orange {
+            background-color: #ff9800;
+        }
+
+        .btn-red {
+            background-color: #f44336;
+        }
 
         footer {
             text-align: center;
@@ -254,6 +282,7 @@
                 background: white;
                 padding: 0;
             }
+
             .container {
                 box-shadow: none;
                 padding: 20px;
@@ -261,6 +290,7 @@
         }
     </style>
 </head>
+
 <body>
     <div class="container">
         <h1>CCTV Discovery Tool</h1>
@@ -310,7 +340,9 @@
 
         <!-- 1. Introduction -->
         <h2 id="introduction">1. Introduction</h2>
-        <p>Welcome to the CCTV Discovery Tool! This application helps you find and audit CCTV cameras and recording devices (NVRs/DVRs) on your network. Whether you're a security professional, IT administrator, or facility manager, this tool makes it easy to:</p>
+        <p>Welcome to the CCTV Discovery Tool! This application helps you find and audit CCTV cameras and recording
+            devices (NVRs/DVRs) on your network. Whether you're a security professional, IT administrator, or facility
+            manager, this tool makes it easy to:</p>
         <ul>
             <li>Discover all CCTV cameras connected to your network</li>
             <li>Verify that cameras are working properly</li>
@@ -409,7 +441,8 @@
         <p>Follow these steps to discover and audit cameras on your network:</p>
 
         <h3 id="step1-network">4.1 Step 1: Select Network</h3>
-        <p>First, you need to tell the tool where to look for cameras. Click the <strong>"Select Network"</strong> button to open the network configuration dialog.</p>
+        <p>First, you need to tell the tool where to look for cameras. Click the <strong>"Select Network"</strong>
+            button to open the network configuration dialog.</p>
 
         <h4>Simple Mode (Recommended for Beginners)</h4>
         <img src="images/network-simple-mode.png" alt="Network selection - Simple Mode">
@@ -419,7 +452,8 @@
 
         <div class="step-box">
             <h4>Option A: Network Interface (Easiest)</h4>
-            <p>Select your network adapter from the dropdown list. The tool will automatically scan the entire network connected to that adapter.</p>
+            <p>Select your network adapter from the dropdown list. The tool will automatically scan the entire network
+                connected to that adapter.</p>
         </div>
 
         <div class="step-box">
@@ -450,11 +484,13 @@
 
         <div class="tip-box">
             <h4>Tip: How Many IPs to Scan?</h4>
-            <p>The "Possible IPs" counter shows how many addresses will be checked. Scanning more IPs takes longer. For a typical office network, 254 IPs (a /24 network) takes about 2-5 minutes.</p>
+            <p>The "Possible IPs" counter shows how many addresses will be checked. Scanning more IPs takes longer. For
+                a typical office network, 254 IPs (a /24 network) takes about 2-5 minutes.</p>
         </div>
 
         <h3 id="step2-credentials">4.2 Step 2: Set Credentials</h3>
-        <p>Most cameras require a username and password to access. Click <strong>"Set Credentials"</strong> to enter login details.</p>
+        <p>Most cameras require a username and password to access. Click <strong>"Set Credentials"</strong> to enter
+            login details.</p>
 
         <img src="images/credentials-section.png" alt="Credentials management dialog">
         <p class="img-caption">Adding camera credentials</p>
@@ -472,7 +508,8 @@
 
         <div class="info-box">
             <h4>Why Multiple Credentials?</h4>
-            <p>Different cameras on your network might have different passwords. You can add up to 4 credential pairs, and the tool will try each one until it finds one that works.</p>
+            <p>Different cameras on your network might have different passwords. You can add up to 4 credential pairs,
+                and the tool will try each one until it finds one that works.</p>
         </div>
 
         <p>To edit or remove credentials, right-click on any entry in the list:</p>
@@ -487,7 +524,8 @@
                 <li>Username: <code>admin</code> | Password: <code>12345</code></li>
                 <li>Username: <code>admin</code> | Password: <code>admin123</code></li>
             </ul>
-            <p><strong>Security Note:</strong> If cameras still use default passwords, they should be changed immediately!</p>
+            <p><strong>Security Note:</strong> If cameras still use default passwords, they should be changed
+                immediately!</p>
         </div>
 
         <h3 id="step3-verification">4.3 Step 3: Choose Verification Method</h3>
@@ -525,13 +563,16 @@
 
         <div class="tip-box">
             <h4>Recommendation</h4>
-            <p><strong>Video Capture</strong> is recommended for audit purposes because it actually captures a video frame from each camera, confirming it's truly working. Use Quick Check only for initial network surveys.</p>
+            <p><strong>Video Capture</strong> is recommended for audit purposes because it actually captures a video
+                frame from each camera, confirming it's truly working. Use Quick Check only for initial network surveys.
+            </p>
         </div>
 
         <h3 id="step4-discovery">4.4 Step 4: Start Discovery</h3>
-        <p>Once you've configured the network and credentials, click <strong>"Start Discovery"</strong> to begin scanning.</p>
+        <p>Once you've configured the network and credentials, click <strong>"Start Discovery"</strong> to begin
+            scanning.</p>
 
-        <img src="images/discovery-progress.png" alt="Discovery in progress">
+        <img src="images/discovery-progress-1.png" alt="Discovery in progress">
         <p class="img-caption">Discovery in progress showing port scanning phase</p>
 
         <p>The discovery process goes through several phases:</p>
@@ -687,14 +728,16 @@
 
         <div class="info-box">
             <h4>When to Change Ports</h4>
-            <p>Only change port settings if you know your cameras are configured to use different ports. Contact your IT administrator if you're unsure.</p>
+            <p>Only change port settings if you know your cameras are configured to use different ports. Contact your IT
+                administrator if you're unsure.</p>
         </div>
 
         <h3 id="settings-rtsp-paths">6.2 Custom RTSP Paths</h3>
         <img src="images/settings-rtsp-paths.png" alt="Settings - RTSP Paths tab">
         <p class="img-caption">Custom RTSP path configuration</p>
 
-        <p>RTSP paths tell the tool where to find video streams on each camera. The tool already knows paths for common camera brands, but you can add custom paths for unusual cameras.</p>
+        <p>RTSP paths tell the tool where to find video streams on each camera. The tool already knows paths for common
+            camera brands, but you can add custom paths for unusual cameras.</p>
 
         <div class="step-box">
             <h4>Adding Custom Paths</h4>
@@ -707,14 +750,16 @@
 
         <div class="tip-box">
             <h4>Tip: Finding RTSP Paths</h4>
-            <p>If you don't know your camera's RTSP path, check the camera manufacturer's documentation or search online for "[Camera Model] RTSP URL".</p>
+            <p>If you don't know your camera's RTSP path, check the camera manufacturer's documentation or search online
+                for "[Camera Model] RTSP URL".</p>
         </div>
 
         <h3 id="settings-validation">6.3 RTSP Validation Method</h3>
         <img src="images/settings-rtsp-validation.png" alt="Settings - RTSP Validation tab">
         <p class="img-caption">RTSP validation method settings</p>
 
-        <p>This setting controls how the tool verifies RTSP streams. It's similar to the Verification Method but provides more technical control:</p>
+        <p>This setting controls how the tool verifies RTSP streams. It's similar to the Verification Method but
+            provides more technical control:</p>
 
         <ul>
             <li><strong>SDP Only:</strong> Fastest, but may show non-working streams as valid</li>
@@ -809,7 +854,9 @@
 
         <div class="warning-box">
             <h4>Security Warning</h4>
-            <p>The Excel report contains <strong>plaintext passwords</strong> and full RTSP URLs with embedded credentials. Handle this file with care and store it securely. The report is password-protected to prevent accidental editing.</p>
+            <p>The Excel report contains <strong>plaintext passwords</strong> and full RTSP URLs with embedded
+                credentials. Handle this file with care and store it securely. The report is password-protected to
+                prevent accidental editing.</p>
         </div>
 
         <h3>Host Report Sheet</h3>
@@ -828,9 +875,12 @@
         <div class="step-box">
             <h4>Possible Causes and Solutions</h4>
             <ul>
-                <li><strong>Wrong network selected:</strong> Make sure you selected the correct network interface or IP range</li>
-                <li><strong>Firewall blocking:</strong> Temporarily disable Windows Firewall or add an exception for the tool</li>
-                <li><strong>Cameras on different network:</strong> Ensure your computer is on the same network/VLAN as the cameras</li>
+                <li><strong>Wrong network selected:</strong> Make sure you selected the correct network interface or IP
+                    range</li>
+                <li><strong>Firewall blocking:</strong> Temporarily disable Windows Firewall or add an exception for the
+                    tool</li>
+                <li><strong>Cameras on different network:</strong> Ensure your computer is on the same network/VLAN as
+                    the cameras</li>
                 <li><strong>Cameras powered off:</strong> Verify cameras have power and network connectivity</li>
             </ul>
         </div>
@@ -842,7 +892,8 @@
                 <li><strong>Wrong credentials:</strong> Double-check usernames and passwords</li>
                 <li><strong>Caps Lock on:</strong> Passwords are case-sensitive</li>
                 <li><strong>Account locked:</strong> Too many failed attempts may lock the camera account</li>
-                <li><strong>Different passwords:</strong> Different cameras may have different passwords - try adding multiple credential pairs</li>
+                <li><strong>Different passwords:</strong> Different cameras may have different passwords - try adding
+                    multiple credential pairs</li>
             </ul>
         </div>
 
@@ -862,7 +913,8 @@
             <ul>
                 <li><strong>Missing jre folder:</strong> Ensure the jre folder is in the same directory as the .exe</li>
                 <li><strong>Antivirus blocking:</strong> Add an exception for CctvDiscovery.exe in your antivirus</li>
-                <li><strong>Windows SmartScreen:</strong> Click "More info" then "Run anyway" if Windows blocks the app</li>
+                <li><strong>Windows SmartScreen:</strong> Click "More info" then "Run anyway" if Windows blocks the app
+                </li>
             </ul>
         </div>
 
@@ -870,13 +922,18 @@
         <h2 id="faq">9. Frequently Asked Questions</h2>
 
         <h3>Q: Is this tool safe to use?</h3>
-        <p>Yes, the CCTV Discovery Tool only reads information from cameras - it doesn't modify any settings or configurations on your devices.</p>
+        <p>Yes, the CCTV Discovery Tool only reads information from cameras - it doesn't modify any settings or
+            configurations on your devices.</p>
 
         <h3>Q: Will this tool work with any camera brand?</h3>
-        <p>The tool works with most ONVIF-compliant cameras and has specific support for popular brands including Hikvision, Dahua, Axis, CP Plus, Uniview, Hanwha/Samsung, Amcrest, Foscam, Vivotek, Bosch, Sony, and Panasonic.</p>
+        <p>The tool works with most ONVIF-compliant cameras and has specific support for popular brands including
+            Hikvision, Dahua, Axis, CP Plus, Uniview, Hanwha/Samsung, Amcrest, Foscam, Vivotek, Bosch, Sony, and
+            Panasonic.</p>
 
         <h3>Q: How do I know which credentials to use?</h3>
-        <p>Use the username and password that you would use to log into the camera's web interface. If you don't know these, contact your IT administrator or check if default credentials are still in use (though defaults should be changed for security).</p>
+        <p>Use the username and password that you would use to log into the camera's web interface. If you don't know
+            these, contact your IT administrator or check if default credentials are still in use (though defaults
+            should be changed for security).</p>
 
         <h3>Q: Can I scan cameras on a different network/VLAN?</h3>
         <p>You need network connectivity to the cameras. If they're on a different VLAN, you'll need either:</p>
@@ -887,7 +944,8 @@
         </ul>
 
         <h3>Q: What does "Time Diff" mean in the report?</h3>
-        <p>This shows how many seconds the camera's clock differs from your computer's clock. Large differences can cause issues with video recording timestamps and should be corrected.</p>
+        <p>This shows how many seconds the camera's clock differs from your computer's clock. Large differences can
+            cause issues with video recording timestamps and should be corrected.</p>
 
         <h3>Q: Why are some values highlighted in red in the Excel report?</h3>
         <p>Red highlighting indicates potential compliance issues:</p>
@@ -899,10 +957,12 @@
         </ul>
 
         <h3>Q: Can I use the RTSP URLs from the report to view cameras?</h3>
-        <p>Yes! The RTSP URLs in the report include credentials and can be used directly in video players like VLC Media Player. Simply copy the URL and open it with "Media > Open Network Stream" in VLC.</p>
+        <p>Yes! The RTSP URLs in the report include credentials and can be used directly in video players like VLC Media
+            Player. Simply copy the URL and open it with "Media > Open Network Stream" in VLC.</p>
 
         <h3>Q: How do I unlock the Excel report to edit it?</h3>
-        <p>The report is protected to prevent accidental changes. The password is automatically generated based on the number of devices and the date. Contact your administrator if you need to modify the report.</p>
+        <p>The report is protected to prevent accidental changes. The password is automatically generated based on the
+            number of devices and the date. Contact your administrator if you need to modify the report.</p>
 
         <footer>
             <p>CCTV Discovery Tool - User Manual</p>
@@ -910,4 +970,5 @@
         </footer>
     </div>
 </body>
+
 </html>

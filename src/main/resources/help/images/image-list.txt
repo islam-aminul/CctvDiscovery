@@ -1,0 +1,21 @@
+# List of images to extract for the user manual
+# Add new image filenames here (one per line)
+credentials-context-menu.png
+credentials-section.png
+discovery-progress-1.png
+discovery-progress-2.png
+export-dialog.png
+folder-structure.png
+header-buttons.png
+host-audit-sheet.png
+main-window.png
+network-advanced-mode.png
+network-simple-mode.png
+results-table-colored.png
+retry-authentication.png
+settings-dialog.png
+settings-onvif-ports.png
+settings-rtsp-paths.png
+settings-rtsp-ports.png
+settings-rtsp-validation.png
+verification-dialog.png
