@@ -189,46 +189,48 @@ public class StreamAnalyzer {
     }
 
     /**
-     * Extract H.264 profile from FFmpegFrameGrabber.
-     * Uses the video codec context's profile field.
+     * Extract H.264/H.265 profile from FFmpegFrameGrabber.
+     * Uses metadata and pixel format analysis since JavaCV doesn't directly expose codec context profile.
      *
-     * H.264 profile IDs (from FFmpeg avcodec.h):
-     *   66 = Baseline, 77 = Main, 88 = Extended,
-     *   100 = High, 110 = High 10, 122 = High 4:2:2, 244 = High 4:4:4 Predictive,
-     *   44 = CAVLC 4:4:4, 83 = Scalable Baseline, 86 = Scalable High,
-     *   118 = Multiview High, 128 = Stereo High, 138 = Multiview Depth High
+     * H.264 profile detection methods:
+     * 1. Video metadata "profile" field
+     * 2. Format metadata "profile" field
+     * 3. Pixel format heuristics for advanced profiles (High 10, High 4:2:2, High 4:4:4)
      */
     private String extractProfile(FFmpegFrameGrabber grabber) {
         try {
-            // JavaCV exposes the video codec context; getVideoCodecName gives codec string
             String videoCodecName = grabber.getVideoCodecName();
             if (videoCodecName == null) {
                 return null;
             }
 
-            // Try to get profile from FFmpeg metadata
+            // Method 1: Try video-level metadata (works for some containers/streams)
             String metadata = grabber.getVideoMetadata("profile");
             if (metadata != null && !metadata.isEmpty()) {
-                return metadata;
+                logger.info("Profile from video metadata: {}", metadata);
+                return normalizeProfileName(metadata);
             }
 
-            // Fallback: parse profile from SPS via format context metadata
-            // FFmpeg sets profile in the codec context; access via getVideoSideData or metadata
+            // Method 2: Try format-level metadata
             String formatMeta = grabber.getMetadata("profile");
             if (formatMeta != null && !formatMeta.isEmpty()) {
-                return formatMeta;
+                logger.info("Profile from format metadata: {}", formatMeta);
+                return normalizeProfileName(formatMeta);
             }
 
-            // Fallback: use pixel format as a proxy hint
-            // High 10 uses yuv420p10le, High 4:2:2 uses yuv422p, High 4:4:4 uses yuv444p
+            // Method 3: Pixel format heuristics for detecting advanced profiles
             int pixFmt = grabber.getPixelFormat();
-            if (videoCodecName.contains("h264") || videoCodecName.contains("H264")
-                    || videoCodecName.contains("264")) {
-                // avutil pixel format IDs (common):
-                // 0 = yuv420p (Baseline/Main/High), 64 = yuv420p10le (High 10)
-                // 4 = yuv422p (High 4:2:2), 5 = yuv444p (High 4:4:4)
+            String codecLower = videoCodecName.toLowerCase();
+            boolean isH264 = codecLower.contains("h264") || codecLower.contains("264") || codecLower.contains("avc");
+            boolean isH265 = codecLower.contains("hevc") || codecLower.contains("h265") || codecLower.contains("265");
+
+            if (isH264 || isH265) {
+                // Pixel format hints for advanced profiles:
+                // yuv420p10le (64, 68) = High 10 or Main 10
+                // yuv422p (4) = High 4:2:2
+                // yuv444p (5) = High 4:4:4
                 if (pixFmt == 64 || pixFmt == 68) {
-                    return "High 10";
+                    return isH265 ? "Main 10" : "High 10";
                 } else if (pixFmt == 4) {
                     return "High 4:2:2";
                 } else if (pixFmt == 5) {
@@ -240,6 +242,55 @@ public class StreamAnalyzer {
         } catch (Exception e) {
             logger.info("Could not extract profile: {}", e.getMessage());
             return null;
+        }
+    }
+
+    /**
+     * Normalize profile name from various FFmpeg metadata formats.
+     * FFmpeg may return profile names like "High", "Baseline", "Main", or numeric IDs.
+     */
+    private String normalizeProfileName(String rawProfile) {
+        if (rawProfile == null || rawProfile.isEmpty()) {
+            return null;
+        }
+
+        String profile = rawProfile.trim();
+
+        // Check if it's a numeric profile ID
+        try {
+            int profileId = Integer.parseInt(profile);
+            return mapProfileIdToName(profileId);
+        } catch (NumberFormatException e) {
+            // Not numeric, return as-is (already a name like "High", "Main", etc.)
+            return profile;
+        }
+    }
+
+    /**
+     * Map FFmpeg profile ID to human-readable profile name.
+     * Covers both H.264 and H.265 profile IDs.
+     */
+    private String mapProfileIdToName(int profileId) {
+        // H.264/AVC profiles (most common for CCTV)
+        switch (profileId) {
+            case 66: return "Baseline";
+            case 77: return "Main";
+            case 88: return "Extended";
+            case 100: return "High";
+            case 110: return "High 10";
+            case 122: return "High 4:2:2";
+            case 244: return "High 4:4:4";
+            case 44: return "CAVLC 4:4:4";
+            case 83: return "Scalable Baseline";
+            case 86: return "Scalable High";
+            // H.265/HEVC profiles
+            case 1: return "Main";  // Note: conflicts with H.264, context-dependent
+            case 2: return "Main 10";
+            case 3: return "Main Still Picture";
+            case 4: return "Rext";
+            default:
+                logger.info("Unknown profile ID: {}", profileId);
+                return "Profile " + profileId;
         }
     }
 
