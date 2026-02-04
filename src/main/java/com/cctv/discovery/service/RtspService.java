@@ -1248,8 +1248,14 @@ public class RtspService {
         logger.info("Using RTSP port {} for NVR channel iteration", rtspPort);
 
         String manufacturer = device.getManufacturer();
-        boolean isHikvision = manufacturer != null && manufacturer.toUpperCase().contains("HIKVISION");
-        boolean isDahua = manufacturer != null && manufacturer.toUpperCase().contains("DAHUA");
+        String mfgUpper = manufacturer != null ? manufacturer.toUpperCase() : "";
+        boolean isHikvision = mfgUpper.contains("HIKVISION");
+        // Dahua-compatible: Dahua, CP Plus, Amcrest (OEM)
+        boolean isDahuaCompatible = mfgUpper.contains("DAHUA") ||
+                                    mfgUpper.contains("CP PLUS") ||
+                                    mfgUpper.contains("CP_PLUS") ||
+                                    mfgUpper.contains("AMCREST");
+        boolean isUniview = mfgUpper.contains("UNIVIEW");
 
         for (int channel = 1; channel <= maxChannels; channel++) {
             String mainPath = null;
@@ -1258,9 +1264,13 @@ public class RtspService {
             if (isHikvision) {
                 mainPath = "/Streaming/Channels/" + (channel * 100 + 1);
                 subPath = "/Streaming/Channels/" + (channel * 100 + 2);
-            } else if (isDahua) {
+            } else if (isDahuaCompatible) {
                 mainPath = "/cam/realmonitor?channel=" + channel + "&subtype=0";
                 subPath = "/cam/realmonitor?channel=" + channel + "&subtype=1";
+            } else if (isUniview) {
+                // Uniview NVR channel format: /media/video{channel} for main, /media/video{channel+100} for sub
+                mainPath = "/media/video" + channel;
+                subPath = "/media/video" + (channel + 100);
             } else {
                 mainPath = "/ch" + String.format("%02d", channel) + "/0";
                 subPath = "/ch" + String.format("%02d", channel) + "/1";

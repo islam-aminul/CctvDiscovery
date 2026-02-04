@@ -1754,8 +1754,20 @@ public class MainController {
             logger.info("Device {} detected as NVR/DVR, iterating channels", device.getIpAddress());
             List<RTSPStream> nvrStreams = rtspService.iterateNvrChannels(
                     device, device.getUsername(), device.getPassword(), 64);
-            device.getRtspStreams().addAll(nvrStreams);
-            logger.info("Found {} additional NVR/DVR streams", nvrStreams.size());
+
+            // Add only non-duplicate streams (check by RTSP URL)
+            java.util.Set<String> existingUrls = device.getRtspStreams().stream()
+                    .map(RTSPStream::getRtspUrl)
+                    .collect(java.util.stream.Collectors.toSet());
+            int added = 0;
+            for (RTSPStream stream : nvrStreams) {
+                if (!existingUrls.contains(stream.getRtspUrl())) {
+                    device.getRtspStreams().add(stream);
+                    added++;
+                }
+            }
+            logger.info("Found {} NVR/DVR streams, added {} new (filtered {} duplicates)",
+                    nvrStreams.size(), added, nvrStreams.size() - added);
         }
 
         // Set final status
