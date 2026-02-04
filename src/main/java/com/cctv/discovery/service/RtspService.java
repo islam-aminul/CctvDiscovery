@@ -34,8 +34,48 @@ public class RtspService {
     // Manufacturer-specific RTSP path templates (loaded from resource file)
     private static final Map<String, String[]> MANUFACTURER_PATHS = new HashMap<>();
 
+    // NVR channel URL patterns (loaded from resource file)
+    private static final Map<String, NvrChannelPattern> NVR_CHANNEL_PATTERNS = new HashMap<>();
+
     // Discovery configuration
     private static RtspDiscoveryConfig discoveryConfig = new RtspDiscoveryConfig();
+
+    /**
+     * NVR channel URL pattern holder.
+     * Patterns use placeholders: {channel}, {channel01}, {channel*100+1}, {channel*100+2}, {channel+100}
+     */
+    public static class NvrChannelPattern {
+        private final String mainPattern;
+        private final String subPattern;
+
+        public NvrChannelPattern(String mainPattern, String subPattern) {
+            this.mainPattern = mainPattern;
+            this.subPattern = subPattern;
+        }
+
+        public String getMainPath(int channel) {
+            return resolvePlaceholders(mainPattern, channel);
+        }
+
+        public String getSubPath(int channel) {
+            return resolvePlaceholders(subPattern, channel);
+        }
+
+        private String resolvePlaceholders(String pattern, int channel) {
+            if (pattern == null) return null;
+            return pattern
+                    .replace("{channel*100+1}", String.valueOf(channel * 100 + 1))
+                    .replace("{channel*100+2}", String.valueOf(channel * 100 + 2))
+                    .replace("{channel+100}", String.valueOf(channel + 100))
+                    .replace("{channel01}", String.format("%02d", channel))
+                    .replace("{channel}", String.valueOf(channel));
+        }
+
+        @Override
+        public String toString() {
+            return "NvrChannelPattern{main='" + mainPattern + "', sub='" + subPattern + "'}";
+        }
+    }
 
     static {
         // Route FFmpeg native logs through SLF4J instead of raw stderr.
@@ -148,6 +188,55 @@ public class RtspService {
                 }
             }
 
+            // Parse NVR channel patterns: nvr.<NAME>.mainPattern, nvr.<NAME>.subPattern, nvr.<NAME>.aliases
+            Map<String, String> nvrMainPatterns = new HashMap<>();
+            Map<String, String> nvrSubPatterns = new HashMap<>();
+            Map<String, String> nvrAliases = new HashMap<>();
+
+            for (String key : props.stringPropertyNames()) {
+                if (key.startsWith("nvr.")) {
+                    String[] parts = key.split("\\.");
+                    if (parts.length == 3) {
+                        String nvrName = parts[1].toUpperCase();
+                        String propType = parts[2];
+                        String value = props.getProperty(key);
+
+                        if ("mainPattern".equals(propType)) {
+                            nvrMainPatterns.put(nvrName, value);
+                        } else if ("subPattern".equals(propType)) {
+                            nvrSubPatterns.put(nvrName, value);
+                        } else if ("aliases".equals(propType)) {
+                            nvrAliases.put(nvrName, value);
+                        }
+                    }
+                }
+            }
+
+            // Register NVR patterns with their aliases
+            for (String nvrName : nvrMainPatterns.keySet()) {
+                String mainPattern = nvrMainPatterns.get(nvrName);
+                String subPattern = nvrSubPatterns.get(nvrName);
+
+                if (mainPattern != null && subPattern != null) {
+                    NvrChannelPattern pattern = new NvrChannelPattern(mainPattern, subPattern);
+
+                    // Register under primary name
+                    NVR_CHANNEL_PATTERNS.put(nvrName, pattern);
+
+                    // Register under each alias
+                    String aliases = nvrAliases.get(nvrName);
+                    if (aliases != null && !aliases.trim().isEmpty()) {
+                        for (String alias : aliases.split(",")) {
+                            alias = alias.trim().toUpperCase().replace(" ", "_");
+                            if (!alias.isEmpty()) {
+                                NVR_CHANNEL_PATTERNS.put(alias, pattern);
+                            }
+                        }
+                    }
+                    logger.info("Loaded NVR channel pattern for {}: {}", nvrName, pattern);
+                }
+            }
+
             if (MANUFACTURER_PATHS.isEmpty()) {
                 logger.warn("No RTSP templates loaded from file, using hardcoded defaults");
                 loadHardcodedDefaults();
@@ -156,9 +245,18 @@ public class RtspService {
                         MANUFACTURER_PATHS.size());
             }
 
+            if (NVR_CHANNEL_PATTERNS.isEmpty()) {
+                logger.warn("No NVR channel patterns loaded from file, using hardcoded defaults");
+                loadHardcodedNvrDefaults();
+            } else {
+                logger.info("Successfully loaded NVR channel patterns for {} entries from resource file",
+                        NVR_CHANNEL_PATTERNS.size());
+            }
+
         } catch (Exception e) {
             logger.error("Error loading rtsp-templates.properties, falling back to hardcoded defaults", e);
             loadHardcodedDefaults();
+            loadHardcodedNvrDefaults();
         }
     }
 
@@ -210,6 +308,71 @@ public class RtspService {
         });
 
         logger.info("Loaded {} manufacturer RTSP templates from hardcoded defaults", MANUFACTURER_PATHS.size());
+    }
+
+    /**
+     * Load hardcoded default NVR channel patterns as fallback.
+     * Used when rtsp-templates.properties is not found or fails to load.
+     */
+    private static void loadHardcodedNvrDefaults() {
+        // Hikvision NVR pattern
+        NvrChannelPattern hikvision = new NvrChannelPattern(
+                "/Streaming/Channels/{channel*100+1}",
+                "/Streaming/Channels/{channel*100+2}");
+        NVR_CHANNEL_PATTERNS.put("HIKVISION", hikvision);
+        NVR_CHANNEL_PATTERNS.put("HIK", hikvision);
+
+        // Dahua-compatible NVR pattern (Dahua, CP Plus, Amcrest)
+        NvrChannelPattern dahua = new NvrChannelPattern(
+                "/cam/realmonitor?channel={channel}&subtype=0",
+                "/cam/realmonitor?channel={channel}&subtype=1");
+        NVR_CHANNEL_PATTERNS.put("DAHUA", dahua);
+        NVR_CHANNEL_PATTERNS.put("CP_PLUS", dahua);
+        NVR_CHANNEL_PATTERNS.put("CP PLUS", dahua);
+        NVR_CHANNEL_PATTERNS.put("AMCREST", dahua);
+
+        // Uniview NVR pattern
+        NvrChannelPattern uniview = new NvrChannelPattern(
+                "/media/video{channel}",
+                "/media/video{channel+100}");
+        NVR_CHANNEL_PATTERNS.put("UNIVIEW", uniview);
+        NVR_CHANNEL_PATTERNS.put("UNV", uniview);
+
+        // Generic fallback pattern
+        NvrChannelPattern generic = new NvrChannelPattern(
+                "/ch{channel01}/0",
+                "/ch{channel01}/1");
+        NVR_CHANNEL_PATTERNS.put("GENERIC", generic);
+
+        logger.info("Loaded {} NVR channel patterns from hardcoded defaults", NVR_CHANNEL_PATTERNS.size());
+    }
+
+    /**
+     * Find NVR channel pattern for the given manufacturer.
+     * Checks exact match first, then partial match against aliases.
+     * Returns GENERIC pattern if no match found.
+     */
+    private static NvrChannelPattern findNvrPattern(String manufacturer) {
+        if (manufacturer == null || manufacturer.isEmpty()) {
+            return NVR_CHANNEL_PATTERNS.getOrDefault("GENERIC", null);
+        }
+
+        String mfgUpper = manufacturer.toUpperCase().replace(" ", "_");
+
+        // Try exact match first
+        if (NVR_CHANNEL_PATTERNS.containsKey(mfgUpper)) {
+            return NVR_CHANNEL_PATTERNS.get(mfgUpper);
+        }
+
+        // Try partial match (manufacturer name contains alias)
+        for (String key : NVR_CHANNEL_PATTERNS.keySet()) {
+            if (mfgUpper.contains(key) || key.contains(mfgUpper)) {
+                return NVR_CHANNEL_PATTERNS.get(key);
+            }
+        }
+
+        // Fallback to generic
+        return NVR_CHANNEL_PATTERNS.getOrDefault("GENERIC", null);
     }
 
     /**
@@ -1247,27 +1410,23 @@ public class RtspService {
         int rtspPort = rtspPorts.get(0); // Use first detected port
         logger.info("Using RTSP port {} for NVR channel iteration", rtspPort);
 
+        // Find NVR channel pattern for this manufacturer (from properties file)
         String manufacturer = device.getManufacturer();
-        boolean isHikvision = manufacturer != null && manufacturer.toUpperCase().contains("HIKVISION");
-        boolean isDahua = manufacturer != null && manufacturer.toUpperCase().contains("DAHUA");
+        NvrChannelPattern pattern = findNvrPattern(manufacturer);
+
+        if (pattern == null) {
+            logger.warn("No NVR channel pattern found for manufacturer: {}", manufacturer);
+            return streams;
+        }
+
+        logger.info("Using NVR channel pattern for {}: {}", manufacturer, pattern);
 
         for (int channel = 1; channel <= maxChannels; channel++) {
-            String mainPath = null;
-            String subPath = null;
-
-            if (isHikvision) {
-                mainPath = "/Streaming/Channels/" + (channel * 100 + 1);
-                subPath = "/Streaming/Channels/" + (channel * 100 + 2);
-            } else if (isDahua) {
-                mainPath = "/cam/realmonitor?channel=" + channel + "&subtype=0";
-                subPath = "/cam/realmonitor?channel=" + channel + "&subtype=1";
-            } else {
-                mainPath = "/ch" + String.format("%02d", channel) + "/0";
-                subPath = "/ch" + String.format("%02d", channel) + "/1";
-            }
+            String mainPath = pattern.getMainPath(channel);
+            String subPath = pattern.getSubPath(channel);
 
             String mainUrl = "rtsp://" + device.getIpAddress() + ":" + rtspPort + mainPath;
-            RTSPStream mainStream = testRtspUrl(mainUrl, username, password);
+            RTSPStream mainStream = validateRtspStream(mainUrl, username, password);
 
             if (mainStream != null) {
                 mainStream.setStreamName("CH" + channel + " Main");
@@ -1277,7 +1436,7 @@ public class RtspService {
 
                 // Try sub stream
                 String subUrl = "rtsp://" + device.getIpAddress() + ":" + rtspPort + subPath;
-                RTSPStream subStream = testRtspUrl(subUrl, username, password);
+                RTSPStream subStream = validateRtspStream(subUrl, username, password);
                 if (subStream != null) {
                     subStream.setStreamName("CH" + channel + " Sub");
                     subStream.setChannelName("Channel " + channel);
