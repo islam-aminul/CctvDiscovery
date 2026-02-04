@@ -1267,7 +1267,7 @@ public class RtspService {
             }
 
             String mainUrl = "rtsp://" + device.getIpAddress() + ":" + rtspPort + mainPath;
-            RTSPStream mainStream = testRtspUrl(mainUrl, username, password);
+            RTSPStream mainStream = validateRtspStream(mainUrl, username, password);
 
             if (mainStream != null) {
                 mainStream.setStreamName("CH" + channel + " Main");
@@ -1277,7 +1277,7 @@ public class RtspService {
 
                 // Try sub stream
                 String subUrl = "rtsp://" + device.getIpAddress() + ":" + rtspPort + subPath;
-                RTSPStream subStream = testRtspUrl(subUrl, username, password);
+                RTSPStream subStream = validateRtspStream(subUrl, username, password);
                 if (subStream != null) {
                     subStream.setStreamName("CH" + channel + " Sub");
                     subStream.setChannelName("Channel " + channel);
