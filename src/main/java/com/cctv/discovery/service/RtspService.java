@@ -42,7 +42,8 @@ public class RtspService {
 
     /**
      * NVR channel URL pattern holder.
-     * Patterns use placeholders: {channel}, {channel01}, {channel*100+1}, {channel*100+2}, {channel+100}
+     * Patterns use placeholders: {channel}, {channel01}, {channel*100+1},
+     * {channel*100+2}, {channel+100}
      */
     public static class NvrChannelPattern {
         private final String mainPattern;
@@ -62,7 +63,8 @@ public class RtspService {
         }
 
         private String resolvePlaceholders(String pattern, int channel) {
-            if (pattern == null) return null;
+            if (pattern == null)
+                return null;
             return pattern
                     .replace("{channel*100+1}", String.valueOf(channel * 100 + 1))
                     .replace("{channel*100+2}", String.valueOf(channel * 100 + 2))
@@ -188,7 +190,8 @@ public class RtspService {
                 }
             }
 
-            // Parse NVR channel patterns: nvr.<NAME>.mainPattern, nvr.<NAME>.subPattern, nvr.<NAME>.aliases
+            // Parse NVR channel patterns: nvr.<NAME>.mainPattern, nvr.<NAME>.subPattern,
+            // nvr.<NAME>.aliases
             Map<String, String> nvrMainPatterns = new HashMap<>();
             Map<String, String> nvrSubPatterns = new HashMap<>();
             Map<String, String> nvrAliases = new HashMap<>();
@@ -915,6 +918,7 @@ public class RtspService {
         DatagramSocket rtpSocket = null;
         String sessionId = null;
         String authorizationHeader = null;
+        String contentBase = null; // For resolving relative control URLs
 
         try {
             String host = extractHost(rtspUrl);
@@ -1045,6 +1049,7 @@ public class RtspService {
             }
 
             // Read SDP (from either unauthenticated or authenticated 200 response)
+            // Also capture Content-Base header for relative URL resolution
             StringBuilder sdp = new StringBuilder();
             String line;
             boolean inBody = false;
@@ -1053,7 +1058,13 @@ public class RtspService {
                     inBody = true;
                     continue;
                 }
-                if (inBody) {
+                if (!inBody) {
+                    // Still in headers - check for Content-Base
+                    if (line.toLowerCase().startsWith("content-base:")) {
+                        contentBase = line.substring(13).trim();
+                        logger.info("RTP: Content-Base header found: {}", contentBase);
+                    }
+                } else {
                     sdp.append(line).append("\n");
                     if (line.startsWith("a=control"))
                         break; // Got enough
@@ -1066,8 +1077,10 @@ public class RtspService {
                 return null;
             }
 
-            // Step 2: Extract control URL
-            String controlUrl = extractControlUrlFromSdp(sdpContent, rtspUrl);
+            // Step 2: Extract control URL (use Content-Base if available, otherwise
+            // original URL)
+            String baseForControl = (contentBase != null && !contentBase.isEmpty()) ? contentBase : rtspUrl;
+            String controlUrl = extractControlUrlFromSdp(sdpContent, baseForControl);
 
             // Step 3: SETUP (with auth if needed)
             rtpSocket = new DatagramSocket();
