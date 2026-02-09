@@ -36,8 +36,7 @@
         <app.filename>CctvDiscovery</app.filename>
         <jre.source.directory>jre8</jre.source.directory>
         <jre.target.directory>jre</jre.target.directory>
-        <keystore.filename>cctv-discovery.jks</keystore.filename>
-        <pfx.filename>cctv-discovery.pfx</pfx.filename>
+        <keystore.filename>cctv-discovery.p12</keystore.filename>
         <keystore.alias>cctv-discovery</keystore.alias>
         <keystore.password>${user.name}-${project.version}</keystore.password>
 
@@ -115,12 +114,6 @@
             <version>${javacv.version}</version>
         </dependency>
         <!-- Native Libs (Managed by Profile) -->
-        <dependency>
-            <groupId>org.bytedeco</groupId>
-            <artifactId>opencv</artifactId>
-            <version>4.7.0-${javacv.version}</version>
-            <classifier>${javacpp.platform}</classifier>
-        </dependency>
         <dependency>
             <groupId>org.bytedeco</groupId>
             <artifactId>ffmpeg</artifactId>
@@ -359,6 +352,7 @@
                         </goals>
                         <configuration>
                             <keystore>${project.build.directory}/${keystore.filename}</keystore>
+                            <storetype>PKCS12</storetype>
                             <storepass>${keystore.password}</storepass>
                             <keypass>${keystore.password}</keypass>
                             <alias>${keystore.alias}</alias>
@@ -373,39 +367,12 @@
                 </executions>
             </plugin>
 
-            <!-- Convert JKS to PFX for Windows signing -->
+            <!-- Sign EXE with signtool (Windows only) -->
             <plugin>
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>exec-maven-plugin</artifactId>
                 <version>3.1.0</version>
                 <executions>
-                    <!-- Convert JKS to PFX -->
-                    <execution>
-                        <id>convert-to-pfx</id>
-                        <phase>package</phase>
-                        <goals>
-                            <goal>exec</goal>
-                        </goals>
-                        <configuration>
-                            <executable>keytool</executable>
-                            <arguments>
-                                <argument>-importkeystore</argument>
-                                <argument>-srckeystore</argument>
-                                <argument>${project.build.directory}/${keystore.filename}</argument>
-                                <argument>-srcstoretype</argument>
-                                <argument>JKS</argument>
-                                <argument>-srcstorepass</argument>
-                                <argument>${keystore.password}</argument>
-                                <argument>-destkeystore</argument>
-                                <argument>${project.build.directory}/${pfx.filename}</argument>
-                                <argument>-deststoretype</argument>
-                                <argument>PKCS12</argument>
-                                <argument>-deststorepass</argument>
-                                <argument>${keystore.password}</argument>
-                            </arguments>
-                        </configuration>
-                    </execution>
-                    <!-- Sign EXE with signtool (Windows only) -->
                     <execution>
                         <id>sign-exe</id>
                         <phase>verify</phase>
@@ -420,7 +387,7 @@
                                 <argument>/fd</argument>
                                 <argument>SHA256</argument>
                                 <argument>/f</argument>
-                                <argument>${project.build.directory}/${pfx.filename}</argument>
+                                <argument>${project.build.directory}/${keystore.filename}</argument>
                                 <argument>/p</argument>
                                 <argument>${keystore.password}</argument>
                                 <argument>/tr</argument>
