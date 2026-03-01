@@ -1770,6 +1770,25 @@ public class MainController {
                     nvrStreams.size(), added, nvrStreams.size() - added);
         }
 
+        // Final MAC resolution attempt for cross-subnet devices
+        // If MAC is still null after all auth attempts, try unauthenticated ONVIF
+        if (device.getMacAddress() == null && !device.getOpenOnvifPorts().isEmpty()) {
+            for (int port : device.getOpenOnvifPorts()) {
+                String serviceUrl = "http://" + device.getIpAddress() + ":" + port + "/onvif/device_service";
+                onvifService.getNetworkInterfacesUnauthenticated(device, serviceUrl);
+                if (device.getMacAddress() != null) {
+                    String manufacturer = MacLookupService.getInstance()
+                            .lookupManufacturer(device.getMacAddress());
+                    if (manufacturer != null && !"Unknown".equals(manufacturer)) {
+                        device.setManufacturer(manufacturer);
+                    }
+                    logger.info("Late MAC resolution for {}: {} ({})",
+                            device.getIpAddress(), device.getMacAddress(), device.getManufacturer());
+                    break;
+                }
+            }
+        }
+
         // Set final status
         if (device.getUsername() != null && !device.getRtspStreams().isEmpty()) {
             device.setStatus(Device.DeviceStatus.COMPLETED);
@@ -2684,6 +2703,9 @@ public class MainController {
     }
 
     public void shutdown() {
+        if (rtspService != null) {
+            rtspService.shutdown();
+        }
         if (networkScanner != null) {
             networkScanner.shutdown();
         }

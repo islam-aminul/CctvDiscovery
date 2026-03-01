@@ -130,6 +130,23 @@ public class NetworkScanner {
             device.setManufacturer(manufacturer);
         }
 
+        // Cross-subnet fallback: try unauthenticated ONVIF GetNetworkInterfaces for MAC
+        if (device.getMacAddress() == null && !NetworkUtils.isLocalSubnet(ip)
+                && !device.getOpenOnvifPorts().isEmpty()) {
+            logger.info("Cross-subnet device {} - trying unauthenticated ONVIF for MAC resolution", ip);
+            for (int port : device.getOpenOnvifPorts()) {
+                String serviceUrl = "http://" + ip + ":" + port + "/onvif/device_service";
+                onvifService.getNetworkInterfacesUnauthenticated(device, serviceUrl);
+                if (device.getMacAddress() != null) {
+                    String manufacturer = macLookupService.lookupManufacturer(device.getMacAddress());
+                    device.setManufacturer(manufacturer);
+                    logger.info("Cross-subnet MAC resolved via unauthenticated ONVIF for {}: {}",
+                            ip, device.getMacAddress());
+                    break;
+                }
+            }
+        }
+
         logger.info("Scanned device: {} - Open ports: {}", ip, openPorts);
         return device;
     }

@@ -533,6 +533,48 @@ public class OnvifService {
     }
 
     /**
+     * Get network interfaces using ONVIF GetNetworkInterfaces WITHOUT authentication.
+     * Many cameras allow unauthenticated access to this API.
+     * Used as fallback for cross-subnet devices where ARP cannot resolve MAC.
+     *
+     * @param device     The device to update with MAC address
+     * @param serviceUrl The ONVIF service URL to probe
+     */
+    public void getNetworkInterfacesUnauthenticated(Device device, String serviceUrl) {
+        logger.info("Trying unauthenticated GetNetworkInterfaces for {} at {}", device.getIpAddress(), serviceUrl);
+        try {
+            String soapRequest = buildGetNetworkInterfacesRequestNoAuth();
+            String response = sendOnvifRequest(serviceUrl, soapRequest, null, null);
+
+            if (response != null) {
+                parseNetworkInterfaces(device, response);
+            }
+        } catch (Exception e) {
+            logger.info("Unauthenticated GetNetworkInterfaces failed for {}: {}", device.getIpAddress(), e.getMessage());
+        }
+    }
+
+    /**
+     * Build GetNetworkInterfaces SOAP request WITHOUT WS-Security (unauthenticated).
+     */
+    private String buildGetNetworkInterfacesRequestNoAuth() throws Exception {
+        MessageFactory messageFactory = MessageFactory.newInstance();
+        SOAPMessage soapMessage = messageFactory.createMessage();
+        SOAPPart soapPart = soapMessage.getSOAPPart();
+        SOAPEnvelope envelope = soapPart.getEnvelope();
+
+        envelope.addNamespaceDeclaration("tds", "http://www.onvif.org/ver10/device/wsdl");
+
+        // No WS-Security header - unauthenticated request
+        SOAPBody body = envelope.getBody();
+        body.addChildElement("GetNetworkInterfaces", "tds");
+
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        soapMessage.writeTo(out);
+        return out.toString("UTF-8");
+    }
+
+    /**
      * Build GetNetworkInterfaces SOAP request with WS-Security.
      */
     private String buildGetNetworkInterfacesRequest(String username, String password) throws Exception {
