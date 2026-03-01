@@ -155,7 +155,7 @@ public class NetworkUtils {
     /**
      * Convert IP address to long.
      */
-    private static long ipToLong(String ipAddress) throws Exception {
+    public static long ipToLong(String ipAddress) throws Exception {
         String[] octets = ipAddress.split("\\.");
         long result = 0;
         for (int i = 0; i < 4; i++) {
@@ -212,7 +212,11 @@ public class NetworkUtils {
                 ipToMacCache.put(ipAddress, mac);
                 logger.info("MAC address for {} resolved via ARP: {}", ipAddress, mac);
             } else {
-                logger.info("MAC address for {} not found in ARP table", ipAddress);
+                if (!isLocalSubnet(ipAddress)) {
+                    logger.info("MAC address for {} unavailable - cross-subnet device (ARP only works within local broadcast domain)", ipAddress);
+                } else {
+                    logger.info("MAC address for {} not found in ARP table", ipAddress);
+                }
             }
 
             return mac;
@@ -398,6 +402,38 @@ public class NetworkUtils {
         }
         // Subtract 2 for network and broadcast addresses
         return (int) Math.pow(2, 32 - prefixLength) - 2;
+    }
+
+    /**
+     * Check if an IP address belongs to any local interface's subnet.
+     * Used to detect cross-subnet targets where ARP resolution won't work.
+     *
+     * @param ipAddress The target IP address to check
+     * @return true if the IP is on a local subnet, false if cross-subnet
+     */
+    public static boolean isLocalSubnet(String ipAddress) {
+        try {
+            long targetIp = ipToLong(ipAddress);
+            Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
+            while (interfaces.hasMoreElements()) {
+                NetworkInterface ni = interfaces.nextElement();
+                if (ni.isLoopback() || !ni.isUp()) continue;
+                for (InterfaceAddress ifAddr : ni.getInterfaceAddresses()) {
+                    InetAddress addr = ifAddr.getAddress();
+                    if (!(addr instanceof Inet4Address)) continue;
+                    short prefix = ifAddr.getNetworkPrefixLength();
+                    if (prefix <= 0 || prefix > 32) continue;
+                    long ifIp = ipToLong(addr.getHostAddress());
+                    long mask = prefix == 32 ? 0xFFFFFFFFL : ((-1L << (32 - prefix)) & 0xFFFFFFFFL);
+                    if ((ifIp & mask) == (targetIp & mask)) {
+                        return true;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            logger.info("Error checking subnet for {}: {}", ipAddress, e.getMessage());
+        }
+        return false;
     }
 
     /**

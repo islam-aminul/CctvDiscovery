@@ -16,6 +16,7 @@ import java.net.SocketTimeoutException;
 import java.net.DatagramSocket;
 import java.net.DatagramPacket;
 import java.util.*;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import org.bytedeco.javacv.FFmpegFrameGrabber;
 import org.bytedeco.javacv.FFmpegLogCallback;
 import org.bytedeco.javacv.Frame;
@@ -39,6 +40,12 @@ public class RtspService {
 
     // Discovery configuration
     private static RtspDiscoveryConfig discoveryConfig = new RtspDiscoveryConfig();
+
+    // Shutdown flag for graceful cancellation of ongoing discovery
+    private volatile boolean shutdownRequested = false;
+
+    // Track active FFmpegFrameGrabber instances for forced cleanup on shutdown
+    private final ConcurrentLinkedQueue<FFmpegFrameGrabber> activeGrabbers = new ConcurrentLinkedQueue<>();
 
     /**
      * NVR channel URL pattern holder.
@@ -410,13 +417,27 @@ public class RtspService {
         }
 
         // 2. Try manufacturer-specific paths
-        if (manufacturer != null) {
+        if (manufacturer != null && !"Unknown".equals(manufacturer)) {
             // Normalize manufacturer name: replace spaces with underscores for consistent
             // lookup
             String normalizedManufacturer = manufacturer.replace(" ", "_").toUpperCase();
             String[] mfgPaths = MANUFACTURER_PATHS.get(normalizedManufacturer);
             if (mfgPaths != null) {
                 for (String path : mfgPaths) {
+                    if (!pathsToTry.contains(path)) {
+                        pathsToTry.add(path);
+                    }
+                }
+            }
+        } else {
+            // Manufacturer unknown - include ALL manufacturer-specific paths as fallback.
+            // Without manufacturer identification (common for cross-subnet devices where
+            // ARP-based MAC resolution fails), we try every known manufacturer's paths
+            // to maximize discovery chances.
+            logger.info("Manufacturer unknown for {} - trying all manufacturer-specific paths", device.getIpAddress());
+            for (Map.Entry<String, String[]> entry : MANUFACTURER_PATHS.entrySet()) {
+                if ("GENERIC".equals(entry.getKey())) continue; // Generic added separately in step 4
+                for (String path : entry.getValue()) {
                     if (!pathsToTry.contains(path)) {
                         pathsToTry.add(path);
                     }
@@ -431,6 +452,10 @@ public class RtspService {
 
             // Process custom paths as pairs
             for (int i = 0; i < customPaths.length; i += 2) {
+                if (isShutdownOrInterrupted()) {
+                    logger.info("Discovery interrupted during custom path testing");
+                    return streams;
+                }
                 String mainPath = customPaths[i];
                 String subPath = customPaths[i + 1];
 
@@ -438,6 +463,7 @@ public class RtspService {
 
                 // Try main stream on each detected RTSP port
                 for (int port : rtspPorts) {
+                    if (isShutdownOrInterrupted()) return streams;
                     String mainUrl = "rtsp://" + device.getIpAddress() + ":" + port + mainPath;
                     RTSPStream mainStream = validateRtspStream(mainUrl, username, password);
 
@@ -479,7 +505,12 @@ public class RtspService {
 
         // Try each path on each detected RTSP port
         for (String path : pathsToTry) {
+            if (isShutdownOrInterrupted()) {
+                logger.info("Discovery interrupted during path guessing");
+                return streams;
+            }
             for (int port : rtspPorts) {
+                if (isShutdownOrInterrupted()) return streams;
                 String rtspUrl = "rtsp://" + device.getIpAddress() + ":" + port + path;
                 RTSPStream stream = validateRtspStream(rtspUrl, username, password);
 
@@ -518,6 +549,7 @@ public class RtspService {
      * Routes to appropriate validation method based on discoveryConfig.
      */
     private RTSPStream validateRtspStream(String rtspUrl, String username, String password) {
+        if (isShutdownOrInterrupted()) return null;
         switch (discoveryConfig.getValidationMethod()) {
             case SDP_ONLY:
                 return testRtspUrl(rtspUrl, username, password); // Existing SDP method
@@ -1248,6 +1280,7 @@ public class RtspService {
             logger.info("URL: {}, Timeout: {}ms", rtspUrl, timeout);
 
             grabber = new FFmpegFrameGrabber(authUrl);
+            activeGrabbers.add(grabber);
 
             // Optimized FFMPEG settings
             grabber.setOption("rtsp_transport", "tcp");
@@ -1284,8 +1317,10 @@ public class RtspService {
             return null;
         } finally {
             if (grabber != null) {
+                activeGrabbers.remove(grabber);
                 try {
-                    grabber.close();
+                    grabber.stop();
+                    grabber.release();
                 } catch (Exception e) {
                     logger.info("Cleanup error: {}", e.getMessage());
                 }
@@ -1435,6 +1470,10 @@ public class RtspService {
         logger.info("Using NVR channel pattern for {}: {}", manufacturer, pattern);
 
         for (int channel = 1; channel <= maxChannels; channel++) {
+            if (isShutdownOrInterrupted()) {
+                logger.info("NVR channel iteration interrupted at channel {}", channel);
+                break;
+            }
             String mainPath = pattern.getMainPath(channel);
             String subPath = pattern.getSubPath(channel);
 
@@ -1536,5 +1575,32 @@ public class RtspService {
             // Ignore
         }
         return "/";
+    }
+
+    /**
+     * Check if shutdown has been requested or the current thread has been interrupted.
+     */
+    private boolean isShutdownOrInterrupted() {
+        return shutdownRequested || Thread.currentThread().isInterrupted();
+    }
+
+    /**
+     * Shutdown the RTSP service, cancelling any ongoing discovery operations
+     * and forcibly closing active FFmpeg grabbers.
+     */
+    public void shutdown() {
+        shutdownRequested = true;
+        logger.info("RtspService shutdown requested, closing {} active grabbers", activeGrabbers.size());
+
+        // Forcibly stop and release all active FFmpegFrameGrabber instances
+        FFmpegFrameGrabber grabber;
+        while ((grabber = activeGrabbers.poll()) != null) {
+            try {
+                grabber.stop();
+                grabber.release();
+            } catch (Exception e) {
+                logger.info("Error closing grabber during shutdown: {}", e.getMessage());
+            }
+        }
     }
 }
