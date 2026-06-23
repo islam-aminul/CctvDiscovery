@@ -321,15 +321,8 @@ public class OnvifService {
         SOAPHeader header = envelope.getHeader();
         SOAPBody body = envelope.getBody();
 
-        // Add WS-Security header
-        String securityHeader = AuthUtils.generateWsSecurityHeader(username, password);
-        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
-        factory.setNamespaceAware(true);
-        Document secDoc = factory.newDocumentBuilder().parse(
-                new ByteArrayInputStream(securityHeader.getBytes("UTF-8")));
-        header.appendChild(header.getOwnerDocument().importNode(secDoc.getDocumentElement(), true));
+        appendSecurityHeader(header, username, password);
 
-        // Add body
         body.addChildElement("GetDeviceInformation", "tds");
 
         ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -394,15 +387,8 @@ public class OnvifService {
         SOAPHeader header = envelope.getHeader();
         SOAPBody body = envelope.getBody();
 
-        // Add WS-Security header
-        String securityHeader = AuthUtils.generateWsSecurityHeader(username, password);
-        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
-        factory.setNamespaceAware(true);
-        Document secDoc = factory.newDocumentBuilder().parse(
-                new ByteArrayInputStream(securityHeader.getBytes("UTF-8")));
-        header.appendChild(header.getOwnerDocument().importNode(secDoc.getDocumentElement(), true));
+        appendSecurityHeader(header, username, password);
 
-        // Add body
         body.addChildElement("GetVideoSources", "trt");
 
         ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -757,15 +743,8 @@ public class OnvifService {
         SOAPHeader header = envelope.getHeader();
         SOAPBody body = envelope.getBody();
 
-        // Add WS-Security header
-        String securityHeader = AuthUtils.generateWsSecurityHeader(username, password);
-        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
-        factory.setNamespaceAware(true);
-        Document secDoc = factory.newDocumentBuilder().parse(
-                new ByteArrayInputStream(securityHeader.getBytes("UTF-8")));
-        header.appendChild(header.getOwnerDocument().importNode(secDoc.getDocumentElement(), true));
+        appendSecurityHeader(header, username, password);
 
-        // Add body
         body.addChildElement("GetHostname", "tds");
 
         ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -875,15 +854,8 @@ public class OnvifService {
         SOAPHeader header = envelope.getHeader();
         SOAPBody body = envelope.getBody();
 
-        // Add WS-Security header
-        String securityHeader = AuthUtils.generateWsSecurityHeader(username, password);
-        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
-        factory.setNamespaceAware(true);
-        Document secDoc = factory.newDocumentBuilder().parse(
-                new ByteArrayInputStream(securityHeader.getBytes("UTF-8")));
-        header.appendChild(header.getOwnerDocument().importNode(secDoc.getDocumentElement(), true));
+        appendSecurityHeader(header, username, password);
 
-        // Add body
         body.addChildElement("GetNetworkInterfaces", "tds");
 
         ByteArrayOutputStream out = new ByteArrayOutputStream();

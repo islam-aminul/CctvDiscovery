@@ -228,17 +228,36 @@ public class ExcelExporter {
             return rtspUrl;
         }
 
-        // Check if URL already has credentials (contains @ before the first /)
-        if (rtspUrl.matches("rtsp://[^/]*@.*")) {
+        if (!rtspUrl.startsWith("rtsp://")) {
             return rtspUrl;
         }
 
-        // Insert credentials after rtsp://
-        if (rtspUrl.startsWith("rtsp://")) {
-            return "rtsp://" + username + ":" + password + "@" + rtspUrl.substring(7);
+        // Strip any credentials already embedded in the URL before re-inserting,
+        // to avoid double-embedding. The userinfo portion ends at the first '@'
+        // that appears before the host (i.e., before any '/').
+        String withoutCreds = rtspUrl;
+        String afterScheme = rtspUrl.substring(7); // strip "rtsp://"
+        int atIdx = afterScheme.indexOf('@');
+        int slashIdx = afterScheme.indexOf('/');
+        if (atIdx >= 0 && (slashIdx < 0 || atIdx < slashIdx)) {
+            withoutCreds = "rtsp://" + afterScheme.substring(atIdx + 1);
         }
 
-        return rtspUrl;
+        // Percent-encode credentials so special characters (@ : / ? #) don't corrupt the URL.
+        String encodedUser = encodeCredential(username);
+        String encodedPass = encodeCredential(password);
+        return "rtsp://" + encodedUser + ":" + encodedPass + "@" + withoutCreds.substring(7);
+    }
+
+    private String encodeCredential(String value) {
+        if (value == null || value.isEmpty()) {
+            return "";
+        }
+        try {
+            return java.net.URLEncoder.encode(value, "UTF-8").replace("+", "%20");
+        } catch (Exception e) {
+            return value;
+        }
     }
 
     private CellStyle createWarningStyle(Workbook workbook) {

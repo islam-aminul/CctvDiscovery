@@ -2078,7 +2078,7 @@ public class MainController {
         TextField tfRetryUsername = new TextField("admin");
         tfRetryUsername.setPromptText("Username");
 
-        TextField tfRetryPassword = new TextField();
+        PasswordField tfRetryPassword = new PasswordField();
         tfRetryPassword.setPromptText("Password");
 
         grid.add(new Label("Username:"), 0, 0);
@@ -2111,7 +2111,7 @@ public class MainController {
 
         if (result.isPresent() && result.get() == retryButton) {
             String username = tfRetryUsername.getText().trim();
-            String password = tfRetryPassword.getText().trim();
+            String password = tfRetryPassword.getText(); // do not trim — passwords can have leading/trailing spaces
 
             if (!username.isEmpty() && !password.isEmpty()) {
                 // Check if this credential was already used in discovery
@@ -2210,16 +2210,40 @@ public class MainController {
                         && tfEndIP != null) {
                     ips = NetworkUtils.parseIPRange(tfStartIP.getText(), tfEndIP.getText());
                 } else if (rbInterface != null && rbInterface.isSelected() && cbInterfaces != null) {
-                    // Extract CIDR from interface - simplified to /24
-                    // Format is now: IP - DisplayName (e.g., "192.168.1.5 - Ethernet")
+                    // Format: "IP - DisplayName" (e.g., "192.168.1.5 - Ethernet")
                     String selected = cbInterfaces.getValue();
                     if (selected != null) {
                         String[] parts = selected.split(" - ");
                         if (parts.length >= 1) {
-                            String ip = parts[0]; // IP is now first part
+                            String ip = parts[0].trim();
+                            // Resolve actual prefix length for this interface (matches updateIpCount logic)
+                            int prefixLength = 24; // fallback
+                            List<NetworkInterface> ifaces = NetworkUtils.getActiveNetworkInterfaces();
+                            outer:
+                            for (NetworkInterface ni : ifaces) {
+                                for (InterfaceAddress addr : ni.getInterfaceAddresses()) {
+                                    InetAddress inetAddr = addr.getAddress();
+                                    if (inetAddr instanceof java.net.Inet4Address &&
+                                            inetAddr.getHostAddress().equals(ip)) {
+                                        prefixLength = NetworkUtils.getNetworkPrefixLength(ni);
+                                        break outer;
+                                    }
+                                }
+                            }
                             String[] octets = ip.split("\\.");
                             if (octets.length == 4) {
-                                String network = octets[0] + "." + octets[1] + "." + octets[2] + ".0/24";
+                                // Compute network address by masking host bits
+                                int mask = prefixLength == 0 ? 0 : (0xFFFFFFFF << (32 - prefixLength));
+                                int[] oct = new int[4];
+                                for (int i = 0; i < 4; i++) {
+                                    oct[i] = Integer.parseInt(octets[i]);
+                                }
+                                int addr32 = (oct[0] << 24) | (oct[1] << 16) | (oct[2] << 8) | oct[3];
+                                int net32 = addr32 & mask;
+                                String network = ((net32 >> 24) & 0xFF) + "." +
+                                        ((net32 >> 16) & 0xFF) + "." +
+                                        ((net32 >> 8) & 0xFF) + "." +
+                                        (net32 & 0xFF) + "/" + prefixLength;
                                 ips = NetworkUtils.parseCIDR(network);
                             }
                         }
