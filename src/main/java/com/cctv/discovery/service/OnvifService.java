@@ -1,6 +1,7 @@
 package com.cctv.discovery.service;
 
 import com.cctv.discovery.model.Device;
+import com.cctv.discovery.model.RTSPStream;
 import com.cctv.discovery.util.AuthUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -429,6 +430,292 @@ public class OnvifService {
         }
 
         return sources;
+    }
+
+    /**
+     * Retrieve the actual RTSP stream URLs from the device using the ONVIF
+     * media service (GetProfiles followed by GetStreamUri for each profile).
+     *
+     * This is the authoritative way to obtain stream URLs - when it succeeds,
+     * callers should analyze ONLY these URLs and must NOT fall back to guessing
+     * RTSP paths.
+     *
+     * @param device Authenticated device (username/password must be set)
+     * @return List of RTSP streams advertised by the device (de-duplicated by URL),
+     *         or an empty list if none could be retrieved.
+     */
+    public List<RTSPStream> getStreamUris(Device device) {
+        List<RTSPStream> streams = new ArrayList<>();
+
+        if (device.getOnvifServiceUrl() == null || device.getUsername() == null) {
+            logger.info("Cannot retrieve ONVIF stream URIs for {} - missing service URL or credentials",
+                    device.getIpAddress());
+            return streams;
+        }
+
+        String username = device.getUsername();
+        String password = device.getPassword();
+
+        // Resolve the media service URL (may differ from the device service URL)
+        String mediaUrl = getMediaServiceUrl(device, username, password);
+        logger.info("Using ONVIF media service URL for {}: {}", device.getIpAddress(), mediaUrl);
+
+        try {
+            // Step 1: GetProfiles
+            String profilesRequest = buildGetProfilesRequest(username, password);
+            String profilesResponse = sendOnvifRequest(mediaUrl, profilesRequest, username, password);
+
+            if (profilesResponse == null) {
+                logger.warn("ONVIF GetProfiles returned no response for {}", device.getIpAddress());
+                return streams;
+            }
+
+            List<ProfileInfo> profiles = parseProfiles(profilesResponse);
+            logger.info("ONVIF GetProfiles returned {} profile(s) for {}", profiles.size(), device.getIpAddress());
+
+            // Step 2: GetStreamUri for each profile
+            java.util.Set<String> seenUrls = new java.util.LinkedHashSet<>();
+            for (ProfileInfo profile : profiles) {
+                if (profile.token == null || profile.token.isEmpty()) {
+                    continue;
+                }
+
+                String streamUriRequest = buildGetStreamUriRequest(username, password, profile.token);
+                String streamUriResponse = sendOnvifRequest(mediaUrl, streamUriRequest, username, password);
+
+                if (streamUriResponse == null) {
+                    logger.info("ONVIF GetStreamUri returned no response for profile {} on {}",
+                            profile.token, device.getIpAddress());
+                    continue;
+                }
+
+                String uri = parseStreamUri(streamUriResponse);
+                if (uri != null && !uri.isEmpty() && seenUrls.add(uri)) {
+                    String streamName = (profile.name != null && !profile.name.isEmpty())
+                            ? profile.name : profile.token;
+                    RTSPStream stream = new RTSPStream(streamName, uri);
+                    streams.add(stream);
+                    logger.info("ONVIF GetStreamUri resolved profile '{}' -> {}", streamName, uri);
+                }
+            }
+
+        } catch (Exception e) {
+            logger.error("Error retrieving ONVIF stream URIs for {}: {}", device.getIpAddress(), e.getMessage());
+        }
+
+        return streams;
+    }
+
+    /**
+     * Determine the ONVIF media service URL via GetCapabilities.
+     * Falls back to the device service URL if the media capability cannot be
+     * resolved (many cameras accept media requests on the device endpoint too).
+     */
+    private String getMediaServiceUrl(Device device, String username, String password) {
+        try {
+            String request = buildGetCapabilitiesRequest(username, password, "Media");
+            String response = sendOnvifRequest(device.getOnvifServiceUrl(), request, username, password);
+            if (response != null) {
+                String mediaXAddr = parseMediaXAddr(response);
+                if (mediaXAddr != null && !mediaXAddr.isEmpty()) {
+                    return mediaXAddr;
+                }
+            }
+        } catch (Exception e) {
+            logger.info("GetCapabilities failed for {}, using device service URL: {}",
+                    device.getIpAddress(), e.getMessage());
+        }
+        // Fallback: device service URL
+        return device.getOnvifServiceUrl();
+    }
+
+    /**
+     * Build GetCapabilities SOAP request with WS-Security.
+     */
+    private String buildGetCapabilitiesRequest(String username, String password, String category) throws Exception {
+        MessageFactory messageFactory = MessageFactory.newInstance();
+        SOAPMessage soapMessage = messageFactory.createMessage();
+        SOAPPart soapPart = soapMessage.getSOAPPart();
+        SOAPEnvelope envelope = soapPart.getEnvelope();
+
+        envelope.addNamespaceDeclaration("tds", "http://www.onvif.org/ver10/device/wsdl");
+
+        SOAPHeader header = envelope.getHeader();
+        SOAPBody body = envelope.getBody();
+
+        appendSecurityHeader(header, username, password);
+
+        SOAPElement getCapabilities = body.addChildElement("GetCapabilities", "tds");
+        SOAPElement categoryElement = getCapabilities.addChildElement("Category", "tds");
+        categoryElement.setTextContent(category);
+
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        soapMessage.writeTo(out);
+        return out.toString("UTF-8");
+    }
+
+    /**
+     * Parse the Media service XAddr from a GetCapabilities response.
+     */
+    private String parseMediaXAddr(String xml) {
+        try {
+            DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+            factory.setNamespaceAware(true);
+            DocumentBuilder builder = factory.newDocumentBuilder();
+            Document doc = builder.parse(new ByteArrayInputStream(xml.getBytes("UTF-8")));
+
+            NodeList mediaList = doc.getElementsByTagNameNS("*", "Media");
+            for (int i = 0; i < mediaList.getLength(); i++) {
+                Element media = (Element) mediaList.item(i);
+                NodeList xAddrList = media.getElementsByTagNameNS("*", "XAddr");
+                if (xAddrList.getLength() > 0) {
+                    String xAddr = xAddrList.item(0).getTextContent();
+                    if (xAddr != null && !xAddr.trim().isEmpty()) {
+                        return xAddr.trim();
+                    }
+                }
+            }
+        } catch (Exception e) {
+            logger.info("Error parsing Media XAddr: {}", e.getMessage());
+        }
+        return null;
+    }
+
+    /**
+     * Build GetProfiles SOAP request (media service) with WS-Security.
+     */
+    private String buildGetProfilesRequest(String username, String password) throws Exception {
+        MessageFactory messageFactory = MessageFactory.newInstance();
+        SOAPMessage soapMessage = messageFactory.createMessage();
+        SOAPPart soapPart = soapMessage.getSOAPPart();
+        SOAPEnvelope envelope = soapPart.getEnvelope();
+
+        envelope.addNamespaceDeclaration("trt", "http://www.onvif.org/ver10/media/wsdl");
+
+        SOAPHeader header = envelope.getHeader();
+        SOAPBody body = envelope.getBody();
+
+        appendSecurityHeader(header, username, password);
+
+        body.addChildElement("GetProfiles", "trt");
+
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        soapMessage.writeTo(out);
+        return out.toString("UTF-8");
+    }
+
+    /**
+     * Build GetStreamUri SOAP request for a specific profile token.
+     * Requests an RTP-Unicast stream over RTSP.
+     */
+    private String buildGetStreamUriRequest(String username, String password, String profileToken) throws Exception {
+        MessageFactory messageFactory = MessageFactory.newInstance();
+        SOAPMessage soapMessage = messageFactory.createMessage();
+        SOAPPart soapPart = soapMessage.getSOAPPart();
+        SOAPEnvelope envelope = soapPart.getEnvelope();
+
+        envelope.addNamespaceDeclaration("trt", "http://www.onvif.org/ver10/media/wsdl");
+        envelope.addNamespaceDeclaration("tt", "http://www.onvif.org/ver10/schema");
+
+        SOAPHeader header = envelope.getHeader();
+        SOAPBody body = envelope.getBody();
+
+        appendSecurityHeader(header, username, password);
+
+        SOAPElement getStreamUri = body.addChildElement("GetStreamUri", "trt");
+
+        SOAPElement streamSetup = getStreamUri.addChildElement("StreamSetup", "trt");
+        SOAPElement stream = streamSetup.addChildElement("Stream", "tt");
+        stream.setTextContent("RTP-Unicast");
+        SOAPElement transport = streamSetup.addChildElement("Transport", "tt");
+        SOAPElement protocol = transport.addChildElement("Protocol", "tt");
+        protocol.setTextContent("RTSP");
+
+        SOAPElement profileTokenElement = getStreamUri.addChildElement("ProfileToken", "trt");
+        profileTokenElement.setTextContent(profileToken);
+
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        soapMessage.writeTo(out);
+        return out.toString("UTF-8");
+    }
+
+    /**
+     * Lightweight holder for ONVIF media profile information.
+     */
+    private static class ProfileInfo {
+        String token;
+        String name;
+    }
+
+    /**
+     * Parse the profile tokens and names from a GetProfiles response.
+     */
+    private List<ProfileInfo> parseProfiles(String xml) {
+        List<ProfileInfo> profiles = new ArrayList<>();
+        try {
+            DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+            factory.setNamespaceAware(true);
+            DocumentBuilder builder = factory.newDocumentBuilder();
+            Document doc = builder.parse(new ByteArrayInputStream(xml.getBytes("UTF-8")));
+
+            NodeList profilesList = doc.getElementsByTagNameNS("*", "Profiles");
+            for (int i = 0; i < profilesList.getLength(); i++) {
+                Element profileElement = (Element) profilesList.item(i);
+                ProfileInfo info = new ProfileInfo();
+                info.token = profileElement.getAttribute("token");
+
+                NodeList nameList = profileElement.getElementsByTagNameNS("*", "Name");
+                if (nameList.getLength() > 0) {
+                    String name = nameList.item(0).getTextContent();
+                    if (name != null) {
+                        info.name = name.trim();
+                    }
+                }
+
+                if (info.token != null && !info.token.isEmpty()) {
+                    profiles.add(info);
+                }
+            }
+        } catch (Exception e) {
+            logger.info("Error parsing ONVIF profiles: {}", e.getMessage());
+        }
+        return profiles;
+    }
+
+    /**
+     * Parse the RTSP URI from a GetStreamUri response.
+     */
+    private String parseStreamUri(String xml) {
+        try {
+            DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+            factory.setNamespaceAware(true);
+            DocumentBuilder builder = factory.newDocumentBuilder();
+            Document doc = builder.parse(new ByteArrayInputStream(xml.getBytes("UTF-8")));
+
+            NodeList uriList = doc.getElementsByTagNameNS("*", "Uri");
+            if (uriList.getLength() > 0) {
+                String uri = uriList.item(0).getTextContent();
+                if (uri != null && !uri.trim().isEmpty()) {
+                    return uri.trim();
+                }
+            }
+        } catch (Exception e) {
+            logger.info("Error parsing ONVIF stream URI: {}", e.getMessage());
+        }
+        return null;
+    }
+
+    /**
+     * Append a WS-Security UsernameToken header to the given SOAP header.
+     * Shared helper used by all authenticated ONVIF requests.
+     */
+    private void appendSecurityHeader(SOAPHeader header, String username, String password) throws Exception {
+        String securityHeader = AuthUtils.generateWsSecurityHeader(username, password);
+        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+        factory.setNamespaceAware(true);
+        Document secDoc = factory.newDocumentBuilder().parse(
+                new ByteArrayInputStream(securityHeader.getBytes("UTF-8")));
+        header.appendChild(header.getOwnerDocument().importNode(secDoc.getDocumentElement(), true));
     }
 
     /**

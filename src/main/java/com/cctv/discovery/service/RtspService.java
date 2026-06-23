@@ -44,6 +44,11 @@ public class RtspService {
     // Shutdown flag for graceful cancellation of ongoing discovery
     private volatile boolean shutdownRequested = false;
 
+    // Tracks whether the most recent probing observed an authentication
+    // challenge/rejection (HTTP/RTSP 401). Used to distinguish a genuine
+    // authentication failure from an RTSP path (404/not-found) problem.
+    private volatile boolean authChallengeObserved = false;
+
     // Track active FFmpegFrameGrabber instances for forced cleanup on shutdown
     private final ConcurrentLinkedQueue<FFmpegFrameGrabber> activeGrabbers = new ConcurrentLinkedQueue<>();
 
@@ -157,6 +162,36 @@ public class RtspService {
      */
     public static void setDiscoveryConfig(RtspDiscoveryConfig config) {
         discoveryConfig = config;
+    }
+
+    /**
+     * Reset transient discovery state so the service can be reused for a
+     * subsequent discovery run (e.g. "Restart Discovery"). Clears the shutdown
+     * flag and the per-run authentication-observation flag. Without this, a
+     * previous shutdown or a stale flag could cause subsequent runs to abort
+     * prematurely.
+     */
+    public void reset() {
+        shutdownRequested = false;
+        authChallengeObserved = false;
+    }
+
+    /**
+     * Reset only the per-probe authentication-observation flag. Call this
+     * before probing a single device so the resulting flag reflects that
+     * device only.
+     */
+    public void resetProbeState() {
+        authChallengeObserved = false;
+    }
+
+    /**
+     * @return true if the most recent probing observed a 401 (authentication)
+     *         challenge/rejection, indicating credentials - rather than the
+     *         RTSP path - are the likely problem.
+     */
+    public boolean wasAuthChallengeObserved() {
+        return authChallengeObserved;
     }
 
     /**
@@ -635,7 +670,9 @@ public class RtspService {
             }
 
             if (line.contains("401")) {
-                // Unauthorized - need authentication
+                // Unauthorized - need authentication. The path itself exists; this
+                // is an authentication challenge, so record that we saw a 401.
+                authChallengeObserved = true;
                 logger.info("RTSP URL requires authentication: {}", rtspUrl);
                 // Re-create the header content for authentication parsing
                 return testRtspUrlWithAuth(rtspUrl, username, password, socket, in, out, allHeaders.toString());
@@ -990,6 +1027,7 @@ public class RtspService {
 
             // Handle authentication - retry DESCRIBE with credentials
             if (responseLine.contains("401")) {
+                authChallengeObserved = true;
                 logger.info("RTP validation: 401 received, attempting authentication for {}", rtspUrl);
 
                 if (username == null || username.isEmpty()) {
@@ -1268,11 +1306,13 @@ public class RtspService {
         long startTime = System.currentTimeMillis();
 
         try {
-            // Build authenticated URL
+            // Build authenticated URL with percent-encoded credentials so that
+            // special characters in the username/password (e.g. @ : / ? #) do not
+            // corrupt the URL and cause spurious 401 Unauthorized errors.
             String authUrl = rtspUrl;
             if (username != null && !username.isEmpty()) {
                 String cleanUrl = rtspUrl.replaceFirst("rtsp://[^@]+@", "rtsp://");
-                String creds = username + ":" + (password != null ? password : "");
+                String creds = encodeCredential(username) + ":" + encodeCredential(password != null ? password : "");
                 authUrl = cleanUrl.replace("rtsp://", "rtsp://" + creds + "@");
             }
 
@@ -1309,7 +1349,12 @@ public class RtspService {
         } catch (org.bytedeco.javacv.FrameGrabber.Exception e) {
             long elapsedMs = System.currentTimeMillis() - startTime;
             String msg = e.getMessage() != null ? e.getMessage() : "";
-            logger.info("Frame capture failed after {}ms: {}", elapsedMs, msg);
+            if (isUnauthorizedError(msg)) {
+                authChallengeObserved = true;
+                logger.info("Frame capture got 401 Unauthorized after {}ms for {}", elapsedMs, rtspUrl);
+            } else {
+                logger.info("Frame capture failed after {}ms: {}", elapsedMs, msg);
+            }
             return null;
         } catch (Exception e) {
             long elapsedMs = System.currentTimeMillis() - startTime;
@@ -1575,6 +1620,40 @@ public class RtspService {
             // Ignore
         }
         return "/";
+    }
+
+    /**
+     * Percent-encode a credential (username or password) for safe inclusion in
+     * the userinfo portion of an RTSP URL. Encodes characters that would
+     * otherwise break URL parsing (e.g. @ : / ? # %) while leaving the result
+     * usable by FFmpeg.
+     */
+    private String encodeCredential(String value) {
+        if (value == null || value.isEmpty()) {
+            return "";
+        }
+        try {
+            // URLEncoder targets form encoding; convert '+' (space) and restore
+            // a few sub-delims that are valid in userinfo to keep URLs readable.
+            return java.net.URLEncoder.encode(value, "UTF-8").replace("+", "%20");
+        } catch (Exception e) {
+            return value;
+        }
+    }
+
+    /**
+     * Determine whether an FFmpeg/RTSP error message represents a 401
+     * Unauthorized condition. FFmpeg surfaces this as AVERROR_HTTP_UNAUTHORIZED
+     * which renders as the numeric code -825242872.
+     */
+    private boolean isUnauthorizedError(String message) {
+        if (message == null) {
+            return false;
+        }
+        String lower = message.toLowerCase();
+        return lower.contains("401")
+                || lower.contains("unauthorized")
+                || message.contains("-825242872");
     }
 
     /**
