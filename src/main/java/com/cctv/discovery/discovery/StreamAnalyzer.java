@@ -75,10 +75,12 @@ public class StreamAnalyzer {
         try {
             String rtspUrl = stream.getRtspUrl();
 
-            // Add credentials to URL if available
+            // Add credentials to URL if available. Percent-encode them so special
+            // characters in the username/password do not corrupt the URL.
             if (device.getUsername() != null && device.getPassword() != null) {
-                rtspUrl = rtspUrl.replace("rtsp://",
-                        "rtsp://" + device.getUsername() + ":" + device.getPassword() + "@");
+                String creds = encodeCredential(device.getUsername()) + ":" + encodeCredential(device.getPassword());
+                rtspUrl = rtspUrl.replaceFirst("rtsp://[^@/]+@", "rtsp://");
+                rtspUrl = rtspUrl.replace("rtsp://", "rtsp://" + creds + "@");
             }
 
             grabber = new FFmpegFrameGrabber(rtspUrl);
@@ -166,6 +168,21 @@ public class StreamAnalyzer {
                     logger.info("Error releasing grabber", e);
                 }
             }
+        }
+    }
+
+    /**
+     * Percent-encode a credential for safe inclusion in the userinfo portion of
+     * an RTSP URL (handles @ : / ? # % and other special characters).
+     */
+    private String encodeCredential(String value) {
+        if (value == null || value.isEmpty()) {
+            return "";
+        }
+        try {
+            return java.net.URLEncoder.encode(value, "UTF-8").replace("+", "%20");
+        } catch (Exception e) {
+            return value;
         }
     }
 

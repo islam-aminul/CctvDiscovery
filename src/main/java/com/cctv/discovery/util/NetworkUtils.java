@@ -112,6 +112,31 @@ public class NetworkUtils {
     }
 
     /**
+     * Parse a free-form list of IP addresses separated by commas, spaces,
+     * tabs, semicolons, or newlines. Invalid tokens are skipped and duplicates
+     * are removed while preserving the original insertion order.
+     *
+     * @param input Raw text containing one or more IP addresses
+     * @return De-duplicated list of valid IPv4 addresses (never null)
+     */
+    public static List<String> parseMultipleIPs(String input) {
+        // LinkedHashSet preserves order while de-duplicating
+        java.util.LinkedHashSet<String> unique = new java.util.LinkedHashSet<>();
+        if (input == null || input.trim().isEmpty()) {
+            return new ArrayList<>(unique);
+        }
+        // Split on any combination of commas, whitespace (incl. newlines), and semicolons
+        String[] tokens = input.split("[,;\\s]+");
+        for (String token : tokens) {
+            String ip = token.trim();
+            if (!ip.isEmpty() && isValidIP(ip)) {
+                unique.add(ip);
+            }
+        }
+        return new ArrayList<>(unique);
+    }
+
+    /**
      * Parse IP range and return list of IP addresses.
      */
     public static List<String> parseIPRange(String startIp, String endIp) throws Exception {

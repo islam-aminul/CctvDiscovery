@@ -56,10 +56,12 @@ public class MainController {
     private RadioButton rbInterface;
     private RadioButton rbManualRange;
     private RadioButton rbCIDR;
+    private RadioButton rbIpList;
     private ComboBox<String> cbInterfaces;
     private TextField tfStartIP;
     private TextField tfEndIP;
     private TextField tfCIDR;
+    private TextArea taIpList;
     private Label lblIpCount;
 
     // Network selection - Advanced mode
@@ -298,9 +300,11 @@ public class MainController {
         rbInterface = new RadioButton("Network Interface");
         rbManualRange = new RadioButton("Manual IP Range");
         rbCIDR = new RadioButton("CIDR Notation");
+        rbIpList = new RadioButton("IP Address List");
         rbInterface.setToggleGroup(tg);
         rbManualRange.setToggleGroup(tg);
         rbCIDR.setToggleGroup(tg);
+        rbIpList.setToggleGroup(tg);
         rbInterface.setSelected(true);
 
         // Interface dropdown
@@ -328,6 +332,13 @@ public class MainController {
         tfCIDR.setPromptText("CIDR (e.g., 192.168.1.0/24)");
         tfCIDR.setDisable(true);
 
+        // IP Address List - accepts multiple IPs separated by commas, spaces, or newlines
+        taIpList = new TextArea();
+        taIpList.setPromptText("IP addresses separated by commas, spaces, or newlines\n(e.g., 192.168.1.10, 192.168.1.20\n192.168.1.30)");
+        taIpList.setPrefRowCount(4);
+        taIpList.setWrapText(true);
+        taIpList.setDisable(true);
+
         // IP count label - center aligned, bold and colored
         lblIpCount = new Label("Possible IPs: 0");
         lblIpCount.getStyleClass().add("label-info");
@@ -339,15 +350,18 @@ public class MainController {
         rbInterface.setOnAction(e -> updateNetworkMode());
         rbManualRange.setOnAction(e -> updateNetworkMode());
         rbCIDR.setOnAction(e -> updateNetworkMode());
+        rbIpList.setOnAction(e -> updateNetworkMode());
         cbInterfaces.setOnAction(e -> updateIpCount());
         tfStartIP.textProperty().addListener((obs, old, val) -> updateIpCount());
         tfEndIP.textProperty().addListener((obs, old, val) -> updateIpCount());
         tfCIDR.textProperty().addListener((obs, old, val) -> updateIpCount());
+        taIpList.textProperty().addListener((obs, old, val) -> updateIpCount());
 
         vbox.getChildren().addAll(
                 rbInterface, cbInterfaces,
                 rbManualRange, ipRangeBox,
                 rbCIDR, tfCIDR,
+                rbIpList, taIpList,
                 lblIpCount);
 
         return vbox;
@@ -1375,6 +1389,7 @@ public class MainController {
         tfStartIP.setDisable(!rbManualRange.isSelected());
         tfEndIP.setDisable(!rbManualRange.isSelected());
         tfCIDR.setDisable(!rbCIDR.isSelected());
+        taIpList.setDisable(!rbIpList.isSelected());
         updateIpCount();
         updateStartButtonState();
     }
@@ -1415,6 +1430,9 @@ public class MainController {
             if (NetworkUtils.isValidCIDR(cidr)) {
                 count = NetworkUtils.countIPsInCIDR(cidr);
             }
+        } else if (rbIpList.isSelected()) {
+            // Count unique, valid IPs parsed from the free-form list
+            count = NetworkUtils.parseMultipleIPs(taIpList.getText()).size();
         }
         lblIpCount.setText("Possible IPs: " + count);
         updateStartButtonState();
@@ -1565,6 +1583,10 @@ public class MainController {
 
         // Configure RTSP validation method before discovery
         configureRtspValidation();
+
+        // Clear any stale shutdown/probe state from a previous run so a
+        // "Restart Discovery" does not abort prematurely.
+        rtspService.reset();
 
         executorService.submit(() -> {
             try {
@@ -1740,17 +1762,33 @@ public class MainController {
         device.setStatus(Device.DeviceStatus.AUTHENTICATING);
         Platform.runLater(() -> tvResults.refresh());
 
-        // PRIORITY 1: Try ONVIF Discovery
+        // Reset per-device probe state so the auth-vs-path detection below
+        // reflects only this device's probing.
+        rtspService.resetProbeState();
+
+        // PRIORITY 1: Try ONVIF Discovery (authentication)
         boolean onvifSuccess = attemptOnvifAuthentication(device);
 
-        // PRIORITY 2: Try RTSP URL Guessing (if ONVIF failed or no streams found)
-        if (!onvifSuccess || device.getRtspStreams().isEmpty()) {
-            logger.info("Falling back to RTSP URL guessing for {}", device.getIpAddress());
-            attemptRtspAuthentication(device);
+        // PRIORITY 1b: When ONVIF authenticates, retrieve the authoritative RTSP
+        // stream URLs via GetProfiles/GetStreamUri. If ONVIF provides URLs we
+        // analyze ONLY those and must NOT guess RTSP paths.
+        boolean onvifProvidedStreams = false;
+        if (onvifSuccess) {
+            onvifProvidedStreams = retrieveOnvifStreams(device);
         }
 
-        // PRIORITY 3: NVR/DVR Channel Iteration (if applicable and authenticated)
-        if (device.isNvrDvr() && device.getUsername() != null) {
+        // PRIORITY 2: RTSP URL guessing - ONLY when ONVIF did not yield stream URLs.
+        if (!onvifProvidedStreams && device.getRtspStreams().isEmpty()) {
+            logger.info("Falling back to RTSP URL guessing for {}", device.getIpAddress());
+            attemptRtspAuthentication(device);
+        } else if (onvifProvidedStreams) {
+            logger.info("ONVIF provided {} stream URL(s) for {} - skipping RTSP path guessing",
+                    device.getRtspStreams().size(), device.getIpAddress());
+        }
+
+        // PRIORITY 3: NVR/DVR Channel Iteration (path-guessing) - skipped when
+        // ONVIF already provided authoritative stream URLs.
+        if (!onvifProvidedStreams && device.isNvrDvr() && device.getUsername() != null) {
             logger.info("Device {} detected as NVR/DVR, iterating channels", device.getIpAddress());
             List<RTSPStream> nvrStreams = rtspService.iterateNvrChannels(
                     device, device.getUsername(), device.getPassword(), 64);
@@ -1811,13 +1849,57 @@ public class MainController {
                 device.setAuthFailed(false); // Not an auth failure - just not a camera
                 device.setErrorMessage("Unknown device type");
                 logger.info("Device {} marked as UNKNOWN DEVICE TYPE (not a camera)", device.getIpAddress());
-            } else {
+            } else if (rtspService.wasAuthChallengeObserved()) {
+                // The RTSP port challenged us with a 401 but no credential worked:
+                // this is a genuine authentication failure, not a path problem.
                 device.setStatus(Device.DeviceStatus.AUTH_FAILED);
                 device.setAuthFailed(true);
                 device.setErrorMessage("Authentication failed with all credentials");
-                logger.warn("Device {} authentication FAILED", device.getIpAddress());
+                logger.warn("Device {} authentication FAILED (401 from RTSP)", device.getIpAddress());
+            } else {
+                // We reached the RTSP service but never received a 401 - the
+                // credentials were never rejected, so the likely cause is that no
+                // known/guessed RTSP path matched this device.
+                device.setStatus(Device.DeviceStatus.AUTH_FAILED);
+                device.setAuthFailed(false);
+                device.setErrorMessage("No matching RTSP stream path found");
+                logger.warn("Device {} - no RTSP path matched (no 401 observed)", device.getIpAddress());
             }
         }
+    }
+
+    /**
+     * Retrieve and record the authoritative RTSP stream URLs from an
+     * ONVIF-authenticated device using GetProfiles/GetStreamUri.
+     *
+     * When this returns true the device's stream list is populated with the
+     * exact ONVIF-advertised URLs and the caller must NOT guess RTSP paths.
+     *
+     * @return true if at least one ONVIF stream URL was recorded
+     */
+    private boolean retrieveOnvifStreams(Device device) {
+        List<RTSPStream> onvifStreams = onvifService.getStreamUris(device);
+        if (onvifStreams.isEmpty()) {
+            logger.info("ONVIF returned no stream URLs for {} - will fall back to RTSP discovery",
+                    device.getIpAddress());
+            return false;
+        }
+
+        // De-duplicate against any streams already recorded
+        java.util.Set<String> existingUrls = device.getRtspStreams().stream()
+                .map(RTSPStream::getRtspUrl)
+                .collect(java.util.stream.Collectors.toSet());
+
+        int added = 0;
+        for (RTSPStream stream : onvifStreams) {
+            if (stream.getRtspUrl() != null && existingUrls.add(stream.getRtspUrl())) {
+                device.getRtspStreams().add(stream);
+                added++;
+            }
+        }
+
+        logger.info("Recorded {} ONVIF-provided RTSP stream URL(s) for {}", added, device.getIpAddress());
+        return added > 0;
     }
 
     /**
@@ -2119,7 +2201,10 @@ public class MainController {
 
             } else {
                 // Simple mode: single source
-                if (rbCIDR != null && rbCIDR.isSelected() && tfCIDR != null) {
+                if (rbIpList != null && rbIpList.isSelected() && taIpList != null) {
+                    // Multiple IPs separated by commas, spaces, or newlines (de-duplicated)
+                    ips = NetworkUtils.parseMultipleIPs(taIpList.getText());
+                } else if (rbCIDR != null && rbCIDR.isSelected() && tfCIDR != null) {
                     ips = NetworkUtils.parseCIDR(tfCIDR.getText());
                 } else if (rbManualRange != null && rbManualRange.isSelected() && tfStartIP != null
                         && tfEndIP != null) {
@@ -2276,7 +2361,7 @@ public class MainController {
         Label quickGuide = new Label(
                 "Quick Start Guide:\n" +
                         "1. Network Selection:\n" +
-                        "   • Simple Mode: Choose network interface, manual IP range, or CIDR\n" +
+                        "   • Simple Mode: Network interface, manual IP range, CIDR, or IP address list\n" +
                         "   • Advanced Mode: Enable to select multiple sources\n" +
                         "2. Add Credentials (Required - Max 4):\n" +
                         "   • Default username 'admin' is pre-filled\n" +
@@ -2607,6 +2692,13 @@ public class MainController {
             } else if (rbCIDR != null && rbCIDR.isSelected() && NetworkUtils.isValidCIDR(tfCIDR.getText())) {
                 int count = NetworkUtils.countIPsInCIDR(tfCIDR.getText());
                 lblNetworkSummary.setText(String.format("CIDR: %s (%d IPs)", tfCIDR.getText(), count));
+                lblNetworkSummary.setStyle("-fx-font-style: italic; -fx-text-fill: #0078d4;");
+                networkConfigured = true;
+            } else if (rbIpList != null && rbIpList.isSelected()
+                    && !NetworkUtils.parseMultipleIPs(taIpList.getText()).isEmpty()) {
+                int count = NetworkUtils.parseMultipleIPs(taIpList.getText()).size();
+                lblNetworkSummary.setText(String.format("IP List: %d unique address%s",
+                        count, count == 1 ? "" : "es"));
                 lblNetworkSummary.setStyle("-fx-font-style: italic; -fx-text-fill: #0078d4;");
                 networkConfigured = true;
             } else {
