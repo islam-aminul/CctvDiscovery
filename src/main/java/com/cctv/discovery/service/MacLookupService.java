@@ -1,5 +1,6 @@
 package com.cctv.discovery.service;
 
+import com.cctv.discovery.util.NetworkUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -7,133 +8,134 @@ import java.io.BufferedReader;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.zip.GZIPInputStream;
 
 /**
- * Service for resolving manufacturer names from MAC address OUI prefixes.
+ * MAC vendor lookup backed by the bundled IEEE registries (MA-L, MA-M, MA-S).
+ * <p>
+ * The longest matching assignment wins (36-bit MA-S, then 28-bit MA-M, then
+ * 24-bit MA-L). Registry organisation names are mapped to familiar CCTV brand
+ * names through {@code oui/brand-aliases.txt}. Refresh the data with
+ * {@code scripts/Update-OuiData.ps1}.
  */
-public class MacLookupService {
+public final class MacLookupService {
     private static final Logger logger = LoggerFactory.getLogger(MacLookupService.class);
     private static final MacLookupService INSTANCE = new MacLookupService();
 
-    private final Map<String, String> ouiMap;
+    public static final String UNKNOWN = "Unknown";
+
+    private final Map<String, String> registry = new HashMap<>(64_000);
+    private final List<String[]> aliases = new ArrayList<>();
 
     private MacLookupService() {
-        this.ouiMap = new HashMap<>();
-        loadOuiDatabase();
+        loadRegistry();
+        loadAliases();
     }
 
     public static MacLookupService getInstance() {
         return INSTANCE;
     }
 
-    /**
-     * Load OUI database from resources.
-     */
-    private void loadOuiDatabase() {
-        try {
-            // Load optimized India-specific OUI database
-            InputStream is = getClass().getClassLoader().getResourceAsStream("oui.csv");
-            if (is == null) {
-                logger.warn("OUI database not found in resources");
+    public int size() {
+        return registry.size();
+    }
+
+    private void loadRegistry() {
+        try (InputStream raw = MacLookupService.class.getResourceAsStream("/oui/ieee-oui.tsv.gz")) {
+            if (raw == null) {
+                logger.warn("IEEE OUI database not found in resources");
                 return;
             }
-
-            BufferedReader reader = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8));
-            String line;
-            int count = 0;
-
-            while ((line = reader.readLine()) != null) {
-                line = line.trim();
-                if (line.isEmpty() || line.startsWith("#")) {
-                    continue;
-                }
-
-                String[] parts = line.split(",", 2);
-                if (parts.length == 2) {
-                    String prefix = parts[0].trim().toUpperCase();
-                    String manufacturer = parts[1].trim();
-                    ouiMap.put(prefix, manufacturer);
-                    count++;
+            try (BufferedReader r = new BufferedReader(new InputStreamReader(new GZIPInputStream(raw), StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = r.readLine()) != null) {
+                    if (line.isEmpty() || line.charAt(0) == '#') {
+                        continue;
+                    }
+                    int tab = line.indexOf('\t');
+                    if (tab > 0) {
+                        registry.put(line.substring(0, tab), line.substring(tab + 1));
+                    }
                 }
             }
-
-            reader.close();
-            logger.info("Loaded {} OUI entries from database", count);
-
+            logger.info("Loaded {} IEEE OUI assignments", registry.size());
         } catch (Exception e) {
-            logger.error("Error loading OUI database", e);
+            logger.error("Error loading IEEE OUI database", e);
         }
     }
 
+    private void loadAliases() {
+        try (InputStream is = MacLookupService.class.getResourceAsStream("/oui/brand-aliases.txt")) {
+            if (is == null) {
+                return;
+            }
+            try (BufferedReader r = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = r.readLine()) != null) {
+                    line = line.trim();
+                    if (line.isEmpty() || line.startsWith("#")) {
+                        continue;
+                    }
+                    int bar = line.indexOf('|');
+                    if (bar > 0) {
+                        aliases.add(new String[]{line.substring(0, bar).trim().toLowerCase(Locale.ROOT), line.substring(bar + 1).trim()});
+                    }
+                }
+            }
+        } catch (Exception e) {
+            logger.error("Error loading brand aliases", e);
+        }
+    }
+
+    /** IEEE organisation name registered for the MAC, or null when unregistered. */
+    public String lookupOrganization(String macAddress) {
+        String mac = NetworkUtils.normalizeMac(macAddress);
+        if (mac == null) {
+            return null;
+        }
+        String hex = mac.replace(":", "");
+        for (int len : new int[]{9, 7, 6}) {
+            String org = registry.get(hex.substring(0, len));
+            if (org != null) {
+                return org;
+            }
+        }
+        return null;
+    }
+
     /**
-     * Lookup manufacturer name by MAC address.
-     *
-     * @param macAddress MAC address in format XX:XX:XX:XX:XX:XX
-     * @return Manufacturer name or "Unknown" if not found
+     * Brand for the MAC: the alias for its IEEE organisation when one is
+     * defined, otherwise the organisation name without legal suffixes.
+     * Returns {@link #UNKNOWN} for unregistered or locally administered MACs.
      */
     public String lookupManufacturer(String macAddress) {
-        if (macAddress == null || macAddress.length() < 8) {
-            return "Unknown";
-        }
-
-        // Get first 3 octets (XX:XX:XX)
-        String prefix = macAddress.substring(0, 8).toUpperCase().replace("-", ":");
-
-        // Try exact match first
-        String manufacturer = ouiMap.get(prefix);
-        if (manufacturer != null) {
-            return manufacturer;
-        }
-
-        // Try without colons (XXXXXX)
-        String prefixNoSeparator = prefix.replace(":", "");
-        manufacturer = ouiMap.get(prefixNoSeparator);
-        if (manufacturer != null) {
-            return manufacturer;
-        }
-
-        // Try with hyphens (XX-XX-XX)
-        String prefixWithHyphens = prefix.replace(":", "-");
-        manufacturer = ouiMap.get(prefixWithHyphens);
-        if (manufacturer != null) {
-            return manufacturer;
-        }
-
-        logger.info("Unknown manufacturer for MAC prefix: {}", prefix);
-        return "Unknown";
+        String org = lookupOrganization(macAddress);
+        return org == null ? UNKNOWN : brandFor(org);
     }
 
-    /**
-     * Check if manufacturer is a known CCTV/camera vendor.
-     */
-    public boolean isCCTVManufacturer(String manufacturer) {
-        if (manufacturer == null) {
-            return false;
+    /** Map an organisation or ONVIF-reported manufacturer name to a brand name. */
+    public String brandFor(String organization) {
+        if (organization == null || organization.isBlank()) {
+            return UNKNOWN;
         }
-
-        String lower = manufacturer.toLowerCase();
-        return lower.contains("hikvision") ||
-                lower.contains("dahua") ||
-                lower.contains("axis") ||
-                lower.contains("vivotek") ||
-                lower.contains("sony") ||
-                lower.contains("panasonic") ||
-                lower.contains("samsung") ||
-                lower.contains("bosch") ||
-                lower.contains("hanwha") ||
-                lower.contains("honeywell") ||
-                lower.contains("uniview") ||
-                lower.contains("cp plus") ||
-                lower.contains("godrej") ||
-                lower.contains("matrix");
+        String lower = organization.toLowerCase(Locale.ROOT);
+        String compact = lower.replaceAll("[^a-z0-9]", "");
+        for (String[] alias : aliases) {
+            if (lower.contains(alias[0]) || compact.contains(alias[0].replaceAll("[^a-z0-9]", ""))) {
+                return alias[1];
+            }
+        }
+        return cleanOrganization(organization);
     }
 
-    /**
-     * Get total number of OUI entries loaded.
-     */
-    public int getOuiCount() {
-        return ouiMap.size();
+    static String cleanOrganization(String org) {
+        String cleaned = org.replaceAll("(?i)[,.]?\\s*(co\\.?,?\\s*ltd\\.?|ltd\\.?|limited|inc\\.?|corporation|corp\\.?|gmbh|llc|s\\.?a\\.?|pvt\\.?|private|technology|technologies)\\b\\.?", "")
+                .replaceAll("\\s{2,}", " ").replaceAll("[,\\s]+$", "").trim();
+        return cleaned.isEmpty() ? org.trim() : cleaned;
     }
 }

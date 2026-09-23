@@ -2,369 +2,157 @@ package com.cctv.discovery.util;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import oshi.SystemInfo;
-import oshi.hardware.HardwareAbstractionLayer;
-import oshi.hardware.NetworkIF;
 
-import java.net.*;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.net.Inet4Address;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.InterfaceAddress;
+import java.net.NetworkInterface;
+import java.net.Socket;
+import java.nio.charset.Charset;
 import java.util.ArrayList;
-import java.util.Enumeration;
+import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Network utility class for IP validation, CIDR parsing, interface discovery, and MAC resolution.
+ * IPv4 helpers: interface discovery, address arithmetic, MAC resolution.
  */
-public class NetworkUtils {
+public final class NetworkUtils {
     private static final Logger logger = LoggerFactory.getLogger(NetworkUtils.class);
+
     private static final Pattern IP_PATTERN = Pattern.compile(
-            "^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$"
-    );
+            "^((25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)\\.){3}(25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)$");
+    private static final Pattern MAC_PATTERN = Pattern.compile("([0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}");
 
-    // Cache for IP-to-MAC mappings using OSHI
-    private static final Map<String, String> ipToMacCache = new ConcurrentHashMap<>();
-    private static volatile long lastCacheUpdate = 0;
-    private static final long CACHE_VALIDITY_MS = 60000; // 1 minute
+    private static final Map<String, String> ARP_CACHE = new ConcurrentHashMap<>();
 
-    /**
-     * Get list of active physical network interfaces.
-     */
-    public static List<NetworkInterface> getActiveNetworkInterfaces() {
-        List<NetworkInterface> interfaces = new ArrayList<>();
+    private NetworkUtils() {
+    }
+
+    /** An IPv4 address on a local interface together with its real network. */
+    public record LocalInterface(String name, String displayName, String address, int prefixLength) {
+        /** Network CIDR, e.g. 192.168.0.0/24. */
+        public String networkCidr() {
+            long ip = ipToLong(address);
+            long mask = prefixMask(prefixLength);
+            return longToIp(ip & mask) + "/" + prefixLength;
+        }
+
+        public long hostCount() {
+            return countHosts(prefixLength);
+        }
+
+        @Override
+        public String toString() {
+            return address + "/" + prefixLength + " - " + displayName;
+        }
+    }
+
+    /** Active, non-loopback IPv4 interfaces with their real prefix lengths. */
+    public static List<LocalInterface> getLocalInterfaces() {
+        List<LocalInterface> result = new ArrayList<>();
         try {
-            Enumeration<NetworkInterface> enumeration = NetworkInterface.getNetworkInterfaces();
-            while (enumeration.hasMoreElements()) {
-                NetworkInterface ni = enumeration.nextElement();
-                if (!ni.isLoopback() && ni.isUp() && !ni.isVirtual() && ni.getHardwareAddress() != null) {
-                    Enumeration<InetAddress> inetAddresses = ni.getInetAddresses();
-                    while (inetAddresses.hasMoreElements()) {
-                        InetAddress addr = inetAddresses.nextElement();
-                        if (addr instanceof Inet4Address) {
-                            interfaces.add(ni);
-                            break;
-                        }
-                    }
-                }
-            }
-        } catch (Exception e) {
-            logger.error("Error getting network interfaces", e);
-        }
-        return interfaces;
-    }
-
-    /**
-     * Calculate CIDR from interface IP and subnet mask.
-     */
-    public static String calculateCIDR(InetAddress ip, short prefixLength) {
-        return ip.getHostAddress() + "/" + prefixLength;
-    }
-
-    /**
-     * Validate IP address format.
-     */
-    public static boolean isValidIP(String ip) {
-        return ip != null && IP_PATTERN.matcher(ip).matches();
-    }
-
-    /**
-     * Validate CIDR format.
-     */
-    public static boolean isValidCIDR(String cidr) {
-        if (cidr == null || !cidr.contains("/")) {
-            return false;
-        }
-        String[] parts = cidr.split("/");
-        if (parts.length != 2) {
-            return false;
-        }
-        if (!isValidIP(parts[0])) {
-            return false;
-        }
-        try {
-            int prefix = Integer.parseInt(parts[1]);
-            return prefix >= 0 && prefix <= 32;
-        } catch (NumberFormatException e) {
-            return false;
-        }
-    }
-
-    /**
-     * Parse CIDR and return list of IP addresses.
-     */
-    public static List<String> parseCIDR(String cidr) throws Exception {
-        List<String> ips = new ArrayList<>();
-        String[] parts = cidr.split("/");
-        String baseIp = parts[0];
-        int prefix = Integer.parseInt(parts[1]);
-
-        long ip = ipToLong(baseIp);
-        long mask = (-1L << (32 - prefix)) & 0xFFFFFFFFL;
-        long network = ip & mask;
-        long broadcast = network | (~mask & 0xFFFFFFFFL);
-
-        for (long i = network + 1; i < broadcast; i++) {
-            ips.add(longToIp(i));
-        }
-
-        return ips;
-    }
-
-    /**
-     * Parse a free-form list of IP addresses separated by commas, spaces,
-     * tabs, semicolons, or newlines. Invalid tokens are skipped and duplicates
-     * are removed while preserving the original insertion order.
-     *
-     * @param input Raw text containing one or more IP addresses
-     * @return De-duplicated list of valid IPv4 addresses (never null)
-     */
-    public static List<String> parseMultipleIPs(String input) {
-        // LinkedHashSet preserves order while de-duplicating
-        java.util.LinkedHashSet<String> unique = new java.util.LinkedHashSet<>();
-        if (input == null || input.trim().isEmpty()) {
-            return new ArrayList<>(unique);
-        }
-        // Split on any combination of commas, whitespace (incl. newlines), and semicolons
-        String[] tokens = input.split("[,;\\s]+");
-        for (String token : tokens) {
-            String ip = token.trim();
-            if (!ip.isEmpty() && isValidIP(ip)) {
-                unique.add(ip);
-            }
-        }
-        return new ArrayList<>(unique);
-    }
-
-    /**
-     * Parse IP range and return list of IP addresses.
-     */
-    public static List<String> parseIPRange(String startIp, String endIp) throws Exception {
-        List<String> ips = new ArrayList<>();
-        long start = ipToLong(startIp);
-        long end = ipToLong(endIp);
-
-        if (start > end) {
-            throw new IllegalArgumentException("Start IP must be less than or equal to End IP");
-        }
-
-        for (long i = start; i <= end; i++) {
-            ips.add(longToIp(i));
-        }
-
-        return ips;
-    }
-
-    /**
-     * Count IPs in CIDR range.
-     */
-    public static int countIPsInCIDR(String cidr) {
-        String[] parts = cidr.split("/");
-        int prefix = Integer.parseInt(parts[1]);
-        return (int) Math.pow(2, 32 - prefix) - 2; // Exclude network and broadcast
-    }
-
-    /**
-     * Count IPs in range.
-     */
-    public static int countIPsInRange(String startIp, String endIp) {
-        try {
-            long start = ipToLong(startIp);
-            long end = ipToLong(endIp);
-            return (int) (end - start + 1);
-        } catch (Exception e) {
-            return 0;
-        }
-    }
-
-    /**
-     * Convert IP address to long.
-     */
-    public static long ipToLong(String ipAddress) throws Exception {
-        String[] octets = ipAddress.split("\\.");
-        long result = 0;
-        for (int i = 0; i < 4; i++) {
-            result |= (Long.parseLong(octets[i]) << (24 - (8 * i)));
-        }
-        return result & 0xFFFFFFFFL;
-    }
-
-    /**
-     * Convert long to IP address.
-     */
-    private static String longToIp(long ip) {
-        return ((ip >> 24) & 0xFF) + "." +
-                ((ip >> 16) & 0xFF) + "." +
-                ((ip >> 8) & 0xFF) + "." +
-                (ip & 0xFF);
-    }
-
-    /**
-     * Resolve MAC address for given IP using hybrid approach:
-     * 1. Check OSHI cache for local interface IPs (fast, no CLI)
-     * 2. Fall back to ARP CLI for remote devices (requires OS ARP table)
-     *
-     * @param ipAddress The IP address to resolve
-     * @return MAC address in format XX:XX:XX:XX:XX:XX or null if not found
-     */
-    public static String resolveMacAddress(String ipAddress) {
-        try {
-            // Check OSHI cache first (for local interface IPs)
-            long now = System.currentTimeMillis();
-            if (now - lastCacheUpdate < CACHE_VALIDITY_MS && ipToMacCache.containsKey(ipAddress)) {
-                logger.info("MAC address for {} found in OSHI cache: {}", ipAddress, ipToMacCache.get(ipAddress));
-                return ipToMacCache.get(ipAddress);
-            }
-
-            // Refresh OSHI cache if expired
-            if (now - lastCacheUpdate >= CACHE_VALIDITY_MS) {
-                refreshMacCache();
-            }
-
-            // Check OSHI cache again after refresh
-            String mac = ipToMacCache.get(ipAddress);
-            if (mac != null) {
-                logger.info("MAC address for {} resolved via OSHI: {}", ipAddress, mac);
-                return mac;
-            }
-
-            // Fall back to ARP CLI for remote devices (not in OSHI cache)
-            logger.info("IP {} not in OSHI cache, querying OS ARP table", ipAddress);
-            mac = resolveMacViaArp(ipAddress);
-
-            if (mac != null) {
-                // Cache the ARP result for future lookups
-                ipToMacCache.put(ipAddress, mac);
-                logger.info("MAC address for {} resolved via ARP: {}", ipAddress, mac);
-            } else {
-                if (!isLocalSubnet(ipAddress)) {
-                    logger.info("MAC address for {} unavailable - cross-subnet device (ARP only works within local broadcast domain)", ipAddress);
-                } else {
-                    logger.info("MAC address for {} not found in ARP table", ipAddress);
-                }
-            }
-
-            return mac;
-
-        } catch (Exception e) {
-            logger.error("Error resolving MAC address for IP {}", ipAddress, e);
-            return null;
-        }
-    }
-
-    /**
-     * Resolve MAC address via OS ARP table (fallback for remote devices).
-     * This is used when OSHI cache doesn't have the IP (remote devices).
-     *
-     * @param ipAddress The IP address to resolve
-     * @return MAC address or null if not found
-     */
-    private static String resolveMacViaArp(String ipAddress) {
-        try {
-            String os = System.getProperty("os.name").toLowerCase();
-            Process process;
-
-            if (os.contains("win")) {
-                process = Runtime.getRuntime().exec("arp -a " + ipAddress);
-            } else if (os.contains("nix") || os.contains("nux") || os.contains("mac")) {
-                process = Runtime.getRuntime().exec(new String[]{"arp", "-n", ipAddress});
-            } else {
-                logger.info("Unsupported OS for ARP resolution: {}", os);
-                return null;
-            }
-
-            try (java.io.BufferedReader reader = new java.io.BufferedReader(
-                    new java.io.InputStreamReader(process.getInputStream()))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    if (line.contains(ipAddress)) {
-                        String mac = extractMacFromArpLine(line);
-                        if (mac != null) {
-                            return mac;
-                        }
-                    }
-                }
-            }
-
-            process.waitFor();
-        } catch (Exception e) {
-            logger.info("Error querying ARP for IP {}: {}", ipAddress, e.getMessage());
-        }
-        return null;
-    }
-
-    /**
-     * Extract MAC address from ARP output line.
-     */
-    private static String extractMacFromArpLine(String line) {
-        // Match patterns like: 00:11:22:33:44:55 or 00-11-22-33-44-55
-        Pattern macPattern = Pattern.compile("([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})");
-        java.util.regex.Matcher matcher = macPattern.matcher(line);
-        if (matcher.find()) {
-            return normalizeMac(matcher.group());
-        }
-        return null;
-    }
-
-    /**
-     * Refresh the IP-to-MAC cache using OSHI to query all network interfaces.
-     * This is more efficient than querying individual IPs via ARP CLI.
-     */
-    private static synchronized void refreshMacCache() {
-        try {
-            logger.info("Refreshing MAC address cache using OSHI...");
-            ipToMacCache.clear();
-
-            SystemInfo systemInfo = new SystemInfo();
-            HardwareAbstractionLayer hardware = systemInfo.getHardware();
-            List<NetworkIF> networkIFs = hardware.getNetworkIFs();
-
-            int totalMappings = 0;
-            for (NetworkIF netIF : networkIFs) {
-                String macAddress = netIF.getMacaddr();
-
-                // Skip if MAC is empty or invalid
-                if (macAddress == null || macAddress.isEmpty() || macAddress.equals("00:00:00:00:00:00")) {
+            for (NetworkInterface ni : Collections.list(NetworkInterface.getNetworkInterfaces())) {
+                if (ni.isLoopback() || !ni.isUp() || ni.isPointToPoint()) {
                     continue;
                 }
-
-                // Normalize MAC address format
-                macAddress = normalizeMac(macAddress);
-
-                // Get all IPv4 addresses assigned to this interface
-                String[] ipv4Addresses = netIF.getIPv4addr();
-                if (ipv4Addresses != null) {
-                    for (String ip : ipv4Addresses) {
-                        if (ip != null && !ip.isEmpty() && !ip.equals("0.0.0.0")) {
-                            ipToMacCache.put(ip, macAddress);
-                            totalMappings++;
-                            logger.trace("Cached MAC mapping: {} -> {}", ip, macAddress);
+                for (InterfaceAddress ia : ni.getInterfaceAddresses()) {
+                    if (ia.getAddress() instanceof Inet4Address addr && !addr.isLinkLocalAddress()) {
+                        int prefix = ia.getNetworkPrefixLength();
+                        if (prefix <= 0 || prefix > 32) {
+                            prefix = 24;
                         }
+                        result.add(new LocalInterface(ni.getName(), ni.getDisplayName(), addr.getHostAddress(), prefix));
                     }
                 }
             }
-
-            lastCacheUpdate = System.currentTimeMillis();
-            logger.info("MAC address cache refreshed: {} IP-to-MAC mappings from {} network interfaces",
-                       totalMappings, networkIFs.size());
-
         } catch (Exception e) {
-            logger.error("Error refreshing MAC address cache with OSHI", e);
+            logger.error("Error enumerating network interfaces", e);
         }
+        return result;
     }
 
-    /**
-     * Clear the MAC address cache (useful for testing or forcing refresh).
-     */
-    public static void clearMacCache() {
-        ipToMacCache.clear();
-        lastCacheUpdate = 0;
-        logger.info("MAC address cache cleared");
+    /** Local IPv4 interfaces as {@link NetworkInterface}s (for multicast send). */
+    public static List<NetworkInterface> getMulticastInterfaces() {
+        List<NetworkInterface> result = new ArrayList<>();
+        try {
+            for (NetworkInterface ni : Collections.list(NetworkInterface.getNetworkInterfaces())) {
+                if (ni.isLoopback() || !ni.isUp() || !ni.supportsMulticast()) {
+                    continue;
+                }
+                boolean hasV4 = ni.getInterfaceAddresses().stream()
+                        .anyMatch(ia -> ia.getAddress() instanceof Inet4Address a && !a.isLinkLocalAddress());
+                if (hasV4) {
+                    result.add(ni);
+                }
+            }
+        } catch (Exception e) {
+            logger.error("Error enumerating multicast interfaces", e);
+        }
+        return result;
     }
 
-    /**
-     * Check if port is open on given host.
-     */
+    public static boolean isValidIP(String ip) {
+        return ip != null && IP_PATTERN.matcher(ip.trim()).matches();
+    }
+
+    public static long ipToLong(String ip) {
+        String[] o = ip.trim().split("\\.");
+        if (o.length != 4) {
+            throw new IllegalArgumentException("Invalid IPv4 address: " + ip);
+        }
+        long r = 0;
+        for (String part : o) {
+            int v = Integer.parseInt(part);
+            if (v < 0 || v > 255) {
+                throw new IllegalArgumentException("Invalid IPv4 address: " + ip);
+            }
+            r = (r << 8) | v;
+        }
+        return r;
+    }
+
+    public static String longToIp(long ip) {
+        return ((ip >> 24) & 0xFF) + "." + ((ip >> 16) & 0xFF) + "." + ((ip >> 8) & 0xFF) + "." + (ip & 0xFF);
+    }
+
+    public static long prefixMask(int prefix) {
+        return prefix == 0 ? 0 : (0xFFFFFFFFL << (32 - prefix)) & 0xFFFFFFFFL;
+    }
+
+    /** Usable host addresses for a prefix (RFC 3021: /31 has two, /32 has one). */
+    public static long countHosts(int prefix) {
+        if (prefix < 0 || prefix > 32) {
+            return 0;
+        }
+        long size = 1L << (32 - prefix);
+        return prefix >= 31 ? size : size - 2;
+    }
+
+    /** True if the address falls inside the network of any local interface. */
+    public static boolean isLocalSubnet(String ip) {
+        try {
+            long target = ipToLong(ip);
+            for (LocalInterface li : getLocalInterfaces()) {
+                long mask = prefixMask(li.prefixLength());
+                if ((ipToLong(li.address()) & mask) == (target & mask)) {
+                    return true;
+                }
+            }
+        } catch (Exception e) {
+            logger.debug("Subnet check failed for {}: {}", ip, e.getMessage());
+        }
+        return false;
+    }
+
     public static boolean isPortOpen(String host, int port, int timeoutMs) {
         try (Socket socket = new Socket()) {
             socket.connect(new InetSocketAddress(host, port), timeoutMs);
@@ -375,114 +163,90 @@ public class NetworkUtils {
     }
 
     /**
-     * Normalize MAC address format to XX:XX:XX:XX:XX:XX.
+     * Resolve a MAC address from the OS neighbour (ARP) table. Only works for
+     * hosts in the local broadcast domain, and only after traffic has been
+     * exchanged with the host (the port scan takes care of that).
      */
+    public static String resolveMacAddress(String ip) {
+        String cached = ARP_CACHE.get(ip);
+        if (cached != null) {
+            return cached;
+        }
+        if (!isValidIP(ip)) {
+            return null;
+        }
+        String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
+        List<String> command = os.contains("win") ? List.of("arp", "-a", ip) : List.of("arp", "-n", ip);
+        try {
+            Process p = new ProcessBuilder(command).redirectErrorStream(true).start();
+            try (BufferedReader r = new BufferedReader(new InputStreamReader(p.getInputStream(), Charset.defaultCharset()))) {
+                String line;
+                while ((line = r.readLine()) != null) {
+                    if (!line.contains(ip + " ") && !line.contains("(" + ip + ")") && !line.trim().startsWith(ip)) {
+                        continue;
+                    }
+                    Matcher m = MAC_PATTERN.matcher(line);
+                    if (m.find()) {
+                        String mac = normalizeMac(m.group());
+                        if (isUnicastMac(mac)) {
+                            ARP_CACHE.put(ip, mac);
+                            return mac;
+                        }
+                    }
+                }
+            } finally {
+                if (!p.waitFor(3, TimeUnit.SECONDS)) {
+                    p.destroyForcibly();
+                }
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } catch (Exception e) {
+            logger.debug("ARP lookup failed for {}: {}", ip, e.getMessage());
+        }
+        return null;
+    }
+
+    /** Normalise to XX:XX:XX:XX:XX:XX (upper case); returns null for malformed input. */
     public static String normalizeMac(String mac) {
         if (mac == null) {
             return null;
         }
-        // Remove any separators and convert to uppercase
-        String cleaned = mac.replaceAll("[:-]", "").toUpperCase();
-        if (cleaned.length() != 12) {
-            return mac; // Return original if invalid length
+        String hex = mac.replaceAll("[^0-9A-Fa-f]", "").toUpperCase(Locale.ROOT);
+        if (hex.length() != 12) {
+            return null;
         }
-        // Format as XX:XX:XX:XX:XX:XX
-        StringBuilder formatted = new StringBuilder();
+        StringBuilder sb = new StringBuilder(17);
         for (int i = 0; i < 12; i += 2) {
             if (i > 0) {
-                formatted.append(":");
+                sb.append(':');
             }
-            formatted.append(cleaned.substring(i, i + 2));
+            sb.append(hex, i, i + 2);
         }
-        return formatted.toString();
+        return sb.toString();
     }
 
-    /**
-     * Get MAC prefix (first 3 octets) for manufacturer lookup.
-     */
-    public static String getMacPrefix(String mac) {
-        if (mac == null || mac.length() < 8) {
-            return null;
+    /** A real device MAC: not multicast/broadcast and not all zeros. */
+    public static boolean isUnicastMac(String mac) {
+        String n = normalizeMac(mac);
+        if (n == null || n.equals("00:00:00:00:00:00") || n.equals("FF:FF:FF:FF:FF:FF")) {
+            return false;
         }
-        String normalized = normalizeMac(mac);
-        if (normalized == null) {
-            return null;
-        }
-        return normalized.substring(0, 8); // XX:XX:XX
+        int firstOctet = Integer.parseInt(n.substring(0, 2), 16);
+        return (firstOctet & 0x01) == 0;
     }
 
-    /**
-     * Calculate number of usable IPs in a subnet based on prefix length.
-     *
-     * @param prefixLength Network prefix length (0-32)
-     * @return Number of usable host IPs (excluding network and broadcast addresses)
-     */
-    public static int countIPsFromPrefix(int prefixLength) {
-        if (prefixLength < 0 || prefixLength > 32) {
-            return 0;
-        }
-        if (prefixLength == 31 || prefixLength == 32) {
-            // /31 (point-to-point) has 2 usable IPs, /32 (host) has 1
-            return (int) Math.pow(2, 32 - prefixLength);
-        }
-        // Subtract 2 for network and broadcast addresses
-        return (int) Math.pow(2, 32 - prefixLength) - 2;
-    }
-
-    /**
-     * Check if an IP address belongs to any local interface's subnet.
-     * Used to detect cross-subnet targets where ARP resolution won't work.
-     *
-     * @param ipAddress The target IP address to check
-     * @return true if the IP is on a local subnet, false if cross-subnet
-     */
-    public static boolean isLocalSubnet(String ipAddress) {
+    /** Resolve a hostname to IPv4, returning null on failure. */
+    public static String toIpv4(String host) {
         try {
-            long targetIp = ipToLong(ipAddress);
-            Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
-            while (interfaces.hasMoreElements()) {
-                NetworkInterface ni = interfaces.nextElement();
-                if (ni.isLoopback() || !ni.isUp()) continue;
-                for (InterfaceAddress ifAddr : ni.getInterfaceAddresses()) {
-                    InetAddress addr = ifAddr.getAddress();
-                    if (!(addr instanceof Inet4Address)) continue;
-                    short prefix = ifAddr.getNetworkPrefixLength();
-                    if (prefix <= 0 || prefix > 32) continue;
-                    long ifIp = ipToLong(addr.getHostAddress());
-                    long mask = prefix == 32 ? 0xFFFFFFFFL : ((-1L << (32 - prefix)) & 0xFFFFFFFFL);
-                    if ((ifIp & mask) == (targetIp & mask)) {
-                        return true;
-                    }
+            for (InetAddress a : InetAddress.getAllByName(host)) {
+                if (a instanceof Inet4Address) {
+                    return a.getHostAddress();
                 }
             }
         } catch (Exception e) {
-            logger.info("Error checking subnet for {}: {}", ipAddress, e.getMessage());
+            logger.debug("Cannot resolve {}", host);
         }
-        return false;
-    }
-
-    /**
-     * Get the network prefix length (CIDR prefix) for a network interface address.
-     * Returns the actual prefix length or 24 as default if not available.
-     *
-     * @param ni NetworkInterface to query
-     * @return Network prefix length (typically 8, 16, 24, etc.)
-     */
-    public static int getNetworkPrefixLength(NetworkInterface ni) {
-        try {
-            for (InterfaceAddress addr : ni.getInterfaceAddresses()) {
-                InetAddress inetAddr = addr.getAddress();
-                if (inetAddr instanceof Inet4Address) {
-                    short prefix = addr.getNetworkPrefixLength();
-                    if (prefix > 0 && prefix <= 32) {
-                        return prefix;
-                    }
-                }
-            }
-        } catch (Exception e) {
-            logger.info("Error getting network prefix length for {}: {}", ni.getName(), e.getMessage());
-        }
-        // Default to /24 if unable to determine
-        return 24;
+        return null;
     }
 }

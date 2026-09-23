@@ -1,79 +1,93 @@
 package com.cctv.discovery.model;
 
-import java.io.Serializable;
-import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
- * POJO representing a CCTV camera or NVR/DVR device.
- * Based on specification line 148-149.
+ * A discovered network device (camera, NVR/DVR or unknown host).
+ * <p>
+ * Collections are thread-safe because the discovery engine updates devices
+ * from worker threads while the UI reads them.
  */
-public class Device implements Serializable {
-    private static final long serialVersionUID = 1L;
+public class Device {
 
-    // Basic identification
-    private String ipAddress;
-    private String macAddress;
-    private String deviceName;
-    private String deviceType;
-    private String manufacturer;
-    private String model;
-    private String serialNumber;
-    private Long timeDifferenceSeconds;
-
-    // Authentication
-    private String username;
-    private String password;
-    private String onvifServiceUrl;
-    private OnvifAuthMethod onvifAuthMethod;
-    private boolean authFailed;
-
-    // Network ports
-    private List<Integer> openOnvifPorts;
-    private List<Integer> openRtspPorts;
-    private List<Integer> openSpecialPorts;
-
-    // Device type flags
-    private boolean isNvrDvr;
-
-    // Status and errors
-    private String errorMessage;
-    private DeviceStatus status;
-
-    // Streams
-    private List<RTSPStream> rtspStreams;
-
-    public enum OnvifAuthMethod {
-        DIGEST,
-        WS_SECURITY,
-        BASIC,
-        NONE
-    }
+    public enum OnvifAuthMethod {DIGEST, WS_SECURITY, BASIC, NONE}
 
     public enum DeviceStatus {
-        PENDING,
-        SCANNING,
-        AUTHENTICATING,
-        ANALYZING,
-        COMPLETED,
-        AUTH_FAILED,
-        ERROR
+        PENDING("Pending"),
+        SCANNING("Scanning"),
+        AUTHENTICATING("Identifying"),
+        ANALYZING("Analyzing"),
+        COMPLETED("Completed"),
+        AUTH_FAILED("Failed"),
+        ERROR("Error"),
+        CANCELLED("Cancelled");
+
+        private final String label;
+
+        DeviceStatus(String label) {
+            this.label = label;
+        }
+
+        public String label() {
+            return label;
+        }
     }
 
+    public enum DeviceType {
+        CAMERA("IP Camera"), RECORDER("NVR/DVR"), UNKNOWN("Unknown");
+
+        private final String label;
+
+        DeviceType(String label) {
+            this.label = label;
+        }
+
+        public String label() {
+            return label;
+        }
+    }
+
+    private volatile String ipAddress;
+    private volatile String macAddress;
+    private volatile String deviceName;
+    private volatile DeviceType deviceType = DeviceType.UNKNOWN;
+    private volatile String manufacturer;
+    private volatile String vendorFromMac;
+    private volatile String model;
+    private volatile String serialNumber;
+    private volatile String firmwareVersion;
+    private volatile String hardwareId;
+    private volatile Long timeDifferenceSeconds;
+    private volatile String discoverySource;
+
+    private volatile String username;
+    private volatile String password;
+    private volatile String onvifServiceUrl;
+    private volatile String onvifMediaUrl;
+    private volatile OnvifAuthMethod onvifAuthMethod;
+    private volatile boolean authFailed;
+    private volatile Boolean rtspAnonymousAccess;
+    private volatile int videoSourceCount;
+
+    private final List<Integer> openOnvifPorts = new CopyOnWriteArrayList<>();
+    private final List<Integer> openHttpPorts = new CopyOnWriteArrayList<>();
+    private final List<Integer> openRtspPorts = new CopyOnWriteArrayList<>();
+    private final List<Integer> openSpecialPorts = new CopyOnWriteArrayList<>();
+
+    private volatile String errorMessage;
+    private volatile DeviceStatus status = DeviceStatus.PENDING;
+
+    private final List<RTSPStream> rtspStreams = new CopyOnWriteArrayList<>();
+    private final List<Finding> findings = new CopyOnWriteArrayList<>();
+
     public Device() {
-        this.openOnvifPorts = new ArrayList<>();
-        this.openRtspPorts = new ArrayList<>();
-        this.openSpecialPorts = new ArrayList<>();
-        this.rtspStreams = new ArrayList<>();
-        this.status = DeviceStatus.PENDING;
     }
 
     public Device(String ipAddress) {
-        this();
         this.ipAddress = ipAddress;
     }
 
-    // Getters and Setters
     public String getIpAddress() {
         return ipAddress;
     }
@@ -98,12 +112,29 @@ public class Device implements Serializable {
         this.deviceName = deviceName;
     }
 
-    public String getDeviceType() {
+    public DeviceType getType() {
         return deviceType;
     }
 
-    public void setDeviceType(String deviceType) {
-        this.deviceType = deviceType;
+    public void setType(DeviceType type) {
+        this.deviceType = type == null ? DeviceType.UNKNOWN : type;
+    }
+
+    /** Display label of the device type. */
+    public String getDeviceType() {
+        return deviceType.label();
+    }
+
+    public boolean isNvrDvr() {
+        return deviceType == DeviceType.RECORDER;
+    }
+
+    public void setNvrDvr(boolean nvrDvr) {
+        if (nvrDvr) {
+            deviceType = DeviceType.RECORDER;
+        } else if (deviceType == DeviceType.RECORDER) {
+            deviceType = DeviceType.CAMERA;
+        }
     }
 
     public String getManufacturer() {
@@ -112,6 +143,15 @@ public class Device implements Serializable {
 
     public void setManufacturer(String manufacturer) {
         this.manufacturer = manufacturer;
+    }
+
+    /** Vendor registered for the MAC OUI (may differ from the ONVIF-reported brand for OEM devices). */
+    public String getVendorFromMac() {
+        return vendorFromMac;
+    }
+
+    public void setVendorFromMac(String vendorFromMac) {
+        this.vendorFromMac = vendorFromMac;
     }
 
     public String getModel() {
@@ -130,12 +170,44 @@ public class Device implements Serializable {
         this.serialNumber = serialNumber;
     }
 
+    public String getFirmwareVersion() {
+        return firmwareVersion;
+    }
+
+    public void setFirmwareVersion(String firmwareVersion) {
+        this.firmwareVersion = firmwareVersion;
+    }
+
+    public String getHardwareId() {
+        return hardwareId;
+    }
+
+    public void setHardwareId(String hardwareId) {
+        this.hardwareId = hardwareId;
+    }
+
     public Long getTimeDifferenceSeconds() {
         return timeDifferenceSeconds;
     }
 
     public void setTimeDifferenceSeconds(Long timeDifferenceSeconds) {
         this.timeDifferenceSeconds = timeDifferenceSeconds;
+    }
+
+    public String getDiscoverySource() {
+        return discoverySource;
+    }
+
+    public void setDiscoverySource(String discoverySource) {
+        this.discoverySource = discoverySource;
+    }
+
+    public void addDiscoverySource(String source) {
+        if (discoverySource == null || discoverySource.isEmpty()) {
+            discoverySource = source;
+        } else if (!discoverySource.contains(source)) {
+            discoverySource = discoverySource + " + " + source;
+        }
     }
 
     public String getUsername() {
@@ -162,6 +234,14 @@ public class Device implements Serializable {
         this.onvifServiceUrl = onvifServiceUrl;
     }
 
+    public String getOnvifMediaUrl() {
+        return onvifMediaUrl;
+    }
+
+    public void setOnvifMediaUrl(String onvifMediaUrl) {
+        this.onvifMediaUrl = onvifMediaUrl;
+    }
+
     public OnvifAuthMethod getOnvifAuthMethod() {
         return onvifAuthMethod;
     }
@@ -178,36 +258,47 @@ public class Device implements Serializable {
         this.authFailed = authFailed;
     }
 
+    /** True when an RTSP stream answered DESCRIBE without credentials; null if not tested. */
+    public Boolean getRtspAnonymousAccess() {
+        return rtspAnonymousAccess;
+    }
+
+    public void setRtspAnonymousAccess(Boolean rtspAnonymousAccess) {
+        this.rtspAnonymousAccess = rtspAnonymousAccess;
+    }
+
+    public int getVideoSourceCount() {
+        return videoSourceCount;
+    }
+
+    public void setVideoSourceCount(int videoSourceCount) {
+        this.videoSourceCount = videoSourceCount;
+    }
+
     public List<Integer> getOpenOnvifPorts() {
         return openOnvifPorts;
     }
 
-    public void setOpenOnvifPorts(List<Integer> openOnvifPorts) {
-        this.openOnvifPorts = openOnvifPorts;
+    public List<Integer> getOpenHttpPorts() {
+        return openHttpPorts;
     }
 
     public List<Integer> getOpenRtspPorts() {
         return openRtspPorts;
     }
 
-    public void setOpenRtspPorts(List<Integer> openRtspPorts) {
-        this.openRtspPorts = openRtspPorts;
-    }
-
     public List<Integer> getOpenSpecialPorts() {
         return openSpecialPorts;
     }
 
-    public void setOpenSpecialPorts(List<Integer> openSpecialPorts) {
-        this.openSpecialPorts = openSpecialPorts;
-    }
-
-    public boolean isNvrDvr() {
-        return isNvrDvr;
-    }
-
-    public void setNvrDvr(boolean nvrDvr) {
-        isNvrDvr = nvrDvr;
+    /** All open ports found by the scan, sorted and de-duplicated. */
+    public List<Integer> getAllOpenPorts() {
+        java.util.TreeSet<Integer> all = new java.util.TreeSet<>();
+        all.addAll(openOnvifPorts);
+        all.addAll(openHttpPorts);
+        all.addAll(openRtspPorts);
+        all.addAll(openSpecialPorts);
+        return List.copyOf(all);
     }
 
     public String getErrorMessage() {
@@ -230,24 +321,27 @@ public class Device implements Serializable {
         return rtspStreams;
     }
 
-    public void setRtspStreams(List<RTSPStream> rtspStreams) {
-        this.rtspStreams = rtspStreams;
+    public void addStream(RTSPStream stream) {
+        boolean duplicate = rtspStreams.stream().anyMatch(s -> s.getRtspUrl().equals(stream.getRtspUrl()));
+        if (!duplicate) {
+            rtspStreams.add(stream);
+        }
     }
 
-    public void addStream(RTSPStream stream) {
-        this.rtspStreams.add(stream);
+    public List<Finding> getFindings() {
+        return findings;
+    }
+
+    public void addFinding(Finding finding) {
+        boolean duplicate = findings.stream().anyMatch(f -> f.title().equals(finding.title()));
+        if (!duplicate) {
+            findings.add(finding);
+        }
     }
 
     @Override
     public String toString() {
-        return new StringBuilder("Device{")
-                .append("ip='").append(ipAddress).append('\'')
-                .append(", mac='").append(macAddress).append('\'')
-                .append(", name='").append(deviceName).append('\'')
-                .append(", manufacturer='").append(manufacturer).append('\'')
-                .append(", status=").append(status)
-                .append(", streams=").append(rtspStreams.size())
-                .append('}')
-                .toString();
+        return "Device{ip='" + ipAddress + "', mac='" + macAddress + "', manufacturer='" + manufacturer
+                + "', type=" + deviceType + ", status=" + status + ", streams=" + rtspStreams.size() + '}';
     }
 }

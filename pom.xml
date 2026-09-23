@@ -6,72 +6,57 @@
 
     <groupId>com.cctv</groupId>
     <artifactId>cctv-discovery</artifactId>
-    <version>1.1.4</version>
+    <version>2.0.0</version>
     <name>CCTV Discovery</name>
-    <description>A Java 8 project for CCTV discovery and auditing.</description>
+    <description>CCTV discovery, stream analysis and host audit tool (Java 25).</description>
     <inceptionYear>2026</inceptionYear>
     <organization>
         <name>Consultancy Services Ltd.</name>
         <url>https://consultancyservices.com/</url>
     </organization>
 
+    <prerequisites>
+        <maven>3.9.0</maven>
+    </prerequisites>
+
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <maven.compiler.source>1.8</maven.compiler.source>
-        <maven.compiler.target>1.8</maven.compiler.target>
-        <maven.compiler.release>8</maven.compiler.release>
+        <java.release>25</java.release>
+        <maven.compiler.release>${java.release}</maven.compiler.release>
 
-        <!-- Versions -->
-        <javacv.version>1.5.9</javacv.version>
-        <oshi.version>6.4.5</oshi.version>
-        <poi.version>5.4.0</poi.version>
-        <javafx.version>11.0.2</javafx.version>
-        <httpclient.version>4.5.14</httpclient.version>
-        <commons-codec.version>1.15</commons-codec.version>
-        <gson.version>2.8.9</gson.version>
-        <slf4j.version>1.7.36</slf4j.version>
-        <logback.version>1.2.13</logback.version>
+        <!-- Runtime flags shared by tests, the launcher and the bundled runtime.
+             StructuredTaskScope is a preview API in Java 25 (JEP 505). -->
+        <app.jvm.args>--enable-preview --enable-native-access=ALL-UNNAMED</app.jvm.args>
 
-        <!-- Build Configuration Properties -->
+        <!-- Library versions -->
+        <javafx.version>27</javafx.version>
+        <javacv.version>1.5.14</javacv.version>
+        <ffmpeg.version>8.1.2-${javacv.version}</ffmpeg.version>
+        <oshi.version>7.6.1</oshi.version>
+        <poi.version>5.5.1</poi.version>
+        <slf4j.version>2.0.20</slf4j.version>
+        <logback.version>1.6.3</logback.version>
+        <junit.version>6.1.3</junit.version>
+
+        <!-- Packaging -->
         <app.filename>CctvDiscovery</app.filename>
-        <jre.source.directory>jre8</jre.source.directory>
-        <jre.target.directory>jre</jre.target.directory>
-        <keystore.filename>cctv-discovery.p12</keystore.filename>
-        <keystore.alias>cctv-discovery</keystore.alias>
-        <keystore.password>${user.name}-${project.version}</keystore.password>
+        <!-- JDK whose jlink builds the bundled runtime. Must match the target
+             platform (Windows x64 for the .exe). Defaults to the build JDK. -->
+        <runtime.jdk>${java.home}</runtime.jdk>
+        <runtime.modules>java.base,java.desktop,java.logging,java.management,java.naming,java.net.http,java.prefs,java.scripting,java.sql,java.xml,java.xml.crypto,jdk.charsets,jdk.crypto.cryptoki,jdk.localedata,jdk.unsupported,jdk.zipfs</runtime.modules>
 
-        <!-- Conditional execution flags -->
+        <!-- Code signing is optional: pass -Dsign.keystore=... -Dsign.storepass=...
+             (or set the env vars) to sign with a real certificate. -->
+        <sign.keystore>${env.CCTV_SIGN_KEYSTORE}</sign.keystore>
+        <sign.storepass>${env.CCTV_SIGN_STOREPASS}</sign.storepass>
         <skip.signing>true</skip.signing>
     </properties>
 
     <dependencies>
-        <!-- JavaFX Base Dependencies (no classifier) -->
+        <!-- JavaFX (platform classifier selected by profile) -->
         <dependency>
             <groupId>org.openjfx</groupId>
             <artifactId>javafx-controls</artifactId>
-            <version>${javafx.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>org.openjfx</groupId>
-            <artifactId>javafx-fxml</artifactId>
-            <version>${javafx.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>org.openjfx</groupId>
-            <artifactId>javafx-graphics</artifactId>
-            <version>${javafx.version}</version>
-        </dependency>
-
-        <!-- JavaFX Platform Specific Dependencies (with classifier) -->
-        <dependency>
-            <groupId>org.openjfx</groupId>
-            <artifactId>javafx-controls</artifactId>
-            <version>${javafx.version}</version>
-            <classifier>${javafx.platform}</classifier>
-        </dependency>
-        <dependency>
-            <groupId>org.openjfx</groupId>
-            <artifactId>javafx-fxml</artifactId>
             <version>${javafx.version}</version>
             <classifier>${javafx.platform}</classifier>
         </dependency>
@@ -81,8 +66,47 @@
             <version>${javafx.version}</version>
             <classifier>${javafx.platform}</classifier>
         </dependency>
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-base</artifactId>
+            <version>${javafx.version}</version>
+            <classifier>${javafx.platform}</classifier>
+        </dependency>
 
-        <!-- OSHI (exclude slf4j to prevent version conflict) -->
+        <!-- JavaCV: only the FFmpeg preset is used, so the other presets are excluded -->
+        <dependency>
+            <groupId>org.bytedeco</groupId>
+            <artifactId>javacv</artifactId>
+            <version>${javacv.version}</version>
+            <exclusions>
+                <exclusion><groupId>org.bytedeco</groupId><artifactId>opencv</artifactId></exclusion>
+                <exclusion><groupId>org.bytedeco</groupId><artifactId>openblas</artifactId></exclusion>
+                <exclusion><groupId>org.bytedeco</groupId><artifactId>flycapture</artifactId></exclusion>
+                <exclusion><groupId>org.bytedeco</groupId><artifactId>libdc1394</artifactId></exclusion>
+                <exclusion><groupId>org.bytedeco</groupId><artifactId>libfreenect</artifactId></exclusion>
+                <exclusion><groupId>org.bytedeco</groupId><artifactId>libfreenect2</artifactId></exclusion>
+                <exclusion><groupId>org.bytedeco</groupId><artifactId>librealsense</artifactId></exclusion>
+                <exclusion><groupId>org.bytedeco</groupId><artifactId>librealsense2</artifactId></exclusion>
+                <exclusion><groupId>org.bytedeco</groupId><artifactId>videoinput</artifactId></exclusion>
+                <exclusion><groupId>org.bytedeco</groupId><artifactId>artoolkitplus</artifactId></exclusion>
+                <exclusion><groupId>org.bytedeco</groupId><artifactId>leptonica</artifactId></exclusion>
+                <exclusion><groupId>org.bytedeco</groupId><artifactId>tesseract</artifactId></exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>org.bytedeco</groupId>
+            <artifactId>ffmpeg</artifactId>
+            <version>${ffmpeg.version}</version>
+            <classifier>${javacpp.platform}</classifier>
+        </dependency>
+        <dependency>
+            <groupId>org.bytedeco</groupId>
+            <artifactId>javacpp</artifactId>
+            <version>${javacv.version}</version>
+            <classifier>${javacpp.platform}</classifier>
+        </dependency>
+
+        <!-- Host audit -->
         <dependency>
             <groupId>com.github.oshi</groupId>
             <artifactId>oshi-core</artifactId>
@@ -95,83 +119,38 @@
             </exclusions>
         </dependency>
 
-        <!-- Apache POI -->
-        <dependency>
-            <groupId>org.apache.poi</groupId>
-            <artifactId>poi</artifactId>
-            <version>${poi.version}</version>
-        </dependency>
+        <!-- Excel export (including agile encryption) -->
         <dependency>
             <groupId>org.apache.poi</groupId>
             <artifactId>poi-ooxml</artifactId>
             <version>${poi.version}</version>
         </dependency>
 
-        <!-- JavaCV Platform -->
+        <!-- Hashing/Base64 for the existing authentication helpers -->
         <dependency>
-            <groupId>org.bytedeco</groupId>
-            <artifactId>javacv</artifactId>
-            <version>${javacv.version}</version>
-        </dependency>
-        <!-- Native Libs (Managed by Profile) -->
-        <dependency>
-            <groupId>org.bytedeco</groupId>
-            <artifactId>ffmpeg</artifactId>
-            <version>6.0-${javacv.version}</version>
-            <classifier>${javacpp.platform}</classifier>
-        </dependency>
-        <dependency>
-            <groupId>org.bytedeco</groupId>
-            <artifactId>openblas</artifactId>
-            <version>0.3.23-${javacv.version}</version>
-            <classifier>${javacpp.platform}</classifier>
+            <groupId>commons-codec</groupId>
+            <artifactId>commons-codec</artifactId>
+            <version>1.22.1</version>
         </dependency>
 
-        <!-- Logging - SLF4J API (explicit version to prevent conflicts) -->
+        <!-- Logging -->
         <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-api</artifactId>
             <version>${slf4j.version}</version>
         </dependency>
-
-        <!-- Logging binding - Logback (uses logback.xml for file + console logging) -->
         <dependency>
             <groupId>ch.qos.logback</groupId>
             <artifactId>logback-classic</artifactId>
             <version>${logback.version}</version>
         </dependency>
 
-        <!-- HTTP Client for RTSP/REST -->
+        <!-- Tests -->
         <dependency>
-            <groupId>org.apache.httpcomponents</groupId>
-            <artifactId>httpclient</artifactId>
-            <version>${httpclient.version}</version>
-        </dependency>
-
-        <!-- Commons Codec for Digest Authentication -->
-        <dependency>
-            <groupId>commons-codec</groupId>
-            <artifactId>commons-codec</artifactId>
-            <version>${commons-codec.version}</version>
-        </dependency>
-
-        <!-- Gson for JSON parsing -->
-        <dependency>
-            <groupId>com.google.code.gson</groupId>
-            <artifactId>gson</artifactId>
-            <version>${gson.version}</version>
-        </dependency>
-
-        <!-- SOAP Integration (Java 8 compatible) -->
-        <dependency>
-            <groupId>javax.xml.soap</groupId>
-            <artifactId>javax.xml.soap-api</artifactId>
-            <version>1.4.0</version>
-        </dependency>
-        <dependency>
-            <groupId>com.sun.xml.messaging.saaj</groupId>
-            <artifactId>saaj-impl</artifactId>
-            <version>1.4.0</version>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>${junit.version}</version>
+            <scope>test</scope>
         </dependency>
     </dependencies>
 
@@ -186,7 +165,6 @@
             <properties>
                 <javacpp.platform>windows-x86_64</javacpp.platform>
                 <javafx.platform>win</javafx.platform>
-                <skip.signing>false</skip.signing>
             </properties>
         </profile>
         <profile>
@@ -194,6 +172,7 @@
             <activation>
                 <os>
                     <family>unix</family>
+                    <name>Linux</name>
                     <arch>amd64</arch>
                 </os>
             </activation>
@@ -212,49 +191,92 @@
             </activation>
             <properties>
                 <javacpp.platform>macosx-arm64</javacpp.platform>
-                <javafx.platform>mac</javafx.platform>
+                <javafx.platform>mac-aarch64</javafx.platform>
+            </properties>
+        </profile>
+        <!-- Enables signing when a keystore is supplied -->
+        <profile>
+            <id>sign</id>
+            <activation>
+                <property>
+                    <name>sign.keystore</name>
+                </property>
+            </activation>
+            <properties>
+                <skip.signing>false</skip.signing>
             </properties>
         </profile>
     </profiles>
 
     <build>
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+                <filtering>true</filtering>
+                <includes>
+                    <include>application.properties</include>
+                </includes>
+            </resource>
+            <resource>
+                <directory>src/main/resources</directory>
+                <filtering>false</filtering>
+                <excludes>
+                    <exclude>application.properties</exclude>
+                </excludes>
+            </resource>
+        </resources>
         <plugins>
-            <!-- Compiler -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
-                <version>3.11.0</version>
+                <version>3.16.0</version>
                 <configuration>
-                    <source>1.8</source>
-                    <target>1.8</target>
+                    <release>${java.release}</release>
+                    <compilerArgs>
+                        <arg>--enable-preview</arg>
+                        <arg>-Xlint:all,-preview,-serial,-processing</arg>
+                    </compilerArgs>
                 </configuration>
             </plugin>
 
-            <!-- Log Keystore Details -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-antrun-plugin</artifactId>
-                <version>3.1.0</version>
-                <executions>
-                    <execution>
-                        <phase>package</phase>
-                        <goals>
-                            <goal>run</goal>
-                        </goals>
-                        <configuration>
-                            <target>
-                                <echo level="info">Keystore Sequence: ${keystore.password}</echo>
-                            </target>
-                        </configuration>
-                    </execution>
-                </executions>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>3.6.0</version>
+                <configuration>
+                    <argLine>${app.jvm.args}</argLine>
+                </configuration>
             </plugin>
 
-            <!-- Shade Plugin (Fat JAR) -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-resources-plugin</artifactId>
+                <version>3.5.0</version>
+                <configuration>
+                    <useDefaultDelimiters>false</useDefaultDelimiters>
+                    <delimiters>
+                        <delimiter>@</delimiter>
+                    </delimiters>
+                    <!-- Binary data must not be filtered -->
+                    <nonFilteredFileExtensions>
+                        <nonFilteredFileExtension>gz</nonFilteredFileExtension>
+                        <nonFilteredFileExtension>png</nonFilteredFileExtension>
+                        <nonFilteredFileExtension>ico</nonFilteredFileExtension>
+                    </nonFilteredFileExtensions>
+                </configuration>
+            </plugin>
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <version>3.5.1</version>
+            </plugin>
+
+            <!-- Fat JAR -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-shade-plugin</artifactId>
-                <version>3.5.0</version>
+                <version>3.6.2</version>
                 <executions>
                     <execution>
                         <phase>package</phase>
@@ -266,16 +288,12 @@
                             <transformers>
                                 <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
                                     <mainClass>com.cctv.discovery.Main</mainClass>
+                                    <manifestEntries>
+                                        <Enable-Native-Access>ALL-UNNAMED</Enable-Native-Access>
+                                        <Implementation-Version>${project.version}</Implementation-Version>
+                                    </manifestEntries>
                                 </transformer>
-                                <!-- CRITICAL: This merges META-INF/services for SLF4J -->
                                 <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
-                                <!-- Include all properties files -->
-                                <transformer implementation="org.apache.maven.plugins.shade.resource.AppendingTransformer">
-                                    <resource>META-INF/spring.handlers</resource>
-                                </transformer>
-                                <transformer implementation="org.apache.maven.plugins.shade.resource.AppendingTransformer">
-                                    <resource>META-INF/spring.schemas</resource>
-                                </transformer>
                             </transformers>
                             <filters>
                                 <filter>
@@ -285,27 +303,14 @@
                                         <exclude>META-INF/*.DSA</exclude>
                                         <exclude>META-INF/*.RSA</exclude>
                                         <exclude>META-INF/maven/**</exclude>
-                                        <exclude>META-INF/LICENSE.txt</exclude>
-                                        <exclude>META-INF/NOTICE.txt</exclude>
-                                        <exclude>META-INF/LICENSE</exclude>
-                                        <exclude>META-INF/NOTICE</exclude>
+                                        <exclude>META-INF/LICENSE*</exclude>
+                                        <exclude>META-INF/NOTICE*</exclude>
                                         <exclude>META-INF/DEPENDENCIES</exclude>
                                         <exclude>META-INF/MANIFEST.MF</exclude>
-                                        <exclude>META-INF/AL2.0</exclude>
-                                        <exclude>META-INF/LGPL2.1</exclude>
-                                        <!-- Exclude Java 9+ module descriptors (breaks Java 8 fat JAR) -->
                                         <exclude>module-info.class</exclude>
-                                        <exclude>META-INF/versions/**/module-info.class</exclude>
-                                        <!-- Exclude GraalVM native-image configs (not needed for JVM, cause shade overlap warnings) -->
+                                        <exclude>META-INF/versions/*/module-info.class</exclude>
                                         <exclude>META-INF/native-image/**</exclude>
                                     </excludes>
-                                </filter>
-                                <!-- Keep JavaFX module descriptors -->
-                                <filter>
-                                    <artifact>org.openjfx:*</artifact>
-                                    <includes>
-                                        <include>**</include>
-                                    </includes>
                                 </filter>
                             </filters>
                         </configuration>
@@ -313,69 +318,99 @@
                 </executions>
             </plugin>
 
-            <!-- Resources Plugin: Copy JRE and JAR to dist -->
+            <!-- Bundled runtime (jlink) and dist layout -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-resources-plugin</artifactId>
-                <version>3.3.1</version>
+                <artifactId>maven-antrun-plugin</artifactId>
+                <version>3.2.0</version>
                 <executions>
-                    <!-- Copy JRE Source -> Target -->
                     <execution>
-                        <id>copy-jre-to-dist</id>
+                        <id>jlink-runtime</id>
                         <phase>package</phase>
                         <goals>
-                            <goal>copy-resources</goal>
+                            <goal>run</goal>
                         </goals>
                         <configuration>
-                            <outputDirectory>${project.build.directory}/dist/${jre.target.directory}</outputDirectory>
-                            <resources>
-                                <resource>
-                                    <directory>${jre.source.directory}</directory>
-                                </resource>
-                            </resources>
+                            <target>
+                                <delete dir="${project.build.directory}/dist/runtime" quiet="true"/>
+                                <exec executable="${runtime.jdk}/bin/jlink" failonerror="true">
+                                    <arg value="--add-modules"/>
+                                    <arg value="${runtime.modules}"/>
+                                    <arg value="--include-locales=en"/>
+                                    <arg value="--strip-debug"/>
+                                    <arg value="--no-header-files"/>
+                                    <arg value="--no-man-pages"/>
+                                    <arg value="--output"/>
+                                    <arg value="${project.build.directory}/dist/runtime"/>
+                                </exec>
+                                <copy file="${project.build.directory}/${project.artifactId}-${project.version}.jar"
+                                      tofile="${project.build.directory}/dist/${app.filename}.jar"/>
+                                <copy file="README.md" todir="${project.build.directory}/dist"/>
+                            </target>
                         </configuration>
                     </execution>
                 </executions>
             </plugin>
 
-            <!-- Keytool Maven Plugin (Generate Certificate) -->
+            <!-- Windows launcher -->
             <plugin>
-                <groupId>org.codehaus.mojo</groupId>
-                <artifactId>keytool-maven-plugin</artifactId>
-                <version>1.7</version>
+                <groupId>com.akathist.maven.plugins.launch4j</groupId>
+                <artifactId>launch4j-maven-plugin</artifactId>
+                <version>2.7.0</version>
                 <executions>
                     <execution>
-                        <id>generate-keystore</id>
+                        <id>l4j-gui</id>
                         <phase>package</phase>
                         <goals>
-                            <goal>generateKeyPair</goal>
+                            <goal>launch4j</goal>
                         </goals>
                         <configuration>
-                            <keystore>${project.build.directory}/${keystore.filename}</keystore>
-                            <storetype>PKCS12</storetype>
-                            <storepass>${keystore.password}</storepass>
-                            <keypass>${keystore.password}</keypass>
-                            <alias>${keystore.alias}</alias>
-                            <dname>CN=CCTV Discovery, OU=Security, O=Consultancy Services Ltd., L=Kolkata, S=West Bengal, C=IN</dname>
-                            <sigalg>SHA256withRSA</sigalg>
-                            <keyalg>RSA</keyalg>
-                            <keysize>2048</keysize>
-                            <validity>3650</validity>
-                            <skipIfExist>false</skipIfExist>
+                            <headerType>gui</headerType>
+                            <outfile>${project.build.directory}/dist/${app.filename}.exe</outfile>
+                            <jar>${app.filename}.jar</jar>
+                            <dontWrapJar>true</dontWrapJar>
+                            <icon>src/main/resources/icon.ico</icon>
+                            <errTitle>CCTV Discovery</errTitle>
+                            <classPath>
+                                <mainClass>com.cctv.discovery.Main</mainClass>
+                                <addDependencies>false</addDependencies>
+                            </classPath>
+                            <jre>
+                                <path>runtime</path>
+                                <requiresJdk>false</requiresJdk>
+                                <requires64Bit>true</requires64Bit>
+                                <minVersion>${java.release}</minVersion>
+                                <opts>
+                                    <opt>--enable-preview</opt>
+                                    <opt>--enable-native-access=ALL-UNNAMED</opt>
+                                    <opt>-Dfile.encoding=UTF-8</opt>
+                                </opts>
+                            </jre>
+                            <versionInfo>
+                                <fileVersion>${project.version}.0</fileVersion>
+                                <txtFileVersion>${project.version}</txtFileVersion>
+                                <fileDescription>CCTV Discovery &amp; Audit Tool</fileDescription>
+                                <copyright>2026 Consultancy Services Ltd.</copyright>
+                                <productVersion>${project.version}.0</productVersion>
+                                <txtProductVersion>${project.version}</txtProductVersion>
+                                <productName>CCTV Discovery</productName>
+                                <internalName>CctvDiscovery</internalName>
+                                <originalFilename>${app.filename}.exe</originalFilename>
+                            </versionInfo>
                         </configuration>
                     </execution>
                 </executions>
             </plugin>
 
-            <!-- Sign EXE with signtool (Windows only) -->
+            <!-- Optional Authenticode signing with a supplied certificate -->
             <plugin>
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>exec-maven-plugin</artifactId>
-                <version>3.1.0</version>
+                <version>3.6.4</version>
                 <executions>
                     <execution>
                         <id>sign-exe</id>
-                        <phase>verify</phase>
+                        <phase>package</phase>
                         <goals>
                             <goal>exec</goal>
                         </goals>
@@ -387,9 +422,9 @@
                                 <argument>/fd</argument>
                                 <argument>SHA256</argument>
                                 <argument>/f</argument>
-                                <argument>${project.build.directory}/${keystore.filename}</argument>
+                                <argument>${sign.keystore}</argument>
                                 <argument>/p</argument>
-                                <argument>${keystore.password}</argument>
+                                <argument>${sign.storepass}</argument>
                                 <argument>/tr</argument>
                                 <argument>http://timestamp.digicert.com</argument>
                                 <argument>/td</argument>
@@ -401,55 +436,11 @@
                 </executions>
             </plugin>
 
-            <!-- Launch4j (EXE Generation) -->
-            <plugin>
-                <groupId>com.akathist.maven.plugins.launch4j</groupId>
-                <artifactId>launch4j-maven-plugin</artifactId>
-                <version>2.4.1</version>
-                <executions>
-                    <execution>
-                        <id>l4j-gui</id>
-                        <phase>package</phase>
-                        <goals>
-                            <goal>launch4j</goal>
-                        </goals>
-                        <configuration>
-                            <headerType>gui</headerType>
-                            <outfile>target/dist/${app.filename}.exe</outfile>
-                            <jar>target/${project.artifactId}-${project.version}.jar</jar>
-                            <icon>src/main/resources/icon.ico</icon>
-                            <errTitle>CCTV Discovery</errTitle>
-                            <classPath>
-                                <mainClass>com.cctv.discovery.Main</mainClass>
-                                <addDependencies>false</addDependencies>
-                                <preCp>anything</preCp>
-                            </classPath>
-                            <jre>
-                                <path>./${jre.target.directory}</path>
-                                <requires64Bit>true</requires64Bit>
-                                <minVersion>1.8.0</minVersion>
-                            </jre>
-                            <versionInfo>
-                                <fileVersion>1.0.0.0</fileVersion>
-                                <txtFileVersion>1.0.0</txtFileVersion>
-                                <fileDescription>CCTV Discovery &amp; Audit Tool</fileDescription>
-                                <copyright>2026 Consultancy Services Ltd.</copyright>
-                                <productVersion>1.0.0.0</productVersion>
-                                <txtProductVersion>1.0.0</txtProductVersion>
-                                <productName>CCTV Discovery</productName>
-                                <internalName>CctvDiscovery</internalName>
-                                <originalFilename>${app.filename}.exe</originalFilename>
-                            </versionInfo>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
-
-            <!-- Assembly (ZIP) -->
+            <!-- Distribution ZIP -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-assembly-plugin</artifactId>
-                <version>3.6.0</version>
+                <version>3.8.0</version>
                 <configuration>
                     <descriptors>
                         <descriptor>src/assembly/dist.xml</descriptor>
@@ -460,7 +451,7 @@
                 <executions>
                     <execution>
                         <id>make-assembly</id>
-                        <phase>install</phase>
+                        <phase>package</phase>
                         <goals>
                             <goal>single</goal>
                         </goals>

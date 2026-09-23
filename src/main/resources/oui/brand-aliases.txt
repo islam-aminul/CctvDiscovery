@@ -1,0 +1,45 @@
+# Maps IEEE registry organisation names to the brand names installers use.
+# Format: <case-insensitive substring of the IEEE organisation>|<brand>
+# First match wins, so list more specific entries first.
+Hangzhou Hikvision|Hikvision
+Hikvision|Hikvision
+EZVIZ|EZVIZ (Hikvision)
+Prama Hikvision|Prama Hikvision
+Zhejiang Dahua|Dahua
+Dahua|Dahua
+Aditya Infotech|CP Plus
+CP PLUS|CP Plus
+Zhejiang Uniview|Uniview
+Uniview|Uniview
+Hanwha Vision|Hanwha Vision
+Hanwha Techwin|Hanwha Vision
+Samsung Techwin|Hanwha Vision
+Axis Communications|Axis
+Bosch Security|Bosch
+Vivotek|Vivotek
+Sony Corporation|Sony
+Panasonic i-PRO|i-PRO
+i-PRO|i-PRO
+Honeywell|Honeywell
+Hangzhou Xiongmai|Xiongmai (XMeye)
+Tiandy|Tiandy
+Shenzhen Reolink|Reolink
+Foscam|Foscam
+Amcrest|Amcrest
+Lorex|Lorex
+Milesight|Milesight
+Hangzhou Tuya|Tuya
+Tuya|Tuya
+Ubiquiti|Ubiquiti
+MOBOTIX|Mobotix
+Avigilon|Avigilon
+Matrix Comsec|Matrix
+Godrej|Godrej
+Secureye|Secureye
+Zicom|Zicom
+TP-LINK|TP-Link
+TP-Link|TP-Link
+D-Link|D-Link
+Imou|Imou (Dahua)
+Hangzhou Ezviz|EZVIZ (Hikvision)
+Ingenic|Ingenic (OEM)

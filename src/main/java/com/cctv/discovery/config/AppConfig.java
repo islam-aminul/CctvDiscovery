@@ -3,173 +3,231 @@ package com.cctv.discovery.config;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.*;
-import java.net.URISyntaxException;
+import java.io.File;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Properties;
+import java.util.Set;
 
 /**
- * Application configuration manager.
- * Loads default properties from application.properties and user overrides from user-settings.properties.
+ * Application configuration: defaults from {@code application.properties},
+ * overridden by the per-user {@code user-settings.properties}.
+ * <p>
+ * User settings and logs live in a per-user folder
+ * ({@code %APPDATA%\CctvDiscovery} on Windows, {@code ~/.cctv-discovery}
+ * elsewhere) so the application works when installed in a read-only location.
  */
-public class AppConfig {
+public final class AppConfig {
     private static final Logger logger = LoggerFactory.getLogger(AppConfig.class);
-    private static final AppConfig INSTANCE = new AppConfig();
 
     private static final String DEFAULT_PROPERTIES = "/application.properties";
     private static final String USER_SETTINGS_FILE = "user-settings.properties";
 
-    private final Properties defaultProps;
-    private final Properties userProps;
-    private final File userSettingsFile;
+    private static volatile AppConfig instance;
 
-    private AppConfig() {
-        this.defaultProps = new Properties();
-        this.userProps = new Properties();
-        this.userSettingsFile = getUserSettingsFile();
+    private final Properties defaultProps = new Properties();
+    private final Properties userProps = new Properties();
+    private final Path userSettingsFile;
+
+    private AppConfig(Path userSettingsFile) {
+        this.userSettingsFile = userSettingsFile;
         loadDefaultProperties();
+        migrateLegacySettings();
         loadUserSettings();
     }
 
     public static AppConfig getInstance() {
-        return INSTANCE;
+        AppConfig local = instance;
+        if (local == null) {
+            synchronized (AppConfig.class) {
+                local = instance;
+                if (local == null) {
+                    local = new AppConfig(dataDirectory().resolve(USER_SETTINGS_FILE));
+                    instance = local;
+                }
+            }
+        }
+        return local;
     }
 
-    /**
-     * Get the user settings file path.
-     * The file is located in the same directory as the JAR/EXE file.
-     */
-    private File getUserSettingsFile() {
-        try {
-            // Get the directory where the JAR/EXE is located
-            String jarPath = AppConfig.class.getProtectionDomain().getCodeSource().getLocation().toURI().getPath();
-            File jarFile = new File(jarPath);
+    /** For tests: configuration backed by an explicit settings file. */
+    public static AppConfig forTesting(Path settingsFile) {
+        AppConfig config = new AppConfig(settingsFile);
+        instance = config;
+        return config;
+    }
 
-            // If running from JAR, get parent directory
-            // If running from classes directory (IDE), use current directory
-            File directory;
-            if (jarFile.isFile()) {
-                // Running from JAR - use JAR's parent directory
-                directory = jarFile.getParentFile();
-                logger.info("Application running from JAR: {}", jarFile.getAbsolutePath());
-            } else {
-                // Running from IDE - use current directory
-                directory = new File(System.getProperty("user.dir"));
-                logger.info("Application running from IDE, using current directory: {}", directory.getAbsolutePath());
-            }
-
-            File settingsFile = new File(directory, USER_SETTINGS_FILE);
-            logger.info("User settings file location: {}", settingsFile.getAbsolutePath());
-            return settingsFile;
-
-        } catch (URISyntaxException e) {
-            logger.error("Error determining JAR location, falling back to current directory", e);
-            return new File(USER_SETTINGS_FILE);
+    /** Per-user application data directory (created on demand). */
+    public static Path dataDirectory() {
+        String override = System.getProperty("cctv.data.dir");
+        Path dir;
+        if (override != null && !override.isBlank()) {
+            dir = Path.of(override);
+        } else {
+            String appData = System.getenv("APPDATA");
+            dir = appData != null && !appData.isBlank()
+                    ? Path.of(appData, "CctvDiscovery")
+                    : Path.of(System.getProperty("user.home"), ".cctv-discovery");
         }
+        try {
+            Files.createDirectories(dir);
+        } catch (Exception e) {
+            dir = Path.of(System.getProperty("java.io.tmpdir"), "CctvDiscovery");
+            try {
+                Files.createDirectories(dir);
+            } catch (Exception ignored) {
+                // fall through with the temp path
+            }
+        }
+        return dir;
+    }
+
+    /** Directory for log files. */
+    public static Path logDirectory() {
+        String localAppData = System.getenv("LOCALAPPDATA");
+        Path dir = localAppData != null && !localAppData.isBlank()
+                ? Path.of(localAppData, "CctvDiscovery", "logs")
+                : dataDirectory().resolve("logs");
+        try {
+            Files.createDirectories(dir);
+        } catch (Exception e) {
+            dir = dataDirectory();
+        }
+        return dir;
+    }
+
+    public Path getUserSettingsFile() {
+        return userSettingsFile;
     }
 
     private void loadDefaultProperties() {
-        try (InputStream is = getClass().getResourceAsStream(DEFAULT_PROPERTIES)) {
+        try (InputStream is = AppConfig.class.getResourceAsStream(DEFAULT_PROPERTIES)) {
             if (is != null) {
                 defaultProps.load(is);
-                logger.info("Loaded default application properties");
             } else {
-                logger.warn("Default properties file not found: {}", DEFAULT_PROPERTIES);
+                logger.warn("Default properties not found: {}", DEFAULT_PROPERTIES);
             }
         } catch (Exception e) {
             logger.error("Error loading default properties", e);
         }
     }
 
+    /** Move a settings file left next to an older installation's JAR into the per-user folder. */
+    private void migrateLegacySettings() {
+        if (Files.exists(userSettingsFile)) {
+            return;
+        }
+        try {
+            File jar = new File(AppConfig.class.getProtectionDomain().getCodeSource().getLocation().toURI());
+            Path legacy = (jar.isFile() ? jar.getParentFile().toPath() : Path.of(System.getProperty("user.dir")))
+                    .resolve(USER_SETTINGS_FILE);
+            if (Files.isRegularFile(legacy)) {
+                Files.copy(legacy, userSettingsFile, StandardCopyOption.COPY_ATTRIBUTES);
+                logger.info("Migrated legacy settings from {}", legacy);
+            }
+        } catch (Exception e) {
+            logger.debug("No legacy settings to migrate: {}", e.getMessage());
+        }
+    }
+
     private void loadUserSettings() {
-        if (userSettingsFile.exists()) {
-            try (FileInputStream fis = new FileInputStream(userSettingsFile)) {
-                userProps.load(fis);
-                logger.info("Loaded user settings from: {}", userSettingsFile.getAbsolutePath());
+        if (Files.isRegularFile(userSettingsFile)) {
+            try (InputStream is = Files.newInputStream(userSettingsFile)) {
+                userProps.load(is);
+                logger.info("Loaded user settings from {}", userSettingsFile);
             } catch (Exception e) {
                 logger.error("Error loading user settings", e);
             }
-        } else {
-            logger.info("No user settings file found, using defaults");
         }
     }
 
-    /**
-     * Save user settings to file in the same directory as the JAR/EXE.
-     */
-    public void saveUserSettings() {
-        try (FileOutputStream fos = new FileOutputStream(userSettingsFile)) {
-            userProps.store(fos, "CCTV Discovery - User Settings (Auto-generated)");
-            logger.info("Saved user settings to: {}", userSettingsFile.getAbsolutePath());
+    /** Persist user overrides. Returns false (and logs) when the file cannot be written. */
+    public synchronized boolean saveUserSettings() {
+        try {
+            Files.createDirectories(userSettingsFile.getParent());
+            try (OutputStream os = Files.newOutputStream(userSettingsFile)) {
+                userProps.store(os, "CCTV Discovery - user settings");
+            }
+            return true;
         } catch (Exception e) {
-            logger.error("Error saving user settings", e);
+            logger.error("Error saving user settings to {}", userSettingsFile, e);
+            return false;
         }
     }
 
-    /**
-     * Get property value. User settings override defaults.
-     */
-    public String getProperty(String key) {
+    public synchronized String getProperty(String key) {
         String value = userProps.getProperty(key);
         if (value == null) {
             value = defaultProps.getProperty(key);
         }
-        // Handle ${user.home} placeholder
         if (value != null && value.contains("${user.home}")) {
             value = value.replace("${user.home}", System.getProperty("user.home"));
         }
         return value;
     }
 
-    /**
-     * Get property as integer.
-     */
+    public String getDefaultProperty(String key) {
+        return defaultProps.getProperty(key);
+    }
+
     public int getInt(String key, int defaultValue) {
         String value = getProperty(key);
         if (value != null) {
             try {
-                return Integer.parseInt(value);
+                return Integer.parseInt(value.trim());
             } catch (NumberFormatException e) {
-                logger.warn("Invalid integer value for {}: {}", key, value);
+                logger.warn("Invalid integer for {}: {}", key, value);
             }
         }
         return defaultValue;
     }
 
-    /**
-     * Get property as boolean.
-     */
     public boolean getBoolean(String key, boolean defaultValue) {
         String value = getProperty(key);
-        if (value != null) {
-            return Boolean.parseBoolean(value);
-        }
-        return defaultValue;
+        return value == null ? defaultValue : Boolean.parseBoolean(value.trim());
     }
 
-    /**
-     * Set user property override.
-     */
-    public void setProperty(String key, String value) {
+    public synchronized void setProperty(String key, String value) {
         userProps.setProperty(key, value);
     }
 
-    /**
-     * Reset property to default (remove user override).
-     */
-    public void resetProperty(String key) {
-        userProps.remove(key);
-    }
-
-    /**
-     * Reset all settings to defaults.
-     */
-    public void resetAllToDefaults() {
+    public synchronized void resetAllToDefaults() {
         userProps.clear();
         saveUserSettings();
-        logger.info("All settings reset to defaults");
     }
 
-    // Application Info
+    /** Parse a comma-separated port list, ignoring invalid entries and duplicates. */
+    public static int[] parsePorts(String value) {
+        if (value == null) {
+            return new int[0];
+        }
+        Set<Integer> ports = new LinkedHashSet<>();
+        for (String part : value.split("[,;\\s]+")) {
+            try {
+                int p = Integer.parseInt(part.trim());
+                if (p > 0 && p < 65536) {
+                    ports.add(p);
+                }
+            } catch (NumberFormatException ignored) {
+                // skip
+            }
+        }
+        return ports.stream().mapToInt(Integer::intValue).toArray();
+    }
+
+    private int[] ports(String key) {
+        int[] ports = parsePorts(getProperty(key));
+        return ports.length > 0 ? ports : parsePorts(getDefaultProperty(key));
+    }
+
+    // Application info
     public String getAppName() {
         return getProperty("app.name");
     }
@@ -182,73 +240,63 @@ public class AppConfig {
         return getProperty("app.organization");
     }
 
-    // Network Discovery
-    public int getOnvifPort() {
-        return getInt("discovery.onvif.port", 3702);
-    }
-
-    public String getOnvifMulticast() {
-        return getProperty("discovery.onvif.multicast");
+    // Discovery
+    public boolean isWsDiscoveryEnabled() {
+        return getBoolean("discovery.wsdiscovery.enabled", true);
     }
 
     public int getOnvifTimeout() {
-        return getInt("discovery.onvif.timeout", 5000);
+        return getInt("discovery.onvif.timeout", 3000);
     }
 
+    /** HTTP ports probed for ONVIF device services. */
     public int[] getHttpPorts() {
-        String value = getProperty("discovery.http.ports");
-        if (value != null) {
-            String[] parts = value.split(",");
-            int[] ports = new int[parts.length];
-            for (int i = 0; i < parts.length; i++) {
-                ports[i] = Integer.parseInt(parts[i].trim());
-            }
-            return ports;
-        }
-        return new int[]{80, 8080};
+        return ports("discovery.http.ports");
     }
 
+    /** Ports probed for RTSP servers (confirmed by protocol, not by number). */
     public int[] getRtspPorts() {
-        String value = getProperty("discovery.rtsp.ports");
-        if (value != null) {
-            String[] parts = value.split(",");
-            int[] ports = new int[parts.length];
-            for (int i = 0; i < parts.length; i++) {
-                ports[i] = Integer.parseInt(parts[i].trim());
-            }
-            return ports;
-        }
-        return new int[]{554, 8554};
+        return ports("discovery.rtsp.ports");
     }
 
-    // Threading
-    public int getPortScanThreadMultiplier() {
-        return getInt("threads.port.scan.multiplier", 8);
+    /** Vendor SDK / management ports recorded for identification only. */
+    public int[] getOtherPorts() {
+        return ports("discovery.other.ports");
     }
 
-    public int getPortScanMaxThreads() {
-        return getInt("threads.port.scan.max", 64);
+    public int getMaxTargets() {
+        return getInt("discovery.max.targets", 65_536);
+    }
+
+    // Concurrency
+    public int getPortScanConcurrency() {
+        return Math.max(1, getInt("threads.port.scan.concurrency", 256));
+    }
+
+    public int getDeviceParallelism() {
+        return Math.max(1, getInt("threads.devices.parallel", 8));
     }
 
     public int getStreamAnalysisMaxThreads() {
-        return getInt("threads.stream.analysis.max", 8);
+        return Math.max(1, getInt("threads.stream.analysis.max", 4));
     }
 
     // Timeouts
     public int getSocketConnectTimeout() {
-        return getInt("timeout.socket.connect", 2000);
+        return getInt("timeout.socket.connect", 1000);
     }
 
     public int getSocketReadTimeout() {
-        return getInt("timeout.socket.read", 5000);
-    }
-
-    public int getRtspConnectTimeout() {
-        return getInt("timeout.rtsp.connect", 5000);
+        return getInt("timeout.socket.read", 3000);
     }
 
     public int getStreamAnalysisTimeout() {
-        return getInt("timeout.stream.analysis", 10000);
+        return getInt("timeout.stream.analysis", 25_000);
+    }
+
+    // Stream analysis
+    public int getStreamAnalysisDuration() {
+        return getInt("stream.analysis.duration", 8);
     }
 
     // RTSP
@@ -262,62 +310,18 @@ public class AppConfig {
 
     public String[] getCustomRtspPaths() {
         String value = getProperty("rtsp.custom.paths");
-        if (value != null && !value.trim().isEmpty()) {
-            String[] paths = value.split(";");
-            // Trim each path
-            for (int i = 0; i < paths.length; i++) {
-                paths[i] = paths[i].trim();
-            }
-            return paths;
+        if (value == null || value.isBlank()) {
+            return new String[0];
         }
-        return new String[0];
+        List<String> paths = new ArrayList<>();
+        for (String p : value.split(";")) {
+            if (!p.isBlank()) {
+                paths.add(p.trim());
+            }
+        }
+        return paths.toArray(String[]::new);
     }
 
-    // Stream Analysis
-    public int getStreamAnalysisDuration() {
-        return getInt("stream.analysis.duration", 10);
-    }
-
-    public int getStreamAnalysisFrameSamples() {
-        return getInt("stream.analysis.frame.samples", 30);
-    }
-
-    // Export
-    public String getExportDefaultDirectory() {
-        return getProperty("export.default.directory");
-    }
-
-    public boolean isExcelPasswordEnabled() {
-        return getBoolean("export.excel.password.enabled", true);
-    }
-
-    public String getExcelPasswordFixedCode() {
-        return getProperty("export.excel.password.fixed.code");
-    }
-
-    // MAC Resolution
-    public boolean isMacResolutionEnabled() {
-        return getBoolean("mac.resolution.enabled", true);
-    }
-
-    public int getMacResolutionTimeout() {
-        return getInt("mac.resolution.timeout", 2000);
-    }
-
-    // UI
-    public int getWindowMinWidth() {
-        return getInt("ui.window.min.width", 1200);
-    }
-
-    public int getWindowMinHeight() {
-        return getInt("ui.window.min.height", 700);
-    }
-
-    public int getMaxCredentials() {
-        return getInt("ui.credentials.max", 4);
-    }
-
-    // RTSP Validation
     public String getRtspValidationMethod() {
         return getProperty("rtsp.validation.method");
     }
@@ -327,10 +331,64 @@ public class AppConfig {
     }
 
     public int getRtspValidationTimeout() {
-        return getInt("rtsp.validation.timeout", 0); // 0 = use default for method
+        return getInt("rtsp.validation.timeout", 0);
     }
 
-    public void setRtspValidationTimeout(int timeout) {
-        setProperty("rtsp.validation.timeout", String.valueOf(timeout));
+    // Compliance rules
+    public int getSubStreamMinHeight() {
+        return getInt("compliance.sub.min.height", 360);
+    }
+
+    public int getSubStreamMaxHeight() {
+        return getInt("compliance.sub.max.height", 480);
+    }
+
+    public int getSubStreamMaxKbps() {
+        return getInt("compliance.sub.max.kbps", 512);
+    }
+
+    public boolean isHighProfileFlagged() {
+        return getBoolean("compliance.flag.high.profile", true);
+    }
+
+    public int getMaxTimeDriftSeconds() {
+        return getInt("compliance.max.time.drift", 5);
+    }
+
+    // Export
+    public String getExportDefaultDirectory() {
+        return getProperty("export.default.directory");
+    }
+
+    public boolean isExportEncryptionDefault() {
+        return getBoolean("export.encrypt", true);
+    }
+
+    public boolean isExportIncludeCredentialsDefault() {
+        return getBoolean("export.include.credentials", true);
+    }
+
+    // MAC resolution
+    public boolean isMacResolutionEnabled() {
+        return getBoolean("mac.resolution.enabled", true);
+    }
+
+    // UI
+    public int getWindowMinWidth() {
+        return getInt("ui.window.min.width", 1100);
+    }
+
+    public int getWindowMinHeight() {
+        return getInt("ui.window.min.height", 680);
+    }
+
+    public int getMaxCredentials() {
+        return Math.max(1, getInt("ui.credentials.max", 8));
+    }
+
+    @Override
+    public String toString() {
+        return "AppConfig{settings=" + userSettingsFile + ", http=" + Arrays.toString(getHttpPorts())
+                + ", rtsp=" + Arrays.toString(getRtspPorts()) + '}';
     }
 }
