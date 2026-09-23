@@ -1,402 +1,37 @@
 package com.cctv.discovery.util;
 
-import org.apache.commons.codec.binary.Base64;
-import org.apache.commons.codec.digest.DigestUtils;
-
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
-import java.text.SimpleDateFormat;
-import java.util.Date;
-import java.util.TimeZone;
+import java.time.Instant;
+import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.Base64;
+import java.util.HexFormat;
+import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 
 /**
- * Authentication utility class for HTTP Digest, Basic Auth, and WS-Security.
+ * HTTP/RTSP Basic and Digest authentication (RFC 7617 / RFC 7616) and the
+ * ONVIF WS-Security UsernameToken.
+ *
+ * <p>Nothing here writes to a log. Callers must keep Authorization headers and
+ * Security elements out of log output; see {@link #redact(String)}.
  */
-public class AuthUtils {
+public final class AuthUtils {
 
-    /**
-     * Generate HTTP Basic Authentication header value.
-     */
-    public static String generateBasicAuth(String username, String password) {
-        String credentials = username + ":" + password;
-        return "Basic " + Base64.encodeBase64String(credentials.getBytes(StandardCharsets.UTF_8));
+    private static final SecureRandom RANDOM = new SecureRandom();
+
+    private AuthUtils() {
     }
 
-    /**
-     * Generate HTTP Digest Authentication response.
-     */
-    public static String generateDigestResponse(String username, String password,
-                                                 String realm, String nonce, String uri,
-                                                 String method, String qop, String nc, String cnonce) {
-        String ha1 = DigestUtils.md5Hex(username + ":" + realm + ":" + password);
-        String ha2 = DigestUtils.md5Hex(method + ":" + uri);
+    public enum AuthType {BASIC, DIGEST}
 
-        String response;
-        if (qop != null && !qop.isEmpty()) {
-            response = DigestUtils.md5Hex(ha1 + ":" + nonce + ":" + nc + ":" + cnonce + ":" + qop + ":" + ha2);
-        } else {
-            response = DigestUtils.md5Hex(ha1 + ":" + nonce + ":" + ha2);
-        }
-
-        return response;
-    }
-
-    /**
-     * Build Digest Authorization header.
-     */
-    public static String buildDigestAuthHeader(String username, String password,
-                                                String realm, String nonce, String uri,
-                                                String method, String opaque) {
-        String qop = "auth";
-        String nc = "00000001";
-        String cnonce = generateCnonce();
-
-        String response = generateDigestResponse(username, password, realm, nonce, uri, method, qop, nc, cnonce);
-
-        StringBuilder header = new StringBuilder("Digest ");
-        header.append("username=\"").append(username).append("\", ");
-        header.append("realm=\"").append(realm).append("\", ");
-        header.append("nonce=\"").append(nonce).append("\", ");
-        header.append("uri=\"").append(uri).append("\", ");
-        header.append("qop=").append(qop).append(", ");
-        header.append("nc=").append(nc).append(", ");
-        header.append("cnonce=\"").append(cnonce).append("\", ");
-        header.append("response=\"").append(response).append("\"");
-
-        if (opaque != null && !opaque.isEmpty()) {
-            header.append(", opaque=\"").append(opaque).append("\"");
-        }
-
-        return header.toString();
-    }
-
-    /**
-     * Generate client nonce for Digest auth.
-     */
-    public static String generateCnonce() {
-        SecureRandom random = new SecureRandom();
-        byte[] bytes = new byte[16];
-        random.nextBytes(bytes);
-        return DigestUtils.md5Hex(bytes);
-    }
-
-    /**
-     * Generate WS-Security UsernameToken nonce.
-     */
-    public static String generateNonce() {
-        SecureRandom random = new SecureRandom();
-        byte[] bytes = new byte[16];
-        random.nextBytes(bytes);
-        return Base64.encodeBase64String(bytes);
-    }
-
-    /**
-     * Generate WS-Security timestamp in ISO 8601 format.
-     */
-    public static String generateTimestamp() {
-        SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'");
-        dateFormat.setTimeZone(TimeZone.getTimeZone("UTC"));
-        return dateFormat.format(new Date());
-    }
-
-    /**
-     * Generate WS-Security password digest.
-     * PasswordDigest = Base64(SHA1(nonce + created + password))
-     */
-    public static String generatePasswordDigest(String nonce, String created, String password) {
-        try {
-            byte[] nonceBytes = Base64.decodeBase64(nonce);
-            byte[] createdBytes = created.getBytes(StandardCharsets.UTF_8);
-            byte[] passwordBytes = password.getBytes(StandardCharsets.UTF_8);
-
-            MessageDigest digest = MessageDigest.getInstance("SHA-1");
-            digest.update(nonceBytes);
-            digest.update(createdBytes);
-            digest.update(passwordBytes);
-
-            return Base64.encodeBase64String(digest.digest());
-        } catch (Exception e) {
-            throw new RuntimeException("Error generating password digest", e);
-        }
-    }
-
-    /**
-     * Generate WS-Security UsernameToken XML element.
-     */
-    public static String generateWsSecurityHeader(String username, String password) {
-        String nonce = generateNonce();
-        String created = generateTimestamp();
-        String passwordDigest = generatePasswordDigest(nonce, created, password);
-
-        StringBuilder xml = new StringBuilder();
-        xml.append("<Security xmlns=\"http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd\" ");
-        xml.append("xmlns:wsu=\"http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-utility-1.0.xsd\">");
-        xml.append("<UsernameToken>");
-        xml.append("<Username>").append(escapeXml(username)).append("</Username>");
-        xml.append("<Password Type=\"http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-username-token-profile-1.0#PasswordDigest\">");
-        xml.append(passwordDigest).append("</Password>");
-        xml.append("<Nonce EncodingType=\"http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-soap-message-security-1.0#Base64Binary\">");
-        xml.append(nonce).append("</Nonce>");
-        xml.append("<wsu:Created>").append(created).append("</wsu:Created>");
-        xml.append("</UsernameToken>");
-        xml.append("</Security>");
-
-        return xml.toString();
-    }
-
-    /**
-     * Generate UUID for WS-Discovery messages.
-     */
-    public static String generateUUID() {
-        return "uuid:" + UUID.randomUUID().toString();
-    }
-
-    /**
-     * Escape XML special characters.
-     */
-    private static String escapeXml(String text) {
-        if (text == null) {
-            return "";
-        }
-        return text.replace("&", "&amp;")
-                .replace("<", "&lt;")
-                .replace(">", "&gt;")
-                .replace("\"", "&quot;")
-                .replace("'", "&apos;");
-    }
-
-    /**
-     * Parse WWW-Authenticate header to extract authentication challenge.
-     * Supports both Digest and Basic authentication.
-     */
-    public static AuthChallenge parseAuthChallenge(String wwwAuthenticate) {
-        if (wwwAuthenticate == null || wwwAuthenticate.trim().isEmpty()) {
-            return null;
-        }
-
-        wwwAuthenticate = wwwAuthenticate.trim();
-
-        // Check for Basic authentication
-        if (wwwAuthenticate.toLowerCase().startsWith("basic")) {
-            return parseBasicChallenge(wwwAuthenticate);
-        }
-
-        // Check for Digest authentication
-        if (wwwAuthenticate.toLowerCase().startsWith("digest")) {
-            return parseDigestChallengeInternal(wwwAuthenticate);
-        }
-
-        return null;
-    }
-
-    /**
-     * Parse Basic authentication challenge.
-     */
-    private static AuthChallenge parseBasicChallenge(String wwwAuthenticate) {
-        AuthChallenge challenge = new AuthChallenge();
-        challenge.type = AuthType.BASIC;
-
-        // Extract realm from Basic challenge
-        // Format: Basic realm="some realm"
-        String afterBasic = wwwAuthenticate.substring(5).trim();
-        if (afterBasic.toLowerCase().startsWith("realm=")) {
-            challenge.realm = extractValue(afterBasic.substring(6));
-        } else {
-            // Some servers send just "Basic" without realm
-            challenge.realm = "Camera";
-        }
-
-        return challenge;
-    }
-
-    /**
-     * Parse Digest authentication challenge with comprehensive format support.
-     * Internal method used by parseAuthChallenge.
-     */
-    private static AuthChallenge parseDigestChallengeInternal(String wwwAuthenticate) {
-        AuthChallenge challenge = new AuthChallenge();
-        challenge.type = AuthType.DIGEST;
-
-        String afterDigest = wwwAuthenticate.substring(6).trim();
-
-        // Split by comma, but be careful about commas inside quoted values
-        String[] parts = splitRespectingQuotes(afterDigest);
-
-        for (String part : parts) {
-            part = part.trim();
-
-            if (part.toLowerCase().startsWith("realm=")) {
-                challenge.realm = extractValue(part.substring(6));
-            } else if (part.toLowerCase().startsWith("nonce=")) {
-                challenge.nonce = extractValue(part.substring(6));
-            } else if (part.toLowerCase().startsWith("opaque=")) {
-                challenge.opaque = extractValue(part.substring(7));
-            } else if (part.toLowerCase().startsWith("qop=")) {
-                challenge.qop = extractValue(part.substring(4));
-            } else if (part.toLowerCase().startsWith("algorithm=")) {
-                challenge.algorithm = extractValue(part.substring(10));
-            } else if (part.toLowerCase().startsWith("stale=")) {
-                challenge.stale = extractValue(part.substring(6));
-            }
-        }
-
-        return challenge;
-    }
-
-    /**
-     * Split authentication header by comma while respecting quoted values.
-     * Example: realm="test,value", nonce="123" -> ["realm=\"test,value\"", "nonce=\"123\""]
-     */
-    private static String[] splitRespectingQuotes(String input) {
-        java.util.List<String> parts = new java.util.ArrayList<>();
-        StringBuilder current = new StringBuilder();
-        boolean inQuotes = false;
-        boolean escaped = false;
-
-        for (int i = 0; i < input.length(); i++) {
-            char c = input.charAt(i);
-
-            if (escaped) {
-                current.append(c);
-                escaped = false;
-                continue;
-            }
-
-            if (c == '\\') {
-                escaped = true;
-                current.append(c);
-                continue;
-            }
-
-            if (c == '"') {
-                inQuotes = !inQuotes;
-                current.append(c);
-                continue;
-            }
-
-            if (c == ',' && !inQuotes) {
-                // Split here
-                if (current.length() > 0) {
-                    parts.add(current.toString());
-                    current = new StringBuilder();
-                }
-                continue;
-            }
-
-            current.append(c);
-        }
-
-        // Add the last part
-        if (current.length() > 0) {
-            parts.add(current.toString());
-        }
-
-        return parts.toArray(new String[0]);
-    }
-
-    /**
-     * Extract value from authentication parameter.
-     * Handles both quoted and unquoted values.
-     * Examples:
-     *   "value"    -> value
-     *   value      -> value
-     *   \"value\"  -> value (escaped quotes)
-     */
-    private static String extractValue(String part) {
-        if (part == null || part.isEmpty()) {
-            return null;
-        }
-
-        part = part.trim();
-
-        // Handle quoted values
-        if (part.startsWith("\"") && part.endsWith("\"") && part.length() > 1) {
-            return part.substring(1, part.length() - 1);
-        }
-
-        // Handle escaped quotes: \"value\"
-        if (part.startsWith("\\\"") && part.endsWith("\\\"") && part.length() > 3) {
-            return part.substring(2, part.length() - 2);
-        }
-
-        // Find first and last quote if they exist
-        int firstQuote = part.indexOf('"');
-        int lastQuote = part.lastIndexOf('"');
-
-        if (firstQuote != -1 && lastQuote != -1 && lastQuote > firstQuote) {
-            return part.substring(firstQuote + 1, lastQuote);
-        }
-
-        // Unquoted value - take until space, comma, or semicolon
-        int endIdx = part.length();
-        for (int i = 0; i < part.length(); i++) {
-            char c = part.charAt(i);
-            if (c == ' ' || c == ',' || c == ';') {
-                endIdx = i;
-                break;
-            }
-        }
-
-        String value = part.substring(0, endIdx).trim();
-        return value.isEmpty() ? null : value;
-    }
-
-    /**
-     * Legacy method for backward compatibility.
-     * @deprecated Use parseAuthChallenge instead
-     */
-    @Deprecated
-    public static DigestChallenge parseDigestChallenge(String wwwAuthenticate) {
-        AuthChallenge challenge = parseAuthChallenge(wwwAuthenticate);
-        if (challenge == null || challenge.type != AuthType.DIGEST) {
-            return null;
-        }
-
-        DigestChallenge digestChallenge = new DigestChallenge();
-        digestChallenge.realm = challenge.realm;
-        digestChallenge.nonce = challenge.nonce;
-        digestChallenge.opaque = challenge.opaque;
-        digestChallenge.qop = challenge.qop;
-        return digestChallenge;
-    }
-
-    /**
-     * Check if authentication challenge is valid.
-     */
-    public static boolean isValidChallenge(AuthChallenge challenge) {
-        if (challenge == null) {
-            return false;
-        }
-
-        if (challenge.type == AuthType.BASIC) {
-            // Basic auth is always valid if we have the type
-            return true;
-        }
-
-        if (challenge.type == AuthType.DIGEST) {
-            // Digest auth requires realm and nonce
-            return challenge.realm != null && !challenge.realm.isEmpty() &&
-                   challenge.nonce != null && !challenge.nonce.isEmpty();
-        }
-
-        return false;
-    }
-
-    /**
-     * Authentication type enum.
-     */
-    public enum AuthType {
-        BASIC,
-        DIGEST
-    }
-
-    /**
-     * Authentication challenge information.
-     * Supports both Basic and Digest authentication.
-     */
-    public static class AuthChallenge {
+    /** A parsed WWW-Authenticate challenge. */
+    public static final class AuthChallenge {
         public AuthType type;
         public String realm;
         public String nonce;
@@ -405,44 +40,291 @@ public class AuthUtils {
         public String algorithm;
         public String stale;
 
-        @Override
-        public String toString() {
-            StringBuilder sb = new StringBuilder("AuthChallenge{");
+        public boolean isValid() {
             if (type == AuthType.BASIC) {
-                sb.append("type=BASIC, realm='").append(realm).append('\'');
-            } else if (type == AuthType.DIGEST) {
-                sb.append("type=DIGEST, realm='").append(realm).append('\'')
-                  .append(", nonce='").append(nonce).append('\'')
-                  .append(", qop='").append(qop).append('\'');
-            } else {
-                sb.append("type=").append(type);
+                return true;
             }
-            return sb.append('}').toString();
+            return type == AuthType.DIGEST && realm != null && nonce != null && !nonce.isEmpty();
         }
 
-        public boolean isValid() {
-            return AuthUtils.isValidChallenge(this);
+        /** True when the server offered {@code qop=auth} (possibly among others). */
+        public boolean offersQopAuth() {
+            if (qop == null) {
+                return false;
+            }
+            for (String q : qop.split(",")) {
+                if ("auth".equalsIgnoreCase(q.trim())) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /** Safe for logs: describes the challenge without any secret. */
+        @Override
+        public String toString() {
+            return type == AuthType.BASIC
+                    ? "Basic realm=\"" + realm + '"'
+                    : "Digest realm=\"" + realm + "\", algorithm=" + (algorithm == null ? "MD5" : algorithm)
+                      + ", qop=" + qop;
         }
     }
 
     /**
-     * Digest challenge information.
-     * @deprecated Use AuthChallenge instead
+     * Credentials bound to one server challenge. Produces a fresh Authorization
+     * value per request, because the Digest hash covers the method and URI, and
+     * increments the nonce count as RFC 7616 requires.
      */
-    @Deprecated
-    public static class DigestChallenge {
-        public String realm;
-        public String nonce;
-        public String opaque;
-        public String qop;
+    public static final class Authenticator {
+        private final AuthChallenge challenge;
+        private final String username;
+        private final String password;
+        private int nonceCount;
 
-        @Override
-        public String toString() {
-            return new StringBuilder("DigestChallenge{")
-                    .append("realm='").append(realm).append('\'')
-                    .append(", nonce='").append(nonce).append('\'')
-                    .append('}')
-                    .toString();
+        public Authenticator(AuthChallenge challenge, String username, String password) {
+            this.challenge = challenge;
+            this.username = username == null ? "" : username;
+            this.password = password == null ? "" : password;
         }
+
+        public AuthType type() {
+            return challenge.type;
+        }
+
+        public AuthChallenge challenge() {
+            return challenge;
+        }
+
+        public synchronized String authorization(String method, String uri) {
+            if (challenge.type == AuthType.BASIC) {
+                return basic(username, password);
+            }
+            nonceCount++;
+            return digest(challenge, username, password, method, uri, nonceCount, newCnonce());
+        }
+    }
+
+    public static String basic(String username, String password) {
+        String raw = (username == null ? "" : username) + ":" + (password == null ? "" : password);
+        return "Basic " + Base64.getEncoder().encodeToString(raw.getBytes(StandardCharsets.UTF_8));
+    }
+
+    /**
+     * Build a Digest Authorization value. {@code qop} is sent only when the
+     * server offered it; RFC 2069-era devices get the legacy response, which the
+     * previous implementation broke by always sending {@code qop=auth}.
+     */
+    public static String digest(AuthChallenge c, String username, String password, String method, String uri,
+                                int nonceCount, String cnonce) {
+        String algorithm = c.algorithm == null ? "MD5" : c.algorithm.trim();
+        String upper = algorithm.toUpperCase(Locale.ROOT);
+        boolean sess = upper.endsWith("-SESS");
+        String hashName = upper.startsWith("SHA-256") ? "SHA-256" : "MD5";
+        boolean useQop = c.offersQopAuth();
+        String nc = String.format("%08x", nonceCount);
+
+        String ha1 = hash(hashName, username + ":" + c.realm + ":" + password);
+        if (sess) {
+            ha1 = hash(hashName, ha1 + ":" + c.nonce + ":" + cnonce);
+        }
+        String ha2 = hash(hashName, method + ":" + uri);
+        String response = useQop
+                ? hash(hashName, ha1 + ":" + c.nonce + ":" + nc + ":" + cnonce + ":auth:" + ha2)
+                : hash(hashName, ha1 + ":" + c.nonce + ":" + ha2);
+
+        StringBuilder h = new StringBuilder(220);
+        h.append("Digest username=\"").append(quote(username)).append('"');
+        h.append(", realm=\"").append(quote(c.realm)).append('"');
+        h.append(", nonce=\"").append(quote(c.nonce)).append('"');
+        h.append(", uri=\"").append(quote(uri)).append('"');
+        if (c.algorithm != null) {
+            h.append(", algorithm=").append(algorithm);
+        }
+        if (useQop) {
+            h.append(", qop=auth, nc=").append(nc).append(", cnonce=\"").append(cnonce).append('"');
+        }
+        h.append(", response=\"").append(response).append('"');
+        if (c.opaque != null && !c.opaque.isEmpty()) {
+            h.append(", opaque=\"").append(quote(c.opaque)).append('"');
+        }
+        return h.toString();
+    }
+
+    private static String quote(String s) {
+        return s == null ? "" : s.replace("\\", "\\\\").replace("\"", "\\\"");
+    }
+
+    static String hash(String algorithm, String value) {
+        try {
+            MessageDigest md = MessageDigest.getInstance(algorithm);
+            return HexFormat.of().formatHex(md.digest(value.getBytes(StandardCharsets.UTF_8)));
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException(algorithm + " unavailable", e);
+        }
+    }
+
+    public static String newCnonce() {
+        byte[] bytes = new byte[16];
+        RANDOM.nextBytes(bytes);
+        return HexFormat.of().formatHex(bytes);
+    }
+
+    /**
+     * Parse every challenge from one or more WWW-Authenticate values, strongest
+     * first (SHA-256 Digest, then MD5 Digest, then Basic).
+     */
+    public static List<AuthChallenge> parseChallenges(List<String> headerValues) {
+        List<AuthChallenge> result = new ArrayList<>();
+        for (String value : headerValues) {
+            AuthChallenge c = parseAuthChallenge(value);
+            if (c != null && c.isValid()) {
+                result.add(c);
+            }
+        }
+        result.sort((a, b) -> Integer.compare(rank(b), rank(a)));
+        return result;
+    }
+
+    private static int rank(AuthChallenge c) {
+        if (c.type == AuthType.BASIC) {
+            return 0;
+        }
+        String alg = c.algorithm == null ? "MD5" : c.algorithm.toUpperCase(Locale.ROOT);
+        return alg.startsWith("SHA-256") ? 3 : 2;
+    }
+
+    /** Parse a single WWW-Authenticate value; null when the scheme is unsupported. */
+    public static AuthChallenge parseAuthChallenge(String header) {
+        if (header == null || header.isBlank()) {
+            return null;
+        }
+        String trimmed = header.trim();
+        String lower = trimmed.toLowerCase(Locale.ROOT);
+        AuthChallenge c = new AuthChallenge();
+        String params;
+        if (lower.startsWith("basic")) {
+            c.type = AuthType.BASIC;
+            params = trimmed.substring(5);
+        } else if (lower.startsWith("digest")) {
+            c.type = AuthType.DIGEST;
+            params = trimmed.substring(6);
+        } else {
+            return null;
+        }
+        for (String part : splitRespectingQuotes(params)) {
+            int eq = part.indexOf('=');
+            if (eq <= 0) {
+                continue;
+            }
+            String key = part.substring(0, eq).trim().toLowerCase(Locale.ROOT);
+            String value = unquote(part.substring(eq + 1).trim());
+            switch (key) {
+                case "realm" -> c.realm = value;
+                case "nonce" -> c.nonce = value;
+                case "opaque" -> c.opaque = value;
+                case "qop" -> c.qop = value;
+                case "algorithm" -> c.algorithm = value;
+                case "stale" -> c.stale = value;
+                default -> { /* ignore unknown parameters */ }
+            }
+        }
+        if (c.realm == null) {
+            c.realm = "";
+        }
+        return c;
+    }
+
+    private static List<String> splitRespectingQuotes(String input) {
+        List<String> parts = new ArrayList<>();
+        StringBuilder current = new StringBuilder();
+        boolean inQuotes = false;
+        for (int i = 0; i < input.length(); i++) {
+            char ch = input.charAt(i);
+            if (ch == '\\' && inQuotes && i + 1 < input.length()) {
+                current.append(ch).append(input.charAt(++i));
+            } else if (ch == '"') {
+                inQuotes = !inQuotes;
+                current.append(ch);
+            } else if (ch == ',' && !inQuotes) {
+                if (!current.isEmpty()) {
+                    parts.add(current.toString().trim());
+                }
+                current.setLength(0);
+            } else {
+                current.append(ch);
+            }
+        }
+        if (!current.isEmpty()) {
+            parts.add(current.toString().trim());
+        }
+        return parts;
+    }
+
+    private static String unquote(String value) {
+        if (value.length() >= 2 && value.startsWith("\"") && value.endsWith("\"")) {
+            return value.substring(1, value.length() - 1).replace("\\\"", "\"").replace("\\\\", "\\");
+        }
+        return value;
+    }
+
+    // ------------------------------------------------------------ WS-Security
+
+    /**
+     * ONVIF WS-Security UsernameToken with PasswordDigest.
+     *
+     * @param clockOffsetMillis device clock minus host clock, so the Created
+     *                          stamp is in the device's own time and cameras
+     *                          with a skewed clock still accept the token
+     */
+    public static String wsSecurityHeader(String username, String password, long clockOffsetMillis) {
+        byte[] nonce = new byte[16];
+        RANDOM.nextBytes(nonce);
+        String created = DateTimeFormatter.ISO_INSTANT.format(
+                Instant.now().plusMillis(clockOffsetMillis).truncatedTo(ChronoUnit.SECONDS));
+        String digest = passwordDigest(nonce, created, password == null ? "" : password);
+        return "<wsse:Security s:mustUnderstand=\"1\" "
+                + "xmlns:wsse=\"http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd\" "
+                + "xmlns:wsu=\"http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-utility-1.0.xsd\">"
+                + "<wsse:UsernameToken>"
+                + "<wsse:Username>" + XmlUtils.escape(username) + "</wsse:Username>"
+                + "<wsse:Password Type=\"http://docs.oasis-open.org/wss/2004/01/"
+                + "oasis-200401-wss-username-token-profile-1.0#PasswordDigest\">" + digest + "</wsse:Password>"
+                + "<wsse:Nonce EncodingType=\"http://docs.oasis-open.org/wss/2004/01/"
+                + "oasis-200401-wss-soap-message-security-1.0#Base64Binary\">"
+                + Base64.getEncoder().encodeToString(nonce) + "</wsse:Nonce>"
+                + "<wsu:Created>" + created + "</wsu:Created>"
+                + "</wsse:UsernameToken></wsse:Security>";
+    }
+
+    /** PasswordDigest = Base64(SHA-1(nonce + created + password)). */
+    public static String passwordDigest(byte[] nonce, String created, String password) {
+        try {
+            MessageDigest sha1 = MessageDigest.getInstance("SHA-1");
+            sha1.update(nonce);
+            sha1.update(created.getBytes(StandardCharsets.UTF_8));
+            sha1.update(password.getBytes(StandardCharsets.UTF_8));
+            return Base64.getEncoder().encodeToString(sha1.digest());
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-1 unavailable", e);
+        }
+    }
+
+    public static String uuidUrn() {
+        return "urn:uuid:" + UUID.randomUUID();
+    }
+
+    /**
+     * Replace the contents of any Security element or Authorization header in
+     * {@code text} with a placeholder, so protocol traces can be logged safely.
+     */
+    public static String redact(String text) {
+        if (text == null || text.isEmpty()) {
+            return text;
+        }
+        return text
+                .replaceAll("(?is)<([a-z0-9]+:)?Security\\b.*?</([a-z0-9]+:)?Security>", "<Security>[redacted]</Security>")
+                // Everything after the scheme is secret, so mask to end of line.
+                .replaceAll("(?i)(Authorization:\\s*)(Basic|Digest)\\b.*", "$1$2 [redacted]")
+                .replaceAll("(?i)(rtsps?://)[^/@\\s]+@", "$1[redacted]@");
     }
 }

@@ -1,17 +1,22 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
-    <!-- Console appender - application logs only (no FFmpeg noise) -->
+    <!--
+      Logs go to a per-user directory so the application also works when it is
+      installed somewhere the user cannot write, such as Program Files.
+      Override with -Dcctv.log.dir=<path>.
+    -->
+    <property name="LOG_DIR" value="${cctv.log.dir:-${LOCALAPPDATA:-${user.home}}/CctvDiscovery/logs}"/>
+
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
-            <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+            <pattern>%d{HH:mm:ss.SSS} %-5level %logger{28} - %msg%n</pattern>
         </encoder>
     </appender>
 
-    <!-- File appender - all logs including FFmpeg native output -->
     <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
-        <file>cctv-discovery.log</file>
+        <file>${LOG_DIR}/cctv-discovery.log</file>
         <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
-            <fileNamePattern>cctv-discovery.%d{yyyy-MM-dd}.%i.log</fileNamePattern>
+            <fileNamePattern>${LOG_DIR}/cctv-discovery.%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
             <maxFileSize>10MB</maxFileSize>
             <maxHistory>30</maxHistory>
             <totalSizeCap>200MB</totalSizeCap>
@@ -21,19 +26,24 @@
         </encoder>
     </appender>
 
-    <!-- FFmpeg native logs: file only (not console) to keep console clean -->
+    <!-- FFmpeg native output is verbose and goes to the file only. -->
     <logger name="org.bytedeco.javacv.FFmpegLogCallback" level="WARN" additivity="false">
-        <appender-ref ref="FILE" />
+        <appender-ref ref="FILE"/>
     </logger>
+    <logger name="org.bytedeco" level="WARN"/>
+    <logger name="org.apache.poi" level="WARN"/>
+    <logger name="oshi" level="WARN"/>
 
-    <!-- Root logger -->
+    <!--
+      Protocol traces are logged at DEBUG and TRACE. They include SOAP bodies,
+      so raise these only for troubleshooting; the code redacts Security
+      elements and Authorization headers before they are written.
+    -->
+    <logger name="com.cctv.discovery.util.RtspClient" level="INFO"/>
+    <logger name="com.cctv.discovery.service.OnvifService" level="INFO"/>
+
     <root level="INFO">
-        <appender-ref ref="CONSOLE" />
-        <appender-ref ref="FILE" />
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="FILE"/>
     </root>
-
-    <!-- Reduce verbosity of third-party libraries -->
-    <logger name="org.bytedeco" level="WARN" />
-    <logger name="org.apache.poi" level="WARN" />
-    <logger name="org.apache.http" level="WARN" />
 </configuration>

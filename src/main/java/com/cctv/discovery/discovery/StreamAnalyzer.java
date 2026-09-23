@@ -1,413 +1,358 @@
 package com.cctv.discovery.discovery;
 
+import com.cctv.discovery.config.AppConfig;
 import com.cctv.discovery.model.Device;
+import com.cctv.discovery.model.Finding;
 import com.cctv.discovery.model.RTSPStream;
-import org.bytedeco.javacv.FFmpegFrameGrabber;
-import org.bytedeco.javacv.FFmpegLogCallback;
-import org.bytedeco.javacv.Frame;
+import com.cctv.discovery.util.FFmpegSupport;
+import com.cctv.discovery.util.RtspClient;
+import org.bytedeco.ffmpeg.avcodec.AVPacket;
+import org.bytedeco.ffmpeg.avformat.AVStream;
+import org.bytedeco.ffmpeg.avutil.AVRational;
+import org.bytedeco.ffmpeg.global.avcodec;
 import org.bytedeco.ffmpeg.global.avutil;
+import org.bytedeco.javacv.FFmpegFrameGrabber;
+import org.bytedeco.javacv.Frame;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.*;
+import java.util.Locale;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.StructuredTaskScope;
+import java.util.concurrent.TimeUnit;
 
 /**
- * Stream analyzer using JavaCV to extract codec, resolution, FPS, and bitrate information.
+ * Measures each stream with FFmpeg: resolution, codec, profile, frame rate,
+ * bitrate and keyframe interval, then checks them against the compliance rules.
+ *
+ * <p>Bitrate is measured from compressed packet sizes. Summing decoded frame
+ * buffers, as the previous version did, reported roughly 1.27 million kbps for
+ * a stream actually running at about 194 kbps.
  */
-public class StreamAnalyzer {
+public final class StreamAnalyzer implements AutoCloseable {
+
     private static final Logger logger = LoggerFactory.getLogger(StreamAnalyzer.class);
 
-    static {
-        // Route FFmpeg native logs through SLF4J instead of raw stderr.
-        // AV_LOG_WARNING = 24: capture warnings and errors for diagnostics.
-        // Logback routes FFmpegLogCallback logger to file only (not console).
-        avutil.av_log_set_level(avutil.AV_LOG_WARNING);
-        FFmpegLogCallback.set();
-    }
-
-    private static final int MAX_PARALLEL_STREAMS = 8;
-    private static final int ANALYSIS_DURATION_SECONDS = 10;
-    private static final int FRAME_SAMPLE_COUNT = 30;
-
-    private final ExecutorService executorService;
+    private final AppConfig config = AppConfig.getInstance();
+    private final Semaphore analysisPermits;
+    private volatile boolean cancelled;
 
     public StreamAnalyzer() {
-        this.executorService = Executors.newFixedThreadPool(MAX_PARALLEL_STREAMS);
-        logger.info("StreamAnalyzer initialized with {} threads", MAX_PARALLEL_STREAMS);
+        FFmpegSupport.init();
+        this.analysisPermits = new Semaphore(config.getStreamAnalysisMaxThreads());
     }
 
-    /**
-     * Analyze all streams for a device.
-     */
+    public void cancel() {
+        cancelled = true;
+    }
+
+    /** Analyse every stream of a device, bounded by the configured timeout. */
     public void analyzeDevice(Device device) {
         List<RTSPStream> streams = device.getRtspStreams();
-        if (streams.isEmpty()) {
+        if (streams.isEmpty() || cancelled) {
             return;
         }
 
-        List<Future<?>> futures = new ArrayList<>();
-
-        for (RTSPStream stream : streams) {
-            Future<?> future = executorService.submit(() -> analyzeStream(stream, device));
-            futures.add(future);
+        Duration budget = Duration.ofMillis((long) config.getStreamAnalysisTimeout() * streams.size() + 5_000);
+        try (var scope = StructuredTaskScope.open(StructuredTaskScope.Joiner.<Void>awaitAll(),
+                cfg -> cfg.withName("analyze-" + device.getIpAddress()).withTimeout(budget))) {
+            for (RTSPStream stream : streams) {
+                scope.fork(() -> {
+                    analyzeStream(stream, device);
+                    return null;
+                });
+            }
+            scope.join();
+        } catch (StructuredTaskScope.TimeoutException e) {
+            logger.warn("Analysis budget elapsed for {}", device.getIpAddress());
+            for (RTSPStream stream : streams) {
+                if (!stream.isAnalyzed() && stream.getAnalysisError() == null) {
+                    stream.setAnalysisError("Timed out");
+                }
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         }
 
-        // Wait for all analyses to complete
-        for (Future<?> future : futures) {
-            try {
-                future.get(ANALYSIS_DURATION_SECONDS + 10, TimeUnit.SECONDS);
-            } catch (TimeoutException e) {
-                logger.warn("Stream analysis timeout");
-                future.cancel(true);
-            } catch (Exception e) {
-                logger.error("Error during stream analysis", e);
-            }
+        refineRoles(streams);
+        for (RTSPStream stream : streams) {
+            checkCompliance(device, stream);
         }
     }
 
-    /**
-     * Analyze a single RTSP stream.
-     */
-    private void analyzeStream(RTSPStream stream, Device device) {
+    /** Analyse one stream; failures are recorded on the stream, not thrown. */
+    public void analyzeStream(RTSPStream stream, Device device) {
+        if (cancelled) {
+            return;
+        }
+        int timeout = config.getStreamAnalysisTimeout();
         FFmpegFrameGrabber grabber = null;
+        boolean permitHeld = false;
         try {
-            String rtspUrl = stream.getRtspUrl();
+            analysisPermits.acquire();
+            permitHeld = true;
 
-            // Add credentials to URL if available. Percent-encode them so special
-            // characters in the username/password do not corrupt the URL.
-            if (device.getUsername() != null && device.getPassword() != null) {
-                String creds = encodeCredential(device.getUsername()) + ":" + encodeCredential(device.getPassword());
-                rtspUrl = rtspUrl.replaceFirst("rtsp://[^@/]+@", "rtsp://");
-                rtspUrl = rtspUrl.replace("rtsp://", "rtsp://" + creds + "@");
-            }
-
-            grabber = new FFmpegFrameGrabber(rtspUrl);
-            grabber.setOption("rtsp_transport", "tcp");
-            grabber.setOption("stimeout", "5000000"); // 5 seconds in microseconds
-            grabber.setImageWidth(0);
-            grabber.setImageHeight(0);
-
-            logger.info("Starting stream analysis for: {}", stream.getRtspUrl());
+            grabber = FFmpegSupport.grabber(stream.getRtspUrl(), device.getUsername(), device.getPassword(), timeout);
             grabber.start();
 
-            // Extract basic metadata
-            int width = grabber.getImageWidth();
-            int height = grabber.getImageHeight();
-            double frameRate = grabber.getFrameRate();
-            int videoCodec = grabber.getVideoCodec();
-            int videoBitrate = grabber.getVideoBitrate();
-
-            // Set resolution
-            if (width > 0 && height > 0) {
-                stream.setResolution(width + "x" + height);
+            if (grabber.getImageWidth() > 0 && grabber.getImageHeight() > 0) {
+                stream.setDimensions(grabber.getImageWidth(), grabber.getImageHeight());
+            }
+            String codec = FFmpegSupport.videoCodecName(grabber);
+            if (codec != null) {
+                stream.setCodec(codec);
+            }
+            String profile = FFmpegSupport.videoProfile(grabber);
+            if (profile != null) {
+                stream.setProfile(profile);
+            }
+            String audio = FFmpegSupport.audioCodecName(grabber);
+            if (audio != null) {
+                stream.setAudioCodec(audio);
             }
 
-            // Set FPS
-            if (frameRate > 0) {
-                stream.setFps(frameRate);
+            Measurement measurement = measure(grabber, config.getStreamAnalysisDuration());
+            if (measurement.videoPackets > 0) {
+                stream.setBitrateKbps((int) Math.round(measurement.kbps));
+                if (measurement.fps > 0) {
+                    stream.setFps(round(measurement.fps, 2));
+                }
+                if (measurement.keyframeIntervalSeconds > 0) {
+                    stream.setKeyframeIntervalSeconds(round(measurement.keyframeIntervalSeconds, 2));
+                }
             }
-
-            // Set codec
-            String codecName = getCodecName(videoCodec);
-            stream.setCodec(codecName);
-
-            // Extract H.264 profile from FFmpeg metadata
-            String profileName = extractProfile(grabber);
-            if (profileName != null) {
-                stream.setProfile(profileName);
-                logger.info("Detected profile: {} for {}", profileName, stream.getRtspUrl());
+            if (stream.getFps() == null && grabber.getFrameRate() > 0) {
+                stream.setFps(round(grabber.getFrameRate(), 2));
             }
-
-            // Calculate bitrate by sampling frames
-            long startTime = System.currentTimeMillis();
-            long totalBytes = 0;
-            int frameCount = 0;
-
-            while (frameCount < FRAME_SAMPLE_COUNT &&
-                    (System.currentTimeMillis() - startTime) < (ANALYSIS_DURATION_SECONDS * 1000)) {
-                Frame frame = grabber.grabFrame();
-                if (frame != null) {
-                    frameCount++;
-                    // Estimate frame size (this is approximate)
-                    totalBytes += estimateFrameSize(frame);
+            if (stream.getWidth() == null && measurement.videoPackets == 0) {
+                // No packets and no dimensions: try one decoded image as a fallback.
+                Frame image = grabber.grabImage();
+                if (image != null && image.imageWidth > 0) {
+                    stream.setDimensions(image.imageWidth, image.imageHeight);
                 }
             }
 
-            long elapsedMs = System.currentTimeMillis() - startTime;
-            if (elapsedMs > 0 && totalBytes > 0) {
-                // Calculate bitrate in kbps
-                double bitrateKbps = (totalBytes * 8.0 / elapsedMs);
-                stream.setBitrateKbps((int) bitrateKbps);
-            } else if (videoBitrate > 0) {
-                // Use FFmpeg reported bitrate
-                stream.setBitrateKbps(videoBitrate / 1000);
-            }
-
-            // Check compliance
-            checkCompliance(stream);
-
-            logger.info("Stream analyzed: {} - {}@{}fps, {} ({}), {}kbps",
-                    stream.getRtspUrl(),
-                    stream.getResolution(),
-                    stream.getFps(),
-                    stream.getCodec(),
-                    stream.getProfile() != null ? stream.getProfile() : "N/A",
-                    stream.getBitrateKbps());
-
+            stream.setAnalyzed(true);
+            logger.info("Analysed {}: {} {} {} {}kbps {}fps",
+                    RtspClient.stripCredentials(stream.getRtspUrl()), stream.getResolution(), stream.getCodec(),
+                    stream.getProfile() == null ? "" : stream.getProfile(),
+                    stream.getBitrateKbps(), stream.getFps());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            stream.setAnalysisError("Cancelled");
         } catch (Exception e) {
-            logger.error("Error analyzing stream: {}", stream.getRtspUrl(), e);
-            stream.setComplianceIssues("Analysis failed: " + e.getMessage());
+            String message = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
+            stream.setAnalysisError(FFmpegSupport.isUnauthorized(message) ? "Authentication rejected" : message);
+            logger.debug("Analysis failed for {}: {}",
+                    RtspClient.stripCredentials(stream.getRtspUrl()), message);
         } finally {
-            if (grabber != null) {
-                try {
-                    grabber.stop();
-                    grabber.release();
-                } catch (Exception e) {
-                    logger.info("Error releasing grabber", e);
-                }
+            FFmpegSupport.closeQuietly(grabber);
+            if (permitHeld) {
+                analysisPermits.release();
             }
         }
     }
 
-    /**
-     * Percent-encode a credential for safe inclusion in the userinfo portion of
-     * an RTSP URL (handles @ : / ? # % and other special characters).
-     */
-    private String encodeCredential(String value) {
-        if (value == null || value.isEmpty()) {
-            return "";
-        }
-        try {
-            return java.net.URLEncoder.encode(value, "UTF-8").replace("+", "%20");
-        } catch (Exception e) {
-            return value;
-        }
+    /** Values measured over a sampling window. */
+    private record Measurement(long videoPackets, long videoBytes, double kbps, double fps,
+                               double keyframeIntervalSeconds) {
     }
 
     /**
-     * Get codec name from codec ID.
-     */
-    private String getCodecName(int codecId) {
-        // Common codec IDs from FFmpeg
-        switch (codecId) {
-            case 27:
-                return "H.264";
-            case 173:
-                return "H.265/HEVC";
-            case 12:
-                return "MPEG-4";
-            case 7:
-                return "MJPEG";
-            default:
-                return "Unknown (" + codecId + ")";
-        }
-    }
-
-    /**
-     * Extract H.264/H.265 profile from FFmpegFrameGrabber.
-     * Uses metadata and pixel format analysis since JavaCV doesn't directly expose codec context profile.
+     * Sample the compressed stream for {@code seconds}, summing packet sizes and
+     * counting frames and keyframes.
      *
-     * H.264 profile detection methods:
-     * 1. Video metadata "profile" field
-     * 2. Format metadata "profile" field
-     * 3. Pixel format heuristics for advanced profiles (High 10, High 4:2:2, High 4:4:4)
+     * <p>Rates are derived from the span of presentation timestamps rather than
+     * from wall-clock time. A camera that delivers a backlog faster than real
+     * time, or stalls on a busy link, otherwise yields a frame rate and bitrate
+     * that describe the network rather than the encoder.
      */
-    private String extractProfile(FFmpegFrameGrabber grabber) {
+    private Measurement measure(FFmpegFrameGrabber grabber, int seconds) {
+        long bytes = 0;
+        long packets = 0;
+        long keyframes = 0;
+        long firstPts = Long.MIN_VALUE;
+        long lastPts = Long.MIN_VALUE;
+        long firstKeyPts = Long.MIN_VALUE;
+        long lastKeyPts = Long.MIN_VALUE;
+
+        int videoStream = grabber.getVideoStream();
+        double timeBase = videoTimeBaseSeconds(grabber, videoStream);
+        long start = System.nanoTime();
+        long deadline = start + TimeUnit.SECONDS.toNanos(Math.max(1, seconds));
+
         try {
-            String videoCodecName = grabber.getVideoCodecName();
-            if (videoCodecName == null) {
-                return null;
-            }
-
-            // Method 1: Try video-level metadata (works for some containers/streams)
-            String metadata = grabber.getVideoMetadata("profile");
-            if (metadata != null && !metadata.isEmpty()) {
-                logger.info("Profile from video metadata: {}", metadata);
-                return normalizeProfileName(metadata);
-            }
-
-            // Method 2: Try format-level metadata
-            String formatMeta = grabber.getMetadata("profile");
-            if (formatMeta != null && !formatMeta.isEmpty()) {
-                logger.info("Profile from format metadata: {}", formatMeta);
-                return normalizeProfileName(formatMeta);
-            }
-
-            // Method 3: Pixel format heuristics for detecting advanced profiles
-            int pixFmt = grabber.getPixelFormat();
-            String codecLower = videoCodecName.toLowerCase();
-            boolean isH264 = codecLower.contains("h264") || codecLower.contains("264") || codecLower.contains("avc");
-            boolean isH265 = codecLower.contains("hevc") || codecLower.contains("h265") || codecLower.contains("265");
-
-            if (isH264 || isH265) {
-                // Pixel format hints for advanced profiles:
-                // yuv420p10le (64, 68) = High 10 or Main 10
-                // yuv422p (4) = High 4:2:2
-                // yuv444p (5) = High 4:4:4
-                if (pixFmt == 64 || pixFmt == 68) {
-                    return isH265 ? "Main 10" : "High 10";
-                } else if (pixFmt == 4) {
-                    return "High 4:2:2";
-                } else if (pixFmt == 5) {
-                    return "High 4:4:4";
+            while (System.nanoTime() < deadline && !cancelled) {
+                AVPacket packet = grabber.grabPacket();
+                if (packet == null) {
+                    break;
+                }
+                try {
+                    if (packet.stream_index() != videoStream) {
+                        continue;
+                    }
+                    packets++;
+                    bytes += Math.max(0, packet.size());
+                    long pts = packet.pts();
+                    if (pts != avutil.AV_NOPTS_VALUE) {
+                        if (firstPts == Long.MIN_VALUE) {
+                            firstPts = pts;
+                        }
+                        lastPts = pts;
+                    }
+                    if ((packet.flags() & avcodec.AV_PKT_FLAG_KEY) != 0) {
+                        keyframes++;
+                        if (pts != avutil.AV_NOPTS_VALUE) {
+                            if (firstKeyPts == Long.MIN_VALUE) {
+                                firstKeyPts = pts;
+                            }
+                            lastKeyPts = pts;
+                        }
+                    }
+                } finally {
+                    avcodec.av_packet_unref(packet);
                 }
             }
-
-            return null;
         } catch (Exception e) {
-            logger.info("Could not extract profile: {}", e.getMessage());
-            return null;
+            logger.debug("Sampling ended early: {}", e.getMessage());
         }
+
+        if (packets == 0) {
+            return new Measurement(0, 0, 0, 0, 0);
+        }
+
+        double wallSeconds = (System.nanoTime() - start) / 1_000_000_000.0;
+        double streamSeconds = 0;
+        if (timeBase > 0 && firstPts != Long.MIN_VALUE && lastPts > firstPts) {
+            streamSeconds = (lastPts - firstPts) * timeBase;
+        }
+        // Fall back to wall clock when the device sends no usable timestamps.
+        double span = streamSeconds > 0.5 ? streamSeconds : wallSeconds;
+        if (span <= 0) {
+            return new Measurement(packets, bytes, 0, 0, 0);
+        }
+
+        // With N frames spanning the interval between the first and last, the
+        // rate is (N-1)/span when timestamps drive it.
+        double frameCount = streamSeconds > 0.5 ? packets - 1 : packets;
+        double kbps = (bytes * 8.0) / span / 1000.0;
+        double fps = frameCount / span;
+
+        double keyframeInterval = 0;
+        if (keyframes > 1) {
+            keyframeInterval = timeBase > 0 && lastKeyPts > firstKeyPts
+                    ? (lastKeyPts - firstKeyPts) * timeBase / (keyframes - 1)
+                    : span / (keyframes - 1);
+        }
+        return new Measurement(packets, bytes, kbps, fps, keyframeInterval);
     }
 
-    /**
-     * Normalize profile name from various FFmpeg metadata formats.
-     * FFmpeg may return profile names like "High", "Baseline", "Main", or numeric IDs.
-     */
-    private String normalizeProfileName(String rawProfile) {
-        if (rawProfile == null || rawProfile.isEmpty()) {
-            return null;
-        }
-
-        String profile = rawProfile.trim();
-
-        // Check if it's a numeric profile ID
+    /** Seconds per timestamp unit for the video stream, or 0 when unknown. */
+    private static double videoTimeBaseSeconds(FFmpegFrameGrabber grabber, int videoStream) {
         try {
-            int profileId = Integer.parseInt(profile);
-            return mapProfileIdToName(profileId);
-        } catch (NumberFormatException e) {
-            // Not numeric, return as-is (already a name like "High", "Main", etc.)
-            return profile;
-        }
-    }
-
-    /**
-     * Map FFmpeg profile ID to human-readable profile name.
-     * Covers both H.264 and H.265 profile IDs.
-     */
-    private String mapProfileIdToName(int profileId) {
-        // H.264/AVC profiles (most common for CCTV)
-        switch (profileId) {
-            case 66: return "Baseline";
-            case 77: return "Main";
-            case 88: return "Extended";
-            case 100: return "High";
-            case 110: return "High 10";
-            case 122: return "High 4:2:2";
-            case 244: return "High 4:4:4";
-            case 44: return "CAVLC 4:4:4";
-            case 83: return "Scalable Baseline";
-            case 86: return "Scalable High";
-            // H.265/HEVC profiles
-            case 1: return "Main";  // Note: conflicts with H.264, context-dependent
-            case 2: return "Main 10";
-            case 3: return "Main Still Picture";
-            case 4: return "Rext";
-            default:
-                logger.info("Unknown profile ID: {}", profileId);
-                return "Profile " + profileId;
-        }
-    }
-
-    /**
-     * Check if a profile is considered "High" and requires transcoding for browser HLS playback.
-     * Baseline and Main profiles are directly playable. High and above require transcoding.
-     */
-    private boolean isHighProfile(String profile) {
-        if (profile == null) {
-            return false;
-        }
-        String lower = profile.toLowerCase();
-        return lower.contains("high");
-    }
-
-    /**
-     * Estimate frame size in bytes (rough approximation).
-     */
-    private int estimateFrameSize(Frame frame) {
-        if (frame.image != null && frame.image.length > 0) {
-            int totalSize = 0;
-            for (int i = 0; i < frame.image.length; i++) {
-                if (frame.image[i] != null) {
-                    totalSize += frame.image[i].capacity();
-                }
+            if (videoStream < 0 || grabber.getFormatContext() == null) {
+                return 0;
             }
-            return totalSize;
+            AVStream stream = grabber.getFormatContext().streams(videoStream);
+            if (stream == null) {
+                return 0;
+            }
+            AVRational timeBase = stream.time_base();
+            if (timeBase == null || timeBase.den() == 0) {
+                return 0;
+            }
+            return (double) timeBase.num() / timeBase.den();
+        } catch (Exception e) {
+            return 0;
         }
-        return 4096; // Default estimate
+    }
+
+    private static double round(double value, int decimals) {
+        double factor = Math.pow(10, decimals);
+        return Math.round(value * factor) / factor;
     }
 
     /**
-     * Check stream compliance with requirements.
-     * Sub-stream: 360p-480p, H.264, <512kbps, Baseline/Main profile (not High).
-     * All streams: High profile flagged (requires transcoding for browser HLS).
+     * Decide which stream is main and which is sub from the measured pixel
+     * counts, so compliance applies to the right one even when the device names
+     * its profiles something opaque like PROFILE_1 and PROFILE_2.
      */
-    private void checkCompliance(RTSPStream stream) {
+    static void refineRoles(List<RTSPStream> streams) {
+        List<RTSPStream> byChannel = new ArrayList<>(streams);
+        long distinctChannels = byChannel.stream()
+                .map(s -> s.getChannelName() == null ? "" : s.getChannelName())
+                .distinct().count();
+        if (distinctChannels > 1) {
+            // Recorder channels already carry explicit roles.
+            return;
+        }
+        List<RTSPStream> measured = byChannel.stream().filter(s -> s.pixels() > 0).toList();
+        if (measured.size() < 2) {
+            return;
+        }
+        long maxPixels = measured.stream().mapToLong(RTSPStream::pixels).max().orElse(0);
+        for (RTSPStream stream : measured) {
+            stream.setRole(stream.pixels() == maxPixels ? RTSPStream.Role.MAIN : RTSPStream.Role.SUB);
+        }
+    }
+
+    /**
+     * Apply the configured rules. High profile is flagged on every stream
+     * because browsers cannot play it over HLS without transcoding; resolution
+     * and bitrate limits apply to sub-streams.
+     */
+    void checkCompliance(Device device, RTSPStream stream) {
         List<String> issues = new ArrayList<>();
 
-        // Check H.264 profile on ALL streams (High profiles need transcoding for HLS)
-        String profile = stream.getProfile();
-        if (isHighProfile(profile)) {
-            issues.add("High profile (requires transcoding for browser HLS)");
+        if (config.isHighProfileFlagged() && isHighProfile(stream.getProfile())) {
+            issues.add("High profile (needs transcoding for browser playback)");
+            device.addFinding(new Finding(Finding.Severity.MEDIUM, "Compliance",
+                    "Stream uses H.264 High profile",
+                    stream.getStreamName() + " reports " + stream.getProfile(),
+                    "Set the encoder to Main or Baseline profile for browser-based viewing."));
         }
 
-        // Sub-stream specific checks
-        String streamName = stream.getStreamName();
-        boolean isSub = streamName != null && streamName.toLowerCase().contains("sub");
-
-        if (isSub) {
-            // Check resolution (360p-480p = 640x360 to 720x480)
-            String resolution = stream.getResolution();
-            if (resolution != null) {
-                String[] parts = resolution.split("x");
-                if (parts.length == 2) {
-                    try {
-                        int height = Integer.parseInt(parts[1]);
-                        if (height < 360 || height > 480) {
-                            issues.add("Resolution not in 360p-480p range");
-                        }
-                    } catch (NumberFormatException e) {
-                        // Ignore
-                    }
+        if (stream.getRole() == RTSPStream.Role.SUB) {
+            Integer height = stream.getHeight();
+            if (height != null) {
+                int min = config.getSubStreamMinHeight();
+                int max = config.getSubStreamMaxHeight();
+                if (height < min || height > max) {
+                    issues.add("Resolution outside " + min + "p-" + max + "p");
                 }
             }
-
-            // Check codec (should be H.264)
             String codec = stream.getCodec();
             if (codec != null && !codec.contains("H.264")) {
-                issues.add("Codec is not H.264");
+                issues.add("Codec is " + codec + ", not H.264");
             }
-
-            // Check bitrate (should be < 512kbps)
             Integer bitrate = stream.getBitrateKbps();
-            if (bitrate != null && bitrate >= 512) {
-                issues.add("Bitrate >= 512kbps");
+            int maxKbps = config.getSubStreamMaxKbps();
+            if (bitrate != null && bitrate >= maxKbps) {
+                issues.add("Bitrate " + bitrate + " kbps is at or above " + maxKbps + " kbps");
             }
         }
 
-        if (!issues.isEmpty()) {
-            stream.setCompliant(false);
-            stream.setComplianceIssues(String.join(", ", issues));
-        } else {
-            stream.setCompliant(true);
+        if (stream.getAnalysisError() != null) {
+            issues.add("Not analysed: " + stream.getAnalysisError());
         }
+
+        stream.setCompliant(issues.isEmpty());
+        stream.setComplianceIssues(issues.isEmpty() ? null : String.join("; ", issues));
     }
 
-    /**
-     * Shutdown the executor service.
-     */
+    static boolean isHighProfile(String profile) {
+        return profile != null && profile.toLowerCase(Locale.ROOT).contains("high");
+    }
+
     public void shutdown() {
-        if (executorService != null && !executorService.isShutdown()) {
-            executorService.shutdown();
-            try {
-                if (!executorService.awaitTermination(10, TimeUnit.SECONDS)) {
-                    executorService.shutdownNow();
-                }
-            } catch (InterruptedException e) {
-                executorService.shutdownNow();
-            }
-        }
+        cancel();
+    }
+
+    @Override
+    public void close() {
+        shutdown();
     }
 }

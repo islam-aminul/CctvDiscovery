@@ -1,248 +1,341 @@
 package com.cctv.discovery.discovery;
 
+import com.cctv.discovery.config.AppConfig;
 import com.cctv.discovery.model.Device;
 import com.cctv.discovery.service.MacLookupService;
 import com.cctv.discovery.service.OnvifService;
+import com.cctv.discovery.service.RtspService;
 import com.cctv.discovery.util.NetworkUtils;
+import com.cctv.discovery.util.TargetParser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.concurrent.*;
+import java.util.Map;
+import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.StructuredTaskScope;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * Network scanner for CCTV device discovery.
- * Implements WS-Discovery, port scanning, and MAC resolution.
+ * Host discovery: multicast WS-Discovery plus a TCP port scan, followed by
+ * protocol confirmation of each open port.
+ *
+ * <p>Ports are classified by what answers on them, not by their number. The
+ * previous version assumed 80/8080 meant ONVIF and 554 meant RTSP, so the test
+ * camera (ONVIF on 8000, RTSP on 5543) was found but classified as having
+ * neither, and every device with port 8000 open was treated as a recorder.
  */
-public class NetworkScanner {
+public final class NetworkScanner implements AutoCloseable {
+
     private static final Logger logger = LoggerFactory.getLogger(NetworkScanner.class);
 
-    private static final int[] TARGET_PORTS = {80, 8080, 554, 8554, 443, 8443, 8000, 8888, 37777, 34567};
-    private static final int PORT_SCAN_TIMEOUT_MS = 2000;
-
-    private final OnvifService onvifService;
-    private final MacLookupService macLookupService;
-    private ExecutorService executorService;
-
-    public NetworkScanner() {
-        this.onvifService = new OnvifService();
-        this.macLookupService = MacLookupService.getInstance();
-
-        // Thread pool: 8x CPU cores, capped at 64
-        int cpuCores = Runtime.getRuntime().availableProcessors();
-        int threadPoolSize = Math.min(cpuCores * 8, 64);
-        this.executorService = Executors.newFixedThreadPool(threadPoolSize);
-
-        logger.info("NetworkScanner initialized with {} threads", threadPoolSize);
+    /** Progress during the port scan. */
+    public interface ProgressCallback {
+        void onProgress(int current, int total);
     }
 
-    /**
-     * Perform WS-Discovery to find ONVIF devices.
-     */
+    private final AppConfig config = AppConfig.getInstance();
+    private final OnvifService onvifService;
+    private final RtspService rtspService;
+    private final MacLookupService macLookupService = MacLookupService.getInstance();
+    private final Semaphore connectionPermits;
+
+    private volatile boolean cancelled;
+
+    public NetworkScanner() {
+        this(new OnvifService(), new RtspService());
+    }
+
+    public NetworkScanner(OnvifService onvifService, RtspService rtspService) {
+        this.onvifService = onvifService;
+        this.rtspService = rtspService;
+        this.connectionPermits = new Semaphore(config.getPortScanConcurrency());
+        logger.info("Scanner ready: {} concurrent connections", config.getPortScanConcurrency());
+    }
+
+    public void cancel() {
+        cancelled = true;
+    }
+
+    private boolean stopped() {
+        return cancelled || Thread.currentThread().isInterrupted();
+    }
+
+    // -------------------------------------------------------------- Discovery
+
+    /** ONVIF devices announcing themselves by multicast. */
     public List<Device> performWsDiscovery() {
-        logger.info("Starting WS-Discovery...");
+        if (!config.isWsDiscoveryEnabled()) {
+            return List.of();
+        }
         List<Device> devices = onvifService.discoverDevices();
-        logger.info("WS-Discovery found {} devices", devices.size());
+        for (Device device : devices) {
+            resolveIdentity(device);
+        }
         return devices;
     }
 
-    /**
-     * Perform port scan on given IP addresses.
-     */
+    /** Scan a list of addresses. */
     public List<Device> performPortScan(List<String> ipAddresses, ProgressCallback callback) {
-        logger.info("Starting port scan on {} IP addresses", ipAddresses.size());
-
-        List<Device> devices = new CopyOnWriteArrayList<>();
-        List<Future<?>> futures = new ArrayList<>();
-        int totalIps = ipAddresses.size();
-        int[] processedCount = {0};
-
-        for (String ip : ipAddresses) {
-            Future<?> future = executorService.submit(() -> {
-                Device device = scanDevice(ip);
-                if (device != null) {
-                    devices.add(device);
-                }
-
-                synchronized (processedCount) {
-                    processedCount[0]++;
-                    if (callback != null) {
-                        callback.onProgress(processedCount[0], totalIps);
-                    }
-                }
-            });
-            futures.add(future);
-        }
-
-        // Wait for all scans to complete
-        for (Future<?> future : futures) {
-            try {
-                future.get();
-            } catch (Exception e) {
-                logger.error("Error during port scan", e);
-            }
-        }
-
-        logger.info("Port scan completed. Found {} devices", devices.size());
-        return new ArrayList<>(devices);
+        return performPortScan(TargetParser.parse(String.join(",", ipAddresses)), callback);
     }
 
     /**
-     * Scan a single device for open ports.
+     * Scan every address in {@code targets}, returning the hosts with at least
+     * one open port.
      */
-    private Device scanDevice(String ip) {
-        List<Integer> openPorts = new ArrayList<>();
-
-        for (int port : TARGET_PORTS) {
-            if (NetworkUtils.isPortOpen(ip, port, PORT_SCAN_TIMEOUT_MS)) {
-                openPorts.add(port);
-            }
+    public List<Device> performPortScan(TargetParser.Targets targets, ProgressCallback callback) {
+        long total = targets.count();
+        if (total == 0) {
+            return List.of();
+        }
+        if (total > config.getMaxTargets()) {
+            throw new IllegalArgumentException("Refusing to scan " + total
+                    + " addresses; the limit is " + config.getMaxTargets());
         }
 
-        if (openPorts.isEmpty()) {
+        int[] httpPorts = config.getHttpPorts();
+        int[] rtspPorts = config.getRtspPorts();
+        int[] otherPorts = config.getOtherPorts();
+        logger.info("Port scan of {} address(es); HTTP {}, RTSP {}, other {}",
+                total, Arrays.toString(httpPorts), Arrays.toString(rtspPorts), Arrays.toString(otherPorts));
+
+        Map<String, Device> found = new ConcurrentHashMap<>();
+        AtomicInteger completed = new AtomicInteger();
+        int totalInt = (int) total;
+
+        try (var scope = StructuredTaskScope.open(StructuredTaskScope.Joiner.<Void>awaitAll(),
+                cfg -> cfg.withName("port-scan"))) {
+            for (String ip : targets) {
+                if (stopped()) {
+                    break;
+                }
+                scope.fork(() -> {
+                    try {
+                        Device device = scanHost(ip, httpPorts, rtspPorts, otherPorts);
+                        if (device != null) {
+                            found.put(ip, device);
+                        }
+                    } finally {
+                        int done = completed.incrementAndGet();
+                        if (callback != null) {
+                            callback.onProgress(done, totalInt);
+                        }
+                    }
+                    return null;
+                });
+            }
+            scope.join();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+
+        List<Device> devices = new ArrayList<>(found.values());
+        devices.sort((a, b) -> Long.compare(
+                NetworkUtils.ipToLong(a.getIpAddress()), NetworkUtils.ipToLong(b.getIpAddress())));
+        logger.info("Port scan finished: {} host(s) responded", devices.size());
+        return devices;
+    }
+
+    /** Scan one host; null when nothing answers. */
+    private Device scanHost(String ip, int[] httpPorts, int[] rtspPorts, int[] otherPorts) {
+        Map<Integer, String> openPorts = new ConcurrentHashMap<>();
+        int connectTimeout = config.getSocketConnectTimeout();
+
+        try (var scope = StructuredTaskScope.open(StructuredTaskScope.Joiner.<Void>awaitAll(),
+                cfg -> cfg.withName("ports-" + ip))) {
+            forkPortChecks(scope, ip, httpPorts, "http", openPorts, connectTimeout);
+            forkPortChecks(scope, ip, rtspPorts, "rtsp", openPorts, connectTimeout);
+            forkPortChecks(scope, ip, otherPorts, "other", openPorts, connectTimeout);
+            scope.join();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return null;
+        }
+
+        if (openPorts.isEmpty() || stopped()) {
             return null;
         }
 
         Device device = new Device(ip);
+        device.addDiscoverySource("Port scan");
+        classifyPorts(device, openPorts);
+        resolveIdentity(device);
 
-        // Categorize ports
-        for (int port : openPorts) {
-            if (port == 80 || port == 8080 || port == 443 || port == 8443) {
-                device.getOpenOnvifPorts().add(port);
-            } else if (port == 554 || port == 8554 || port == 8888) {
-                device.getOpenRtspPorts().add(port);
-            } else {
-                device.getOpenSpecialPorts().add(port);
-            }
-        }
-
-        // Check if likely NVR/DVR
-        if (openPorts.contains(8000) || openPorts.contains(37777)) {
-            device.setNvrDvr(true);
-        }
-
-        // Resolve MAC address
-        String mac = NetworkUtils.resolveMacAddress(ip);
-        if (mac != null) {
-            device.setMacAddress(mac);
-            String manufacturer = macLookupService.lookupManufacturer(mac);
-            device.setManufacturer(manufacturer);
-        }
-
-        // Cross-subnet fallback: try unauthenticated ONVIF GetNetworkInterfaces for MAC
-        if (device.getMacAddress() == null && !NetworkUtils.isLocalSubnet(ip)
-                && !device.getOpenOnvifPorts().isEmpty()) {
-            logger.info("Cross-subnet device {} - trying unauthenticated ONVIF for MAC resolution", ip);
-            for (int port : device.getOpenOnvifPorts()) {
-                String serviceUrl = "http://" + ip + ":" + port + "/onvif/device_service";
-                onvifService.getNetworkInterfacesUnauthenticated(device, serviceUrl);
-                if (device.getMacAddress() != null) {
-                    String manufacturer = macLookupService.lookupManufacturer(device.getMacAddress());
-                    device.setManufacturer(manufacturer);
-                    logger.info("Cross-subnet MAC resolved via unauthenticated ONVIF for {}: {}",
-                            ip, device.getMacAddress());
-                    break;
-                }
-            }
-        }
-
-        logger.info("Scanned device: {} - Open ports: {}", ip, openPorts);
+        logger.info("Host {} open ports {} (ONVIF {}, RTSP {})", ip, device.getAllOpenPorts(),
+                device.getOpenOnvifPorts(), device.getOpenRtspPorts());
         return device;
     }
 
+    private void forkPortChecks(StructuredTaskScope<Void, Void> scope, String ip, int[] ports, String kind,
+                                Map<Integer, String> openPorts, int connectTimeout) {
+        for (int port : ports) {
+            scope.fork(() -> {
+                if (stopped()) {
+                    return null;
+                }
+                connectionPermits.acquire();
+                try {
+                    if (NetworkUtils.isPortOpen(ip, port, connectTimeout)) {
+                        openPorts.put(port, kind);
+                    }
+                } finally {
+                    connectionPermits.release();
+                }
+                return null;
+            });
+        }
+    }
+
     /**
-     * Merge WS-Discovery and port scan results.
+     * Confirm what each open port speaks. An HTTP port counts as ONVIF only
+     * when a device service answers, and an RTSP candidate only when an RTSP
+     * server answers.
      */
-    public List<Device> mergeDeviceLists(List<Device> wsDevices, List<Device> portScanDevices) {
-        List<Device> merged = new ArrayList<>();
-        List<String> wsIps = new ArrayList<>();
+    private void classifyPorts(Device device, Map<Integer, String> openPorts) {
+        Map<Integer, String> sorted = new LinkedHashMap<>();
+        openPorts.entrySet().stream()
+                .sorted(Map.Entry.comparingByKey())
+                .forEach(e -> sorted.put(e.getKey(), e.getValue()));
 
-        // Add WS-Discovery devices first
-        for (Device device : wsDevices) {
-            merged.add(device);
-            wsIps.add(device.getIpAddress());
-
-            // Resolve MAC if not already set
-            if (device.getMacAddress() == null) {
-                String mac = NetworkUtils.resolveMacAddress(device.getIpAddress());
-                if (mac != null) {
-                    device.setMacAddress(mac);
-                    if (device.getManufacturer() == null) {
-                        String manufacturer = macLookupService.lookupManufacturer(mac);
-                        device.setManufacturer(manufacturer);
+        for (Map.Entry<Integer, String> entry : sorted.entrySet()) {
+            if (stopped()) {
+                return;
+            }
+            int port = entry.getKey();
+            switch (entry.getValue()) {
+                case "http" -> {
+                    device.getOpenHttpPorts().add(port);
+                    Optional<String> serviceUrl = onvifService.findDeviceService(device.getIpAddress(), port);
+                    if (serviceUrl.isPresent()) {
+                        device.getOpenOnvifPorts().add(port);
+                        if (device.getOnvifServiceUrl() == null) {
+                            device.setOnvifServiceUrl(serviceUrl.get());
+                        }
+                        device.addDiscoverySource("ONVIF");
                     }
                 }
-            }
-        }
-
-        // Add port scan devices that weren't found via WS-Discovery
-        for (Device device : portScanDevices) {
-            if (!wsIps.contains(device.getIpAddress())) {
-                merged.add(device);
-            } else {
-                // Merge port information
-                Device existing = findDeviceByIp(merged, device.getIpAddress());
-                if (existing != null) {
-                    mergePortInfo(existing, device);
+                case "rtsp" -> {
+                    if (rtspService.isRtspServer(device.getIpAddress(), port)) {
+                        device.getOpenRtspPorts().add(port);
+                    } else {
+                        device.getOpenSpecialPorts().add(port);
+                    }
                 }
+                default -> device.getOpenSpecialPorts().add(port);
             }
         }
 
-        logger.info("Merged device lists: {} total devices", merged.size());
-        return merged;
-    }
-
-    /**
-     * Merge port information from scanned device into existing device.
-     */
-    private void mergePortInfo(Device existing, Device scanned) {
-        for (int port : scanned.getOpenOnvifPorts()) {
-            if (!existing.getOpenOnvifPorts().contains(port)) {
-                existing.getOpenOnvifPorts().add(port);
+        if (!device.getOpenRtspPorts().isEmpty() || !device.getOpenOnvifPorts().isEmpty()) {
+            if (device.getType() == Device.DeviceType.UNKNOWN) {
+                device.setType(Device.DeviceType.CAMERA);
             }
         }
-        for (int port : scanned.getOpenRtspPorts()) {
-            if (!existing.getOpenRtspPorts().contains(port)) {
-                existing.getOpenRtspPorts().add(port);
-            }
-        }
-        for (int port : scanned.getOpenSpecialPorts()) {
-            if (!existing.getOpenSpecialPorts().contains(port)) {
-                existing.getOpenSpecialPorts().add(port);
-            }
-        }
-    }
-
-    private Device findDeviceByIp(List<Device> devices, String ip) {
-        for (Device device : devices) {
-            if (device.getIpAddress().equals(ip)) {
-                return device;
-            }
-        }
-        return null;
     }
 
     /**
-     * Shutdown the executor service.
+     * Fill in MAC and vendor. ARP works only inside the local broadcast domain,
+     * so devices on another subnet are resolved later from ONVIF once
+     * credentials are known.
      */
+    private void resolveIdentity(Device device) {
+        if (!config.isMacResolutionEnabled() || device.getMacAddress() != null) {
+            return;
+        }
+        String mac = NetworkUtils.resolveMacAddress(device.getIpAddress());
+        if (mac == null) {
+            if (!NetworkUtils.isLocalSubnet(device.getIpAddress())) {
+                logger.debug("{} is on another subnet; MAC needs ONVIF", device.getIpAddress());
+            }
+            return;
+        }
+        applyMac(device, mac);
+    }
+
+    /** Record a MAC and the vendor it belongs to. */
+    public void applyMac(Device device, String mac) {
+        String normalized = NetworkUtils.normalizeMac(mac);
+        if (normalized == null || !NetworkUtils.isUnicastMac(normalized)) {
+            return;
+        }
+        device.setMacAddress(normalized);
+        String vendor = macLookupService.lookupManufacturer(normalized);
+        device.setVendorFromMac(vendor);
+        if (device.getManufacturer() == null && !MacLookupService.UNKNOWN.equals(vendor)) {
+            device.setManufacturer(vendor);
+        }
+    }
+
+    /**
+     * Combine multicast and scan results, keeping one Device per address and
+     * preferring the richer ONVIF information.
+     */
+    public List<Device> mergeDeviceLists(List<Device> wsDevices, List<Device> portScanDevices) {
+        Map<String, Device> merged = new LinkedHashMap<>();
+        for (Device device : wsDevices) {
+            merged.put(device.getIpAddress(), device);
+        }
+        for (Device scanned : portScanDevices) {
+            Device existing = merged.get(scanned.getIpAddress());
+            if (existing == null) {
+                merged.put(scanned.getIpAddress(), scanned);
+                continue;
+            }
+            mergeInto(existing, scanned);
+        }
+        List<Device> result = new ArrayList<>(merged.values());
+        result.sort((a, b) -> Long.compare(
+                NetworkUtils.ipToLong(a.getIpAddress()), NetworkUtils.ipToLong(b.getIpAddress())));
+        logger.info("Merged to {} device(s)", result.size());
+        return result;
+    }
+
+    private void mergeInto(Device target, Device source) {
+        addMissing(target.getOpenOnvifPorts(), source.getOpenOnvifPorts());
+        addMissing(target.getOpenHttpPorts(), source.getOpenHttpPorts());
+        addMissing(target.getOpenRtspPorts(), source.getOpenRtspPorts());
+        addMissing(target.getOpenSpecialPorts(), source.getOpenSpecialPorts());
+
+        if (target.getMacAddress() == null && source.getMacAddress() != null) {
+            target.setMacAddress(source.getMacAddress());
+            target.setVendorFromMac(source.getVendorFromMac());
+        }
+        if (target.getManufacturer() == null) {
+            target.setManufacturer(source.getManufacturer());
+        }
+        if (target.getOnvifServiceUrl() == null) {
+            target.setOnvifServiceUrl(source.getOnvifServiceUrl());
+        }
+        if (source.getDiscoverySource() != null) {
+            target.addDiscoverySource(source.getDiscoverySource());
+        }
+    }
+
+    private static void addMissing(List<Integer> target, List<Integer> source) {
+        for (Integer value : source) {
+            if (!target.contains(value)) {
+                target.add(value);
+            }
+        }
+    }
+
+    /** Window used for WS-Discovery, exposed for progress estimates. */
+    public Duration discoveryWindow() {
+        return Duration.ofMillis(config.getOnvifTimeout());
+    }
+
     public void shutdown() {
-        if (executorService != null && !executorService.isShutdown()) {
-            executorService.shutdown();
-            try {
-                if (!executorService.awaitTermination(10, TimeUnit.SECONDS)) {
-                    executorService.shutdownNow();
-                }
-            } catch (InterruptedException e) {
-                executorService.shutdownNow();
-            }
-        }
+        cancel();
     }
 
-    /**
-     * Progress callback interface.
-     */
-    public interface ProgressCallback {
-        void onProgress(int current, int total);
+    @Override
+    public void close() {
+        shutdown();
     }
 }

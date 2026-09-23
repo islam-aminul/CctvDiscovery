@@ -20,6 +20,9 @@ import java.util.stream.Collectors;
 public class HostAuditService {
     private static final Logger logger = LoggerFactory.getLogger(HostAuditService.class);
 
+    /** Seconds between the NTP epoch (1900-01-01) and the Java epoch (1970-01-01). */
+    private static final long NTP_EPOCH_OFFSET_SECONDS = 2_208_988_800L;
+
     private static final String[] NTP_SERVERS = {
             "time.google.com",
             "time.windows.com",
@@ -304,40 +307,59 @@ public class HostAuditService {
      * Get NTP time drift in seconds using SNTP protocol (RFC 4330).
      */
     private Double getNTPTimeDrift(String ntpServer) throws Exception {
-        DatagramSocket socket = null;
-        try {
-            socket = new DatagramSocket();
+        try (DatagramSocket socket = new DatagramSocket()) {
             socket.setSoTimeout(5000);
 
             InetAddress address = InetAddress.getByName(ntpServer);
             byte[] buf = new byte[48];
-            buf[0] = 0x1B; // NTP mode 3 (client), version 3
+            buf[0] = 0x1B; // LI 0, version 3, mode 3 (client)
 
-            DatagramPacket packet = new DatagramPacket(buf, buf.length, address, 123);
+            long t1 = System.currentTimeMillis();
+            writeNtpTimestamp(buf, 40, t1); // transmit timestamp
+            socket.send(new DatagramPacket(buf, buf.length, address, 123));
 
-            socket.send(packet);
-            socket.receive(packet);
+            DatagramPacket response = new DatagramPacket(buf, buf.length);
+            socket.receive(response);
             long t4 = System.currentTimeMillis();
 
-            // Extract transmit timestamp (offset 40-47)
-            long seconds = 0;
-            for (int i = 40; i <= 43; i++) {
-                seconds = (seconds << 8) | (buf[i] & 0xff);
+            long t2 = readNtpTimestamp(buf, 32); // server receive timestamp
+            long t3 = readNtpTimestamp(buf, 40); // server transmit timestamp
+            if (t2 == 0 || t3 == 0) {
+                return null;
             }
 
-            // NTP epoch is Jan 1, 1900; Java epoch is Jan 1, 1970
-            long ntpEpochOffset = 2208988800L;
-            long ntpTime = (seconds - ntpEpochOffset) * 1000;
+            // RFC 4330 clock offset, which cancels out one-way network delay.
+            // Ignoring it, as the previous version did, understated the drift
+            // by half the round trip.
+            double offsetMillis = ((double) (t2 - t1) + (double) (t3 - t4)) / 2.0;
+            return offsetMillis / 1000.0;
+        }
+    }
 
-            // Calculate drift (simplified, ignoring network delay)
-            double drift = (ntpTime - t4) / 1000.0;
+    /** Seconds since 1900 at {@code offset}, converted to epoch milliseconds. */
+    private static long readNtpTimestamp(byte[] buf, int offset) {
+        long seconds = 0;
+        for (int i = 0; i < 4; i++) {
+            seconds = (seconds << 8) | (buf[offset + i] & 0xffL);
+        }
+        long fraction = 0;
+        for (int i = 4; i < 8; i++) {
+            fraction = (fraction << 8) | (buf[offset + i] & 0xffL);
+        }
+        if (seconds == 0 && fraction == 0) {
+            return 0;
+        }
+        return (seconds - NTP_EPOCH_OFFSET_SECONDS) * 1000L + (fraction * 1000L >>> 32);
+    }
 
-            return drift;
-
-        } finally {
-            if (socket != null && !socket.isClosed()) {
-                socket.close();
-            }
+    private static void writeNtpTimestamp(byte[] buf, int offset, long epochMillis) {
+        long seconds = epochMillis / 1000L + NTP_EPOCH_OFFSET_SECONDS;
+        long fraction = ((epochMillis % 1000L) << 32) / 1000L;
+        for (int i = 0; i < 4; i++) {
+            buf[offset + i] = (byte) (seconds >>> (24 - 8 * i));
+        }
+        for (int i = 0; i < 4; i++) {
+            buf[offset + 4 + i] = (byte) (fraction >>> (24 - 8 * i));
         }
     }
 
@@ -360,12 +382,12 @@ public class HostAuditService {
 
             // Top 5 by Memory
             List<HostAuditData.ProcessInfo> topMemory = processes.stream()
-                    .sorted((p1, p2) -> Long.compare(p2.getResidentSetSize(), p1.getResidentSetSize()))
+                    .sorted((p1, p2) -> Long.compare(p2.getResidentMemory(), p1.getResidentMemory()))
                     .limit(5)
                     .map(p -> new HostAuditData.ProcessInfo(
                             p.getName(),
                             p.getProcessID(),
-                            formatBytes(p.getResidentSetSize())))
+                            formatBytes(p.getResidentMemory())))
                     .collect(Collectors.toList());
             data.setTopMemoryProcesses(topMemory);
 

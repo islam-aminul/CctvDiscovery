@@ -334,6 +334,10 @@ public final class AppConfig {
         return getInt("rtsp.validation.timeout", 0);
     }
 
+    public void setRtspValidationTimeout(int timeoutMs) {
+        setProperty("rtsp.validation.timeout", String.valueOf(timeoutMs));
+    }
+
     // Compliance rules
     public int getSubStreamMinHeight() {
         return getInt("compliance.sub.min.height", 360);

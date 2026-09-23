@@ -6,6 +6,7 @@ import com.cctv.discovery.discovery.StreamAnalyzer;
 import com.cctv.discovery.export.ExcelExporter;
 import com.cctv.discovery.model.Credential;
 import com.cctv.discovery.model.Device;
+import com.cctv.discovery.model.Finding;
 import com.cctv.discovery.model.HostAuditData;
 import com.cctv.discovery.model.RTSPStream;
 import com.cctv.discovery.service.HostAuditService;
@@ -13,11 +14,14 @@ import com.cctv.discovery.service.MacLookupService;
 import com.cctv.discovery.service.OnvifService;
 import com.cctv.discovery.service.RtspService;
 import com.cctv.discovery.util.NetworkUtils;
+import com.cctv.discovery.util.RtspClient;
+import com.cctv.discovery.util.TargetParser;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.control.cell.PropertyValueFactory;
@@ -638,7 +642,7 @@ public class MainController {
                 textField.textProperty().addListener((obs, oldVal, newVal) -> {
                     if (newVal == null || newVal.trim().isEmpty()) {
                         textField.setStyle("");
-                    } else if (NetworkUtils.isValidCIDR(newVal.trim())) {
+                    } else if (isValidCidr(newVal.trim())) {
                         textField.setStyle("");
                     } else {
                         textField.setStyle(
@@ -1238,20 +1242,35 @@ public class MainController {
         }
     }
 
+    /** True when the text is a CIDR block this tool can scan. */
+    private static boolean isValidCidr(String text) {
+        return text != null && text.contains("/") && TargetParser.parseToken(text.trim()) != null;
+    }
+
+    /** Address count for one token (single IP, range or CIDR); 0 when invalid. */
+    private static long countIps(String token) {
+        TargetParser.Interval interval = token == null ? null : TargetParser.parseToken(token.trim());
+        return interval == null ? 0 : interval.size();
+    }
+
+    /** Address count for a start-end pair. */
+    private static long countRange(String startIp, String endIp) {
+        if (!NetworkUtils.isValidIP(startIp) || !NetworkUtils.isValidIP(endIp)) {
+            return 0;
+        }
+        return countIps(startIp.trim() + "-" + endIp.trim());
+    }
+
+    /** Valid, de-duplicated addresses from a free-form list. */
+    private static List<String> parseIpList(String text) {
+        TargetParser.Targets targets = TargetParser.parse(text);
+        return targets.toList(AppConfig.getInstance().getMaxTargets());
+    }
+
     private void populateNetworkInterfaces() {
-        List<NetworkInterface> interfaces = NetworkUtils.getActiveNetworkInterfaces();
-        for (NetworkInterface ni : interfaces) {
-            try {
-                for (InterfaceAddress addr : ni.getInterfaceAddresses()) {
-                    InetAddress inetAddr = addr.getAddress();
-                    if (inetAddr instanceof java.net.Inet4Address) {
-                        String display = inetAddr.getHostAddress() + " - " + ni.getDisplayName();
-                        cbInterfaces.getItems().add(display);
-                    }
-                }
-            } catch (Exception e) {
-                logger.error("Error processing interface", e);
-            }
+        cbInterfaces.getItems().clear();
+        for (NetworkUtils.LocalInterface li : NetworkUtils.getLocalInterfaces()) {
+            cbInterfaces.getItems().add(li.toString());
         }
         if (!cbInterfaces.getItems().isEmpty()) {
             cbInterfaces.getSelectionModel().selectFirst();
@@ -1259,33 +1278,15 @@ public class MainController {
     }
 
     private void populateAdvancedNetworkInterfaces() {
-        // Preserve previously selected interfaces
         List<String> selectedIps = new ArrayList<>();
         for (NetworkInterfaceItem item : networkInterfaces) {
             if (item.isSelected()) {
                 selectedIps.add(item.getIpAddress());
             }
         }
-
-        // Clear existing items to prevent duplication on repeated modal opens
         networkInterfaces.clear();
-
-        List<NetworkInterface> interfaces = NetworkUtils.getActiveNetworkInterfaces();
-        for (NetworkInterface ni : interfaces) {
-            try {
-                for (InterfaceAddress addr : ni.getInterfaceAddresses()) {
-                    InetAddress inetAddr = addr.getAddress();
-                    if (inetAddr instanceof java.net.Inet4Address) {
-                        String display = ni.getDisplayName();
-                        String ip = inetAddr.getHostAddress();
-                        // Restore selection state if this IP was previously selected
-                        boolean wasSelected = selectedIps.contains(ip);
-                        networkInterfaces.add(new NetworkInterfaceItem(display, ip, ni, wasSelected));
-                    }
-                }
-            } catch (Exception e) {
-                logger.error("Error processing interface", e);
-            }
+        for (NetworkUtils.LocalInterface li : NetworkUtils.getLocalInterfaces()) {
+            networkInterfaces.add(new NetworkInterfaceItem(li, selectedIps.contains(li.address())));
         }
     }
 
@@ -1352,36 +1353,31 @@ public class MainController {
     }
 
     private void updateAdvancedIpCount() {
-        int count = 0;
+        // Counting through the parser means overlapping sources are not counted
+        // twice, so the figure matches what the scan will actually do.
+        lblAdvancedIpCount.setText("Total addresses: " + TargetParser.parse(advancedTargetText()).count());
+        updateStartButtonState();
+    }
 
-        // Count selected network interfaces
+    /** Every advanced-mode source as one target expression. */
+    private String advancedTargetText() {
+        StringBuilder sb = new StringBuilder();
         for (NetworkInterfaceItem item : networkInterfaces) {
             if (item.isSelected()) {
-                // Calculate actual subnet size based on network prefix length
-                int prefixLength = NetworkUtils.getNetworkPrefixLength(item.getNetworkInterface());
-                int subnetSize = NetworkUtils.countIPsFromPrefix(prefixLength);
-                count += subnetSize;
-                logger.info("Interface {} has /{} prefix = {} usable IPs",
-                        item.getIpAddress(), prefixLength, subnetSize);
+                sb.append(item.getNetworkCidr()).append(' ');
             }
         }
-
-        // Count IP ranges
         for (IpRangeItem range : ipRanges) {
             if (NetworkUtils.isValidIP(range.getStartIp()) && NetworkUtils.isValidIP(range.getEndIp())) {
-                count += NetworkUtils.countIPsInRange(range.getStartIp(), range.getEndIp());
+                sb.append(range.getStartIp().trim()).append('-').append(range.getEndIp().trim()).append(' ');
             }
         }
-
-        // Count CIDRs
         for (CidrItem cidr : cidrs) {
-            if (NetworkUtils.isValidCIDR(cidr.getCidr())) {
-                count += NetworkUtils.countIPsInCIDR(cidr.getCidr());
+            if (isValidCidr(cidr.getCidr())) {
+                sb.append(cidr.getCidr().trim()).append(' ');
             }
         }
-
-        lblAdvancedIpCount.setText("Total Possible IPs: " + count);
-        updateStartButtonState();
+        return sb.toString();
     }
 
     private void updateNetworkMode() {
@@ -1414,25 +1410,15 @@ public class MainController {
     }
 
     private void updateIpCount() {
-        int count = 0;
+        long count = 0;
         if (rbInterface.isSelected() && cbInterfaces.getValue() != null) {
-            // Calculate actual subnet size from selected interface
-            String selectedInterface = cbInterfaces.getValue();
-            count = getSelectedInterfaceIpCount(selectedInterface);
+            count = getSelectedInterfaceIpCount(cbInterfaces.getValue());
         } else if (rbManualRange.isSelected()) {
-            String start = tfStartIP.getText();
-            String end = tfEndIP.getText();
-            if (NetworkUtils.isValidIP(start) && NetworkUtils.isValidIP(end)) {
-                count = NetworkUtils.countIPsInRange(start, end);
-            }
+            count = countRange(tfStartIP.getText(), tfEndIP.getText());
         } else if (rbCIDR.isSelected()) {
-            String cidr = tfCIDR.getText();
-            if (NetworkUtils.isValidCIDR(cidr)) {
-                count = NetworkUtils.countIPsInCIDR(cidr);
-            }
+            count = countIps(tfCIDR.getText());
         } else if (rbIpList.isSelected()) {
-            // Count unique, valid IPs parsed from the free-form list
-            count = NetworkUtils.parseMultipleIPs(taIpList.getText()).size();
+            count = TargetParser.parse(taIpList.getText()).count();
         }
         lblIpCount.setText("Possible IPs: " + count);
         updateStartButtonState();
@@ -1443,36 +1429,22 @@ public class MainController {
      * Parses the display string to extract IP, finds the NetworkInterface,
      * and calculates actual subnet size based on prefix length.
      */
-    private int getSelectedInterfaceIpCount(String displayString) {
-        try {
-            // Display format is "IP - Interface Name" (e.g., "192.168.1.100 - Ethernet")
-            String[] parts = displayString.split(" - ");
-            if (parts.length < 1) {
-                return 254; // Fallback to /24
-            }
+    /** Usable addresses on the subnet of the interface chosen in the combo box. */
+    private long getSelectedInterfaceIpCount(String displayString) {
+        return findSelectedInterface(displayString)
+                .map(NetworkUtils.LocalInterface::hostCount)
+                .orElse(0L);
+    }
 
-            String ipAddress = parts[0].trim();
-            List<NetworkInterface> interfaces = NetworkUtils.getActiveNetworkInterfaces();
-
-            for (NetworkInterface ni : interfaces) {
-                for (InterfaceAddress addr : ni.getInterfaceAddresses()) {
-                    InetAddress inetAddr = addr.getAddress();
-                    if (inetAddr instanceof java.net.Inet4Address &&
-                            inetAddr.getHostAddress().equals(ipAddress)) {
-                        int prefixLength = NetworkUtils.getNetworkPrefixLength(ni);
-                        int subnetSize = NetworkUtils.countIPsFromPrefix(prefixLength);
-                        logger.info("Selected interface {} has /{} prefix = {} usable IPs",
-                                ipAddress, prefixLength, subnetSize);
-                        return subnetSize;
-                    }
-                }
-            }
-        } catch (Exception e) {
-            logger.warn("Error calculating IP count for selected interface, using /24 default", e);
+    /** The interface behind a combo-box entry, matched on its address. */
+    private Optional<NetworkUtils.LocalInterface> findSelectedInterface(String displayString) {
+        if (displayString == null) {
+            return Optional.empty();
         }
-
-        // Fallback to /24 if unable to determine
-        return 254;
+        String address = displayString.split("[/ ]")[0].trim();
+        return NetworkUtils.getLocalInterfaces().stream()
+                .filter(li -> li.address().equals(address))
+                .findFirst();
     }
 
     private void addCredential() {
@@ -1757,294 +1729,177 @@ public class MainController {
         }
     }
 
+    /**
+     * Identify one device and collect its streams: ONVIF first, because it
+     * publishes the real stream URLs, then RTSP path probing only when ONVIF
+     * gave us nothing.
+     */
     private void authenticateAndDiscoverStreams(Device device) {
-        logger.info("Starting authentication for device: {}", device.getIpAddress());
+        logger.info("Identifying {}", device.getIpAddress());
         device.setStatus(Device.DeviceStatus.AUTHENTICATING);
         Platform.runLater(() -> tvResults.refresh());
 
-        // Reset per-device probe state so the auth-vs-path detection below
-        // reflects only this device's probing.
-        rtspService.resetProbeState();
+        boolean onvifAuthenticated = authenticateOnvif(device);
 
-        // PRIORITY 1: Try ONVIF Discovery (authentication)
-        boolean onvifSuccess = attemptOnvifAuthentication(device);
-
-        // PRIORITY 1b: When ONVIF authenticates, retrieve the authoritative RTSP
-        // stream URLs via GetProfiles/GetStreamUri. If ONVIF provides URLs we
-        // analyze ONLY those and must NOT guess RTSP paths.
-        boolean onvifProvidedStreams = false;
-        if (onvifSuccess) {
-            onvifProvidedStreams = retrieveOnvifStreams(device);
-        }
-
-        // PRIORITY 2: RTSP URL guessing - ONLY when ONVIF did not yield stream URLs.
-        if (!onvifProvidedStreams && device.getRtspStreams().isEmpty()) {
-            logger.info("Falling back to RTSP URL guessing for {}", device.getIpAddress());
-            attemptRtspAuthentication(device);
-        } else if (onvifProvidedStreams) {
-            logger.info("ONVIF provided {} stream URL(s) for {} - skipping RTSP path guessing",
-                    device.getRtspStreams().size(), device.getIpAddress());
-        }
-
-        // PRIORITY 3: NVR/DVR Channel Iteration (path-guessing) - skipped when
-        // ONVIF already provided authoritative stream URLs.
-        if (!onvifProvidedStreams && device.isNvrDvr() && device.getUsername() != null) {
-            logger.info("Device {} detected as NVR/DVR, iterating channels", device.getIpAddress());
-            List<RTSPStream> nvrStreams = rtspService.iterateNvrChannels(
-                    device, device.getUsername(), device.getPassword(), 64);
-
-            // Add only non-duplicate streams (check by RTSP URL)
-            java.util.Set<String> existingUrls = device.getRtspStreams().stream()
-                    .map(RTSPStream::getRtspUrl)
-                    .collect(java.util.stream.Collectors.toSet());
-            int added = 0;
-            for (RTSPStream stream : nvrStreams) {
-                if (!existingUrls.contains(stream.getRtspUrl())) {
-                    device.getRtspStreams().add(stream);
-                    added++;
-                }
+        if (onvifAuthenticated) {
+            int sources = onvifService.getVideoSourceCount(device);
+            device.setVideoSourceCount(sources);
+            onvifService.getHostname(device);
+            device.setType(onvifService.classifyType(device, sources));
+            if (device.getMacAddress() == null) {
+                onvifService.getMacAddress(device).ifPresent(mac -> networkScanner.applyMac(device, mac));
             }
-            logger.info("Found {} NVR/DVR streams, added {} new (filtered {} duplicates)",
-                    nvrStreams.size(), added, nvrStreams.size() - added);
-        }
-
-        // Final MAC resolution attempt for cross-subnet devices
-        // If MAC is still null after all auth attempts, try unauthenticated ONVIF
-        if (device.getMacAddress() == null && !device.getOpenOnvifPorts().isEmpty()) {
-            for (int port : device.getOpenOnvifPorts()) {
-                String serviceUrl = "http://" + device.getIpAddress() + ":" + port + "/onvif/device_service";
-                onvifService.getNetworkInterfacesUnauthenticated(device, serviceUrl);
-                if (device.getMacAddress() != null) {
-                    String manufacturer = MacLookupService.getInstance()
-                            .lookupManufacturer(device.getMacAddress());
-                    if (manufacturer != null && !"Unknown".equals(manufacturer)) {
-                        device.setManufacturer(manufacturer);
-                    }
-                    logger.info("Late MAC resolution for {}: {} ({})",
-                            device.getIpAddress(), device.getMacAddress(), device.getManufacturer());
-                    break;
-                }
+            for (RTSPStream stream : onvifService.getStreamUris(device)) {
+                device.addStream(stream);
             }
         }
 
-        // Set final status
-        if (device.getUsername() != null && !device.getRtspStreams().isEmpty()) {
-            device.setStatus(Device.DeviceStatus.COMPLETED);
-            logger.info("Device {} authentication COMPLETED - {} streams found",
-                    device.getIpAddress(), device.getRtspStreams().size());
-        } else {
-            // Check if this is likely NOT a camera (router, printer, NAS, web server, etc.)
-            // Use actual success indicators, not just port detection
-            boolean hasWsDiscovery = device.getOnvifServiceUrl() != null;
-            boolean hasRtspPorts = device.getOpenRtspPorts() != null && !device.getOpenRtspPorts().isEmpty();
+        boolean rtspChallenged = false;
+        if (device.getRtspStreams().isEmpty() && !device.getOpenRtspPorts().isEmpty()) {
+            logger.info("No ONVIF stream URLs for {}; probing RTSP paths", device.getIpAddress());
+            rtspChallenged = discoverStreamsByPath(device);
+        }
 
-            // Device is likely not a camera if:
-            // - No WS-Discovery announcement AND
-            // - No RTSP ports detected AND
-            // - ONVIF didn't actually work (even if ports were detected)
-            boolean isLikelyNotCamera = !hasWsDiscovery && !hasRtspPorts && !onvifSuccess;
-
-            if (isLikelyNotCamera) {
-                device.setStatus(Device.DeviceStatus.AUTH_FAILED);
-                device.setAuthFailed(false); // Not an auth failure - just not a camera
-                device.setErrorMessage("Unknown device type");
-                logger.info("Device {} marked as UNKNOWN DEVICE TYPE (not a camera)", device.getIpAddress());
-            } else if (rtspService.wasAuthChallengeObserved()) {
-                // The RTSP port challenged us with a 401 but no credential worked:
-                // this is a genuine authentication failure, not a path problem.
-                device.setStatus(Device.DeviceStatus.AUTH_FAILED);
-                device.setAuthFailed(true);
-                device.setErrorMessage("Authentication failed with all credentials");
-                logger.warn("Device {} authentication FAILED (401 from RTSP)", device.getIpAddress());
-            } else {
-                // We reached the RTSP service but never received a 401 - the
-                // credentials were never rejected, so the likely cause is that no
-                // known/guessed RTSP path matched this device.
-                device.setStatus(Device.DeviceStatus.AUTH_FAILED);
-                device.setAuthFailed(false);
-                device.setErrorMessage("No matching RTSP stream path found");
-                logger.warn("Device {} - no RTSP path matched (no 401 observed)", device.getIpAddress());
+        if (device.isNvrDvr() && device.getUsername() != null) {
+            for (RTSPStream stream : rtspService.iterateNvrChannels(
+                    device, device.getUsername(), device.getPassword(), config.getNvrMaxChannels())) {
+                device.addStream(stream);
             }
         }
+
+        checkAnonymousAccess(device);
+        recordClockFinding(device);
+        finalizeStatus(device, onvifAuthenticated, rtspChallenged);
     }
 
     /**
-     * Retrieve and record the authoritative RTSP stream URLs from an
-     * ONVIF-authenticated device using GetProfiles/GetStreamUri.
-     *
-     * When this returns true the device's stream list is populated with the
-     * exact ONVIF-advertised URLs and the caller must NOT guess RTSP paths.
-     *
-     * @return true if at least one ONVIF stream URL was recorded
+     * Try each credential against the device's ONVIF service, discovering the
+     * service address first when the port scan has not already found one.
      */
-    private boolean retrieveOnvifStreams(Device device) {
-        List<RTSPStream> onvifStreams = onvifService.getStreamUris(device);
-        if (onvifStreams.isEmpty()) {
-            logger.info("ONVIF returned no stream URLs for {} - will fall back to RTSP discovery",
-                    device.getIpAddress());
+    private boolean authenticateOnvif(Device device) {
+        List<String> serviceUrls = new ArrayList<>();
+        if (device.getOnvifServiceUrl() != null) {
+            serviceUrls.add(device.getOnvifServiceUrl());
+        }
+        for (int port : device.getOpenHttpPorts()) {
+            onvifService.findDeviceService(device.getIpAddress(), port)
+                    .filter(url -> !serviceUrls.contains(url))
+                    .ifPresent(serviceUrls::add);
+        }
+        if (serviceUrls.isEmpty()) {
             return false;
         }
 
-        // De-duplicate against any streams already recorded
-        java.util.Set<String> existingUrls = device.getRtspStreams().stream()
-                .map(RTSPStream::getRtspUrl)
-                .collect(java.util.stream.Collectors.toSet());
-
-        int added = 0;
-        for (RTSPStream stream : onvifStreams) {
-            if (stream.getRtspUrl() != null && existingUrls.add(stream.getRtspUrl())) {
-                device.getRtspStreams().add(stream);
-                added++;
-            }
-        }
-
-        logger.info("Recorded {} ONVIF-provided RTSP stream URL(s) for {}", added, device.getIpAddress());
-        return added > 0;
-    }
-
-    /**
-     * Attempt ONVIF authentication with all credentials.
-     * Tries service URL from WS-Discovery first, then constructs URLs from detected
-     * ports.
-     */
-    private boolean attemptOnvifAuthentication(Device device) {
-        logger.info("Attempting ONVIF authentication for {}", device.getIpAddress());
-
-        // Case 1: Service URL from WS-Discovery
-        if (device.getOnvifServiceUrl() != null) {
-            logger.info("Using ONVIF service URL from WS-Discovery: {}", device.getOnvifServiceUrl());
-
-            for (Credential cred : credentials) {
-                logger.info("Trying ONVIF with credential: {}", cred.getUsername());
-
-                if (onvifService.getDeviceInformation(device, cred.getUsername(), cred.getPassword())) {
-                    device.setUsername(cred.getUsername());
-                    device.setPassword(cred.getPassword());
-                    logger.info("ONVIF authentication successful with user: {}", cred.getUsername());
-
-                    List<String> videoSources = onvifService.getVideoSources(device);
-                    if (videoSources.size() > 1) {
-                        device.setNvrDvr(true);
-                        logger.info("Multiple video sources detected - marking as NVR/DVR");
-                    }
-
-                    // Retrieve device name via ONVIF GetHostname
-                    onvifService.getHostname(device);
-
-                    // Retrieve MAC via ONVIF GetNetworkInterfaces if ARP resolution failed
-                    if (device.getMacAddress() == null || device.getMacAddress().isEmpty()) {
-                        onvifService.getNetworkInterfaces(device);
-                        // Lookup manufacturer from ONVIF-retrieved MAC if not already known
-                        if (device.getMacAddress() != null &&
-                                (device.getManufacturer() == null || "Unknown".equals(device.getManufacturer()))) {
-                            String manufacturer = MacLookupService.getInstance()
-                                    .lookupManufacturer(device.getMacAddress());
-                            if (manufacturer != null && !"Unknown".equals(manufacturer)) {
-                                device.setManufacturer(manufacturer);
-                                logger.info("Manufacturer from ONVIF MAC: {}", manufacturer);
-                            }
-                        }
-                    }
-
+        for (String serviceUrl : serviceUrls) {
+            for (Credential credential : credentials) {
+                if (onvifService.getDeviceInformation(device, serviceUrl,
+                        credential.getUsername(), credential.getPassword())) {
+                    logger.info("ONVIF accepted a credential on {}", serviceUrl);
                     return true;
                 }
             }
-            logger.warn("All credentials failed for WS-Discovery ONVIF URL");
         }
-
-        // Case 2: Construct URLs from detected ONVIF ports
-        if (!device.getOpenOnvifPorts().isEmpty()) {
-            logger.info("No service URL or WS-Discovery auth failed. Constructing ONVIF URLs from {} detected ports",
-                    device.getOpenOnvifPorts().size());
-
-            for (int port : device.getOpenOnvifPorts()) {
-                logger.info("Trying ONVIF on port: {}", port);
-
-                for (Credential cred : credentials) {
-                    logger.info("Trying constructed ONVIF URL with credential: {}", cred.getUsername());
-
-                    if (onvifService.discoverDeviceByPort(device, port, cred.getUsername(), cred.getPassword())) {
-                        device.setUsername(cred.getUsername());
-                        device.setPassword(cred.getPassword());
-                        logger.info("ONVIF authentication successful via constructed URL on port {} with user: {}",
-                                port, cred.getUsername());
-
-                        List<String> videoSources = onvifService.getVideoSources(device);
-                        if (videoSources.size() > 1) {
-                            device.setNvrDvr(true);
-                            logger.info("Multiple video sources detected - marking as NVR/DVR");
-                        }
-
-                        // Retrieve device name via ONVIF GetHostname
-                        onvifService.getHostname(device);
-
-                        // Retrieve MAC via ONVIF GetNetworkInterfaces if ARP resolution failed
-                        if (device.getMacAddress() == null || device.getMacAddress().isEmpty()) {
-                            onvifService.getNetworkInterfaces(device);
-                            // Lookup manufacturer from ONVIF-retrieved MAC if not already known
-                            if (device.getMacAddress() != null &&
-                                    (device.getManufacturer() == null || "Unknown".equals(device.getManufacturer()))) {
-                                String manufacturer = MacLookupService.getInstance()
-                                        .lookupManufacturer(device.getMacAddress());
-                                if (manufacturer != null && !"Unknown".equals(manufacturer)) {
-                                    device.setManufacturer(manufacturer);
-                                    logger.info("Manufacturer from ONVIF MAC: {}", manufacturer);
-                                }
-                            }
-                        }
-
-                        return true;
-                    }
-                }
-            }
-            logger.warn("All ONVIF port/credential combinations failed");
-        } else {
-            logger.info("No ONVIF ports detected for {}, skipping ONVIF", device.getIpAddress());
-        }
-
+        logger.info("No credential accepted by ONVIF on {}", device.getIpAddress());
         return false;
     }
 
     /**
-     * Attempt RTSP URL guessing with all credentials.
+     * Probe RTSP paths with each credential.
+     *
+     * @return true when an RTSP server asked for credentials, which separates a
+     *         wrong password from an unknown stream path
      */
-    private boolean attemptRtspAuthentication(Device device) {
-        logger.info("Attempting RTSP URL guessing for {}", device.getIpAddress());
-
-        // Check if RTSP ports exist - if not, skip entirely
-        if (device.getOpenRtspPorts() == null || device.getOpenRtspPorts().isEmpty()) {
-            logger.info("No RTSP ports detected for {} - skipping RTSP authentication", device.getIpAddress());
-            return false;
-        }
-
-        for (Credential cred : credentials) {
-            logger.info("Trying RTSP discovery with credential: {}", cred.getUsername());
-
-            List<RTSPStream> streams = rtspService.discoverStreams(device, cred.getUsername(), cred.getPassword());
+    private boolean discoverStreamsByPath(Device device) {
+        for (Credential credential : credentials) {
+            List<RTSPStream> streams = rtspService.discoverStreams(
+                    device, credential.getUsername(), credential.getPassword());
             if (!streams.isEmpty()) {
-                device.setUsername(cred.getUsername());
-                device.setPassword(cred.getPassword());
-                device.getRtspStreams().addAll(streams);
-                logger.info("RTSP discovery successful with user: {} - found {} streams",
-                        cred.getUsername(), streams.size());
-
-                // Extract device name from SDP session name if not already set by ONVIF
-                if (device.getDeviceName() == null || device.getDeviceName().isEmpty()) {
-                    for (RTSPStream stream : streams) {
-                        if (stream.getSdpSessionName() != null) {
-                            device.setDeviceName(stream.getSdpSessionName());
-                            logger.info("Set device name from SDP session name: {}", stream.getSdpSessionName());
-                            break;
-                        }
+                if (device.getUsername() == null) {
+                    device.setUsername(credential.getUsername());
+                    device.setPassword(credential.getPassword());
+                }
+                for (RTSPStream stream : streams) {
+                    device.addStream(stream);
+                    if (device.getDeviceName() == null && stream.getSdpSessionName() != null) {
+                        device.setDeviceName(stream.getSdpSessionName());
                     }
                 }
-
+                return false;
+            }
+        }
+        for (int port : device.getOpenRtspPorts()) {
+            RtspService.ProbeResult probe = rtspService.probe(
+                    RtspClient.url(device.getIpAddress(), port, "/"), null, null);
+            if (probe.authRequired()) {
                 return true;
             }
         }
-
-        logger.warn("All RTSP credential combinations failed");
         return false;
+    }
+
+    /** Record whether the video is readable with no credentials at all. */
+    private void checkAnonymousAccess(Device device) {
+        if (device.getRtspStreams().isEmpty()) {
+            return;
+        }
+        RTSPStream first = device.getRtspStreams().getFirst();
+        RtspService.ProbeResult probe = rtspService.probe(first.getRtspUrl(), null, null);
+        device.setRtspAnonymousAccess(probe.valid() && probe.anonymous());
+        if (Boolean.TRUE.equals(device.getRtspAnonymousAccess())) {
+            device.addFinding(new Finding(Finding.Severity.HIGH, "Security",
+                    "Video stream readable without a password",
+                    "RTSP DESCRIBE succeeded on " + RtspClient.stripCredentials(first.getRtspUrl())
+                            + " with no credentials supplied.",
+                    "Enable RTSP authentication on the device so the live feed cannot be viewed by anyone "
+                            + "who can reach it on the network."));
+            logger.warn("{} serves RTSP without authentication", device.getIpAddress());
+        }
+    }
+
+    /** Flag a device clock that disagrees with this computer. */
+    private void recordClockFinding(Device device) {
+        Long drift = device.getTimeDifferenceSeconds();
+        if (drift == null || Math.abs(drift) <= config.getMaxTimeDriftSeconds()) {
+            return;
+        }
+        device.addFinding(new Finding(Finding.Severity.MEDIUM, "Configuration",
+                "Device clock is out of step",
+                "The device clock differs from this computer by " + drift + " seconds.",
+                "Point the device at an NTP server so recordings carry accurate timestamps."));
+    }
+
+    /** Set the final row status and, when there are no streams, say why. */
+    private void finalizeStatus(Device device, boolean onvifAuthenticated, boolean rtspChallenged) {
+        if (!device.getRtspStreams().isEmpty()) {
+            device.setStatus(Device.DeviceStatus.COMPLETED);
+            device.setAuthFailed(false);
+            device.setErrorMessage(null);
+            logger.info("{} completed with {} stream(s)", device.getIpAddress(), device.getRtspStreams().size());
+            return;
+        }
+
+        boolean videoDevice = onvifAuthenticated
+                || !device.getOpenOnvifPorts().isEmpty()
+                || !device.getOpenRtspPorts().isEmpty();
+
+        device.setStatus(Device.DeviceStatus.AUTH_FAILED);
+        if (!videoDevice) {
+            device.setAuthFailed(false);
+            device.setType(Device.DeviceType.UNKNOWN);
+            device.setErrorMessage("Not a camera or recorder");
+        } else if (rtspChallenged || (!onvifAuthenticated && !device.getOpenOnvifPorts().isEmpty())) {
+            device.setAuthFailed(true);
+            device.setErrorMessage("No credential was accepted");
+            device.addFinding(new Finding(Finding.Severity.INFO, "Access", "Could not sign in",
+                    "The device rejected every credential supplied.",
+                    "Add the correct credentials and retry this device from its context menu."));
+        } else {
+            device.setAuthFailed(false);
+            device.setErrorMessage("No stream path matched");
+            device.addFinding(new Finding(Finding.Severity.INFO, "Access", "Stream address unknown",
+                    "Credentials were accepted but no known RTSP path returned video.",
+                    "Add this model's stream path under Settings, RTSP paths."));
+        }
     }
 
     /**
@@ -2161,75 +2016,35 @@ public class MainController {
         }
     }
 
-    private List<String> getIPList() {
-        List<String> ips = new ArrayList<>();
-        try {
-            if (cbAdvancedMode != null && cbAdvancedMode.isSelected()) {
-                // Advanced mode: combine all sources
-
-                // Add IPs from selected network interfaces
-                for (NetworkInterfaceItem item : networkInterfaces) {
-                    if (item.isSelected()) {
-                        String ip = item.getIpAddress();
-                        String[] octets = ip.split("\\.");
-                        if (octets.length == 4) {
-                            String network = octets[0] + "." + octets[1] + "." + octets[2] + ".0/24";
-                            ips.addAll(NetworkUtils.parseCIDR(network));
-                        }
-                    }
-                }
-
-                // Add IPs from IP ranges
-                for (IpRangeItem range : ipRanges) {
-                    if (NetworkUtils.isValidIP(range.getStartIp()) && NetworkUtils.isValidIP(range.getEndIp())) {
-                        ips.addAll(NetworkUtils.parseIPRange(range.getStartIp(), range.getEndIp()));
-                    }
-                }
-
-                // Add IPs from CIDRs
-                for (CidrItem cidr : cidrs) {
-                    if (NetworkUtils.isValidCIDR(cidr.getCidr())) {
-                        ips.addAll(NetworkUtils.parseCIDR(cidr.getCidr()));
-                    }
-                }
-
-                logger.info("Advanced mode: generated {} IPs from {} interfaces, {} ranges, {} CIDRs",
-                        ips.size(),
-                        networkInterfaces.stream().filter(NetworkInterfaceItem::isSelected).count(),
-                        ipRanges.size(),
-                        cidrs.size());
-
-            } else {
-                // Simple mode: single source
-                if (rbIpList != null && rbIpList.isSelected() && taIpList != null) {
-                    // Multiple IPs separated by commas, spaces, or newlines (de-duplicated)
-                    ips = NetworkUtils.parseMultipleIPs(taIpList.getText());
-                } else if (rbCIDR != null && rbCIDR.isSelected() && tfCIDR != null) {
-                    ips = NetworkUtils.parseCIDR(tfCIDR.getText());
-                } else if (rbManualRange != null && rbManualRange.isSelected() && tfStartIP != null
-                        && tfEndIP != null) {
-                    ips = NetworkUtils.parseIPRange(tfStartIP.getText(), tfEndIP.getText());
-                } else if (rbInterface != null && rbInterface.isSelected() && cbInterfaces != null) {
-                    // Extract CIDR from interface - simplified to /24
-                    // Format is now: IP - DisplayName (e.g., "192.168.1.5 - Ethernet")
-                    String selected = cbInterfaces.getValue();
-                    if (selected != null) {
-                        String[] parts = selected.split(" - ");
-                        if (parts.length >= 1) {
-                            String ip = parts[0]; // IP is now first part
-                            String[] octets = ip.split("\\.");
-                            if (octets.length == 4) {
-                                String network = octets[0] + "." + octets[1] + "." + octets[2] + ".0/24";
-                                ips = NetworkUtils.parseCIDR(network);
-                            }
-                        }
-                    }
-                }
-            }
-        } catch (Exception e) {
-            logger.error("Error generating IP list", e);
+    /** The addresses the scan will cover, de-duplicated across all sources. */
+    private TargetParser.Targets getTargets() {
+        String text;
+        if (cbAdvancedMode != null && cbAdvancedMode.isSelected()) {
+            text = advancedTargetText();
+        } else if (rbIpList != null && rbIpList.isSelected() && taIpList != null) {
+            text = taIpList.getText();
+        } else if (rbCIDR != null && rbCIDR.isSelected() && tfCIDR != null) {
+            text = tfCIDR.getText();
+        } else if (rbManualRange != null && rbManualRange.isSelected() && tfStartIP != null && tfEndIP != null) {
+            text = tfStartIP.getText().trim() + "-" + tfEndIP.getText().trim();
+        } else if (rbInterface != null && rbInterface.isSelected() && cbInterfaces != null) {
+            // The interface's real subnet, not an assumed /24.
+            text = findSelectedInterface(cbInterfaces.getValue())
+                    .map(NetworkUtils.LocalInterface::networkCidr)
+                    .orElse("");
+        } else {
+            text = "";
         }
-        return ips;
+        TargetParser.Targets targets = TargetParser.parse(text);
+        if (!targets.invalidTokens().isEmpty()) {
+            logger.warn("Ignoring {} unparseable target(s): {}",
+                    targets.invalidTokens().size(), targets.invalidTokens());
+        }
+        return targets;
+    }
+
+    private List<String> getIPList() {
+        return getTargets().toList(config.getMaxTargets());
     }
 
     private void exportToExcel() {
@@ -2272,17 +2087,20 @@ public class MainController {
             return;
         }
 
-        // Step 2: Auto-generate protection password (numeric only, no delimiters)
-        // Format: {DeviceCount}{YYYYMMDD}{FixedCode}
-        // Example: 25 devices on 2026-01-07 → "252026010748275"
-        String generatedPassword = null;
-        if (config.isExcelPasswordEnabled()) {
-            int deviceCount = devices.size();
-            String dateStr = new java.text.SimpleDateFormat("yyyyMMdd").format(new java.util.Date());
-            String fixedCode = config.getExcelPasswordFixedCode();
-            generatedPassword = "" + deviceCount + dateStr + fixedCode;
-            // Note: Password is NOT logged or displayed to prevent user tampering
+        // Step 2: ask for the password that will encrypt the workbook. The old
+        // build derived one from the device count, the date and a fixed code
+        // shipped in the application, which anyone with a copy could reproduce.
+        String workbookPassword = null;
+        if (config.isExportEncryptionDefault()) {
+            workbookPassword = promptForExportPassword();
+            if (workbookPassword == null) {
+                return; // cancelled
+            }
+            if (workbookPassword.isEmpty()) {
+                workbookPassword = null; // export unencrypted by choice
+            }
         }
+        final String generatedPassword = workbookPassword;
 
         // Step 3: Choose file location with default from config
         FileChooser fileChooser = new FileChooser();
@@ -2327,6 +2145,78 @@ public class MainController {
                 showAlert("Export Error", "Failed to export: " + e.getMessage(), Alert.AlertType.ERROR);
             }
         }
+    }
+
+    /**
+     * Ask for the workbook password.
+     *
+     * @return the password, an empty string to export unencrypted, or null when
+     *         the user cancels
+     */
+    private String promptForExportPassword() {
+        Dialog<String> dialog = new Dialog<>();
+        dialog.setTitle("Protect Report");
+        dialog.setHeaderText("Set a password for the exported workbook");
+        applyDialogIcon(dialog);
+
+        PasswordField pfPassword = new PasswordField();
+        pfPassword.setPromptText("Password");
+        PasswordField pfConfirm = new PasswordField();
+        pfConfirm.setPromptText("Repeat password");
+
+        Label hint = new Label("""
+                The report contains camera addresses and passwords. It is encrypted \
+                with this password, so anyone opening it must have it. Leave both \
+                boxes empty to save the report without encryption.""");
+        hint.setWrapText(true);
+        hint.setMaxWidth(380);
+        hint.setStyle("-fx-font-size: 11px; -fx-text-fill: #555;");
+
+        Label mismatch = new Label();
+        mismatch.setStyle("-fx-text-fill: #A94442; -fx-font-size: 11px;");
+
+        GridPane grid = new GridPane();
+        grid.setHgap(10);
+        grid.setVgap(8);
+        grid.setPadding(new Insets(16));
+        grid.add(hint, 0, 0, 2, 1);
+        grid.add(new Label("Password:"), 0, 1);
+        grid.add(pfPassword, 1, 1);
+        grid.add(new Label("Confirm:"), 0, 2);
+        grid.add(pfConfirm, 1, 2);
+        grid.add(mismatch, 0, 3, 2, 1);
+        dialog.getDialogPane().setContent(grid);
+
+        ButtonType okType = new ButtonType("Save Report", ButtonBar.ButtonData.OK_DONE);
+        dialog.getDialogPane().getButtonTypes().addAll(okType, ButtonType.CANCEL);
+
+        Node okButton = dialog.getDialogPane().lookupButton(okType);
+        Runnable validate = () -> {
+            boolean matched = pfPassword.getText().equals(pfConfirm.getText());
+            okButton.setDisable(!matched);
+            mismatch.setText(matched ? "" : "The two passwords do not match.");
+        };
+        pfPassword.textProperty().addListener((obs, old, val) -> validate.run());
+        pfConfirm.textProperty().addListener((obs, old, val) -> validate.run());
+        Platform.runLater(pfPassword::requestFocus);
+
+        dialog.setResultConverter(button -> button == okType ? pfPassword.getText() : null);
+        return dialog.showAndWait().orElse(null);
+    }
+
+    /** Give a dialog the application icon. */
+    private void applyDialogIcon(Dialog<?> dialog) {
+        dialog.setOnShown(e -> {
+            try {
+                Stage stage = (Stage) dialog.getDialogPane().getScene().getWindow();
+                InputStream iconStream = getClass().getResourceAsStream("/icon.png");
+                if (iconStream != null) {
+                    stage.getIcons().add(new javafx.scene.image.Image(iconStream));
+                }
+            } catch (Exception ex) {
+                logger.debug("Could not load the dialog icon", ex);
+            }
+        });
     }
 
     private void showSettings() {
@@ -2623,90 +2513,53 @@ public class MainController {
         }
     }
 
+    /**
+     * Describe the current selection in one line. Counting through the parser
+     * means overlapping sources are reported once, matching what will be scanned.
+     */
     private void updateNetworkSummary() {
+        String style = "-fx-font-style: italic; -fx-text-fill: #0078d4;";
+        TargetParser.Targets targets = getTargets();
+        long count = targets.count();
+        networkConfigured = count > 0;
+
+        String description;
         if (cbAdvancedMode != null && cbAdvancedMode.isSelected()) {
-            // Advanced mode summary
-            int sourceCount = 0;
-            int totalIps = 0;
-
-            long selectedInterfacesCount = networkInterfaces.stream().filter(NetworkInterfaceItem::isSelected).count();
-            if (selectedInterfacesCount > 0) {
-                sourceCount++;
-                // Calculate actual IP count based on each interface's subnet prefix
-                for (NetworkInterfaceItem item : networkInterfaces) {
-                    if (item.isSelected()) {
-                        int prefixLength = NetworkUtils.getNetworkPrefixLength(item.getNetworkInterface());
-                        int subnetSize = NetworkUtils.countIPsFromPrefix(prefixLength);
-                        totalIps += subnetSize;
-                    }
-                }
-            }
-
-            long validRanges = ipRanges.stream()
-                    .filter(r -> NetworkUtils.isValidIP(r.getStartIp()) && NetworkUtils.isValidIP(r.getEndIp()))
-                    .count();
-            if (validRanges > 0) {
-                sourceCount++;
-                for (IpRangeItem range : ipRanges) {
-                    if (NetworkUtils.isValidIP(range.getStartIp()) && NetworkUtils.isValidIP(range.getEndIp())) {
-                        totalIps += NetworkUtils.countIPsInRange(range.getStartIp(), range.getEndIp());
-                    }
-                }
-            }
-
-            long validCidrs = cidrs.stream()
-                    .filter(c -> NetworkUtils.isValidCIDR(c.getCidr()))
-                    .count();
-            if (validCidrs > 0) {
-                sourceCount++;
-                for (CidrItem cidr : cidrs) {
-                    if (NetworkUtils.isValidCIDR(cidr.getCidr())) {
-                        totalIps += NetworkUtils.countIPsInCIDR(cidr.getCidr());
-                    }
-                }
-            }
-
-            if (sourceCount > 0) {
-                lblNetworkSummary
-                        .setText(String.format("Advanced: %d source(s), %d possible IPs", sourceCount, totalIps));
-                lblNetworkSummary.setStyle("-fx-font-style: italic; -fx-text-fill: #0078d4;");
-                networkConfigured = true;
-            } else {
-                lblNetworkSummary.setText("Advanced mode: No sources configured");
-                lblNetworkSummary.setStyle("-fx-font-style: italic; -fx-text-fill: #0078d4;");
-                networkConfigured = false;
-            }
+            long sources = networkInterfaces.stream().filter(NetworkInterfaceItem::isSelected).count()
+                    + ipRanges.stream()
+                            .filter(r -> NetworkUtils.isValidIP(r.getStartIp()) && NetworkUtils.isValidIP(r.getEndIp()))
+                            .count()
+                    + cidrs.stream().filter(c -> isValidCidr(c.getCidr())).count();
+            description = sources == 0
+                    ? "No sources selected"
+                    : String.format("%d source%s, %s", sources, sources == 1 ? "" : "s", plural(count));
+        } else if (rbInterface != null && rbInterface.isSelected() && cbInterfaces.getValue() != null) {
+            String network = findSelectedInterface(cbInterfaces.getValue())
+                    .map(NetworkUtils.LocalInterface::networkCidr).orElse("unknown");
+            description = String.format("%s, %s", network, plural(count));
+        } else if (rbManualRange != null && rbManualRange.isSelected()) {
+            description = count == 0
+                    ? "Enter a valid start and end address"
+                    : String.format("%s to %s, %s", tfStartIP.getText().trim(), tfEndIP.getText().trim(), plural(count));
+        } else if (rbCIDR != null && rbCIDR.isSelected()) {
+            description = count == 0
+                    ? "Enter a valid CIDR block"
+                    : String.format("%s, %s", tfCIDR.getText().trim(), plural(count));
+        } else if (rbIpList != null && rbIpList.isSelected()) {
+            description = count == 0 ? "Enter at least one address" : plural(count);
         } else {
-            // Simple mode summary
-            if (rbInterface != null && rbInterface.isSelected() && cbInterfaces.getValue() != null) {
-                lblNetworkSummary.setText("Interface: " + cbInterfaces.getValue());
-                lblNetworkSummary.setStyle("-fx-font-style: italic; -fx-text-fill: #0078d4;");
-                networkConfigured = true;
-            } else if (rbManualRange != null && rbManualRange.isSelected() &&
-                    NetworkUtils.isValidIP(tfStartIP.getText()) && NetworkUtils.isValidIP(tfEndIP.getText())) {
-                int count = NetworkUtils.countIPsInRange(tfStartIP.getText(), tfEndIP.getText());
-                lblNetworkSummary.setText(
-                        String.format("Range: %s - %s (%d IPs)", tfStartIP.getText(), tfEndIP.getText(), count));
-                lblNetworkSummary.setStyle("-fx-font-style: italic; -fx-text-fill: #0078d4;");
-                networkConfigured = true;
-            } else if (rbCIDR != null && rbCIDR.isSelected() && NetworkUtils.isValidCIDR(tfCIDR.getText())) {
-                int count = NetworkUtils.countIPsInCIDR(tfCIDR.getText());
-                lblNetworkSummary.setText(String.format("CIDR: %s (%d IPs)", tfCIDR.getText(), count));
-                lblNetworkSummary.setStyle("-fx-font-style: italic; -fx-text-fill: #0078d4;");
-                networkConfigured = true;
-            } else if (rbIpList != null && rbIpList.isSelected()
-                    && !NetworkUtils.parseMultipleIPs(taIpList.getText()).isEmpty()) {
-                int count = NetworkUtils.parseMultipleIPs(taIpList.getText()).size();
-                lblNetworkSummary.setText(String.format("IP List: %d unique address%s",
-                        count, count == 1 ? "" : "es"));
-                lblNetworkSummary.setStyle("-fx-font-style: italic; -fx-text-fill: #0078d4;");
-                networkConfigured = true;
-            } else {
-                lblNetworkSummary.setText("Not configured");
-                lblNetworkSummary.setStyle("-fx-font-style: italic; -fx-text-fill: #0078d4;");
-                networkConfigured = false;
-            }
+            description = "Not configured";
         }
+
+        if (!targets.invalidTokens().isEmpty()) {
+            description += String.format(" (%d entry ignored)", targets.invalidTokens().size());
+        }
+        lblNetworkSummary.setText(description);
+        lblNetworkSummary.setStyle(style);
+    }
+
+    private static String plural(long count) {
+        return count + (count == 1 ? " address" : " addresses");
     }
 
     private void showCredentialManagementDialog() {
@@ -2824,29 +2677,33 @@ public class MainController {
 
     // Inner classes for advanced network selection
     public static class NetworkInterfaceItem {
-        private final String displayName;
-        private final String ipAddress;
-        private final NetworkInterface networkInterface;
+        private final NetworkUtils.LocalInterface localInterface;
         private boolean selected;
 
-        public NetworkInterfaceItem(String displayName, String ipAddress, NetworkInterface networkInterface,
-                boolean selected) {
-            this.displayName = displayName;
-            this.ipAddress = ipAddress;
-            this.networkInterface = networkInterface;
+        public NetworkInterfaceItem(NetworkUtils.LocalInterface localInterface, boolean selected) {
+            this.localInterface = localInterface;
             this.selected = selected;
         }
 
         public String getDisplayName() {
-            return displayName;
+            return localInterface.displayName();
         }
 
         public String getIpAddress() {
-            return ipAddress;
+            return localInterface.address();
         }
 
-        public NetworkInterface getNetworkInterface() {
-            return networkInterface;
+        public NetworkUtils.LocalInterface getLocalInterface() {
+            return localInterface;
+        }
+
+        /** The network this interface is attached to, e.g. 192.168.0.0/24. */
+        public String getNetworkCidr() {
+            return localInterface.networkCidr();
+        }
+
+        public long getHostCount() {
+            return localInterface.hostCount();
         }
 
         public boolean isSelected() {
@@ -2859,9 +2716,7 @@ public class MainController {
 
         @Override
         public String toString() {
-            return new StringBuilder()
-                    .append(ipAddress).append(" - ").append(displayName)
-                    .toString();
+            return localInterface.toString();
         }
     }
 

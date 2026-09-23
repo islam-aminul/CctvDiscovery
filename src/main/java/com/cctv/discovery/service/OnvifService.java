@@ -1,1071 +1,773 @@
 package com.cctv.discovery.service;
 
+import com.cctv.discovery.config.AppConfig;
 import com.cctv.discovery.model.Device;
 import com.cctv.discovery.model.RTSPStream;
 import com.cctv.discovery.util.AuthUtils;
+import com.cctv.discovery.util.NetworkUtils;
+import com.cctv.discovery.util.XmlUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
-import org.w3c.dom.NodeList;
 
-import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLParameters;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
-import javax.xml.parsers.DocumentBuilder;
-import javax.xml.parsers.DocumentBuilderFactory;
-import javax.xml.soap.*;
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.InputStream;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
-import java.net.HttpURLConnection;
-import java.net.URL;
+import java.net.InetSocketAddress;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.security.cert.X509Certificate;
+import java.time.Duration;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.StructuredTaskScope;
 
 /**
- * ONVIF service for WS-Discovery, device communication, and authentication.
- * Strict implementation using JDK 8 javax.xml.soap and org.w3c.dom - NO REGEX.
+ * ONVIF client: WS-Discovery, device information, capabilities and media
+ * profiles.
+ *
+ * <p>All XML is parsed with {@link XmlUtils}, which refuses DOCTYPE
+ * declarations and external entities, because every response here comes from an
+ * untrusted host on the network. TLS verification is relaxed only for this
+ * client's own connections, since cameras ship self-signed certificates; the
+ * JVM-wide defaults are left untouched.
  */
-public class OnvifService {
+public final class OnvifService {
+
     private static final Logger logger = LoggerFactory.getLogger(OnvifService.class);
 
     private static final String WS_DISCOVERY_ADDRESS = "239.255.255.250";
     private static final int WS_DISCOVERY_PORT = 3702;
-    private static final int DISCOVERY_TIMEOUT_MS = 5000;
 
-    // Static block to disable SSL certificate validation for self-signed camera
-    // certificates
-    static {
-        try {
-            // Create a trust manager that trusts all certificates
-            TrustManager[] trustAllCerts = new TrustManager[] {
-                    new X509TrustManager() {
-                        public X509Certificate[] getAcceptedIssuers() {
-                            return null;
-                        }
+    private static final String NS_SOAP = "http://www.w3.org/2003/05/soap-envelope";
+    private static final String NS_DEVICE = "http://www.onvif.org/ver10/device/wsdl";
+    private static final String NS_MEDIA = "http://www.onvif.org/ver10/media/wsdl";
+    private static final String NS_MEDIA2 = "http://www.onvif.org/ver20/media/wsdl";
+    private static final String NS_SCHEMA = "http://www.onvif.org/ver10/schema";
 
-                        public void checkClientTrusted(X509Certificate[] certs, String authType) {
-                            // Trust all client certificates
-                        }
+    private final AppConfig config = AppConfig.getInstance();
+    private final HttpClient httpClient;
 
-                        public void checkServerTrusted(X509Certificate[] certs, String authType) {
-                            // Trust all server certificates (cameras with self-signed certs)
-                        }
-                    }
-            };
+    /** Device clock minus host clock, per device service URL. */
+    private final Map<String, Long> clockOffsets = new ConcurrentHashMap<>();
 
-            // Install the all-trusting trust manager
-            SSLContext sc = SSLContext.getInstance("TLS");
-            sc.init(null, trustAllCerts, new java.security.SecureRandom());
-            HttpsURLConnection.setDefaultSSLSocketFactory(sc.getSocketFactory());
-
-            // Disable hostname verification (cameras often use IP addresses)
-            HttpsURLConnection.setDefaultHostnameVerifier((hostname, session) -> true);
-
-            logger.info("SSL certificate validation disabled for ONVIF HTTPS connections");
-        } catch (Exception e) {
-            logger.error("Failed to disable SSL certificate validation", e);
-        }
+    public OnvifService() {
+        this.httpClient = buildHttpClient(config.getSocketConnectTimeout());
     }
 
+    private static HttpClient buildHttpClient(int connectTimeoutMs) {
+        HttpClient.Builder builder = HttpClient.newBuilder()
+                .version(HttpClient.Version.HTTP_1_1)
+                .followRedirects(HttpClient.Redirect.NEVER)
+                .connectTimeout(Duration.ofMillis(Math.max(500, connectTimeoutMs)));
+        try {
+            // Cameras use self-signed certificates with IP-address subjects. This
+            // relaxation is confined to this HttpClient instance.
+            TrustManager[] acceptAll = {new X509TrustManager() {
+                @Override
+                public void checkClientTrusted(X509Certificate[] chain, String authType) {
+                    // discovery client does not authenticate peers
+                }
+
+                @Override
+                public void checkServerTrusted(X509Certificate[] chain, String authType) {
+                    // discovery client does not authenticate peers
+                }
+
+                @Override
+                public X509Certificate[] getAcceptedIssuers() {
+                    return new X509Certificate[0];
+                }
+            }};
+            SSLContext sslContext = SSLContext.getInstance("TLS");
+            sslContext.init(null, acceptAll, new java.security.SecureRandom());
+            SSLParameters params = new SSLParameters();
+            params.setEndpointIdentificationAlgorithm(null);
+            builder.sslContext(sslContext).sslParameters(params);
+        } catch (Exception e) {
+            logger.warn("Could not relax TLS verification for ONVIF; HTTPS cameras may fail: {}", e.getMessage());
+        }
+        return builder.build();
+    }
+
+    // ------------------------------------------------------------ WS-Discovery
+
     /**
-     * Send WS-Discovery probe and collect ONVIF device responses.
+     * Multicast Probe on every IPv4-capable interface, collecting replies for
+     * {@link AppConfig#getOnvifTimeout()} milliseconds.
+     *
+     * <p>Sending per interface matters on machines with several networks (Wi-Fi
+     * plus a wired camera VLAN), where a probe on the default route alone
+     * reaches nothing.
      */
     public List<Device> discoverDevices() {
-        List<Device> devices = new ArrayList<>();
-        DatagramSocket socket = null;
-
-        try {
-            socket = new DatagramSocket();
-            socket.setSoTimeout(DISCOVERY_TIMEOUT_MS);
-
-            String probeMessage = buildWsDiscoveryProbe();
-            byte[] sendData = probeMessage.getBytes("UTF-8");
-
-            InetAddress group = InetAddress.getByName(WS_DISCOVERY_ADDRESS);
-            DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, group, WS_DISCOVERY_PORT);
-
-            socket.send(sendPacket);
-            logger.info("WS-Discovery probe sent to {}:{}", WS_DISCOVERY_ADDRESS, WS_DISCOVERY_PORT);
-
-            byte[] receiveData = new byte[8192];
-            long startTime = System.currentTimeMillis();
-
-            while (System.currentTimeMillis() - startTime < DISCOVERY_TIMEOUT_MS) {
-                try {
-                    DatagramPacket receivePacket = new DatagramPacket(receiveData, receiveData.length);
-                    socket.receive(receivePacket);
-
-                    String response = new String(receivePacket.getData(), 0, receivePacket.getLength(), "UTF-8");
-                    Device device = parseProbeMatch(response);
-
-                    if (device != null) {
-                        devices.add(device);
-                        logger.info("Discovered ONVIF device: {}", device.getIpAddress());
-                    }
-                } catch (Exception e) {
-                    // Timeout or parsing error - continue
-                }
-            }
-
-        } catch (Exception e) {
-            logger.error("Error during WS-Discovery", e);
-        } finally {
-            if (socket != null && !socket.isClosed()) {
-                socket.close();
-            }
+        List<java.net.NetworkInterface> interfaces = NetworkUtils.getMulticastInterfaces();
+        if (interfaces.isEmpty()) {
+            logger.info("No multicast-capable interfaces; skipping WS-Discovery");
+            return List.of();
         }
 
-        logger.info("WS-Discovery completed. Found {} devices", devices.size());
+        Map<String, Device> byKey = new ConcurrentHashMap<>();
+        Duration window = Duration.ofMillis(config.getOnvifTimeout());
+
+        try (var scope = StructuredTaskScope.open(
+                StructuredTaskScope.Joiner.<Void>awaitAll(),
+                cfg -> cfg.withName("ws-discovery").withTimeout(window.plusMillis(500)))) {
+
+            for (java.net.NetworkInterface ni : interfaces) {
+                scope.fork(() -> {
+                    probeInterface(ni, window, byKey);
+                    return null;
+                });
+            }
+            scope.join();
+        } catch (StructuredTaskScope.TimeoutException e) {
+            logger.debug("WS-Discovery window elapsed");
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+
+        List<Device> devices = new ArrayList<>(byKey.values());
+        logger.info("WS-Discovery found {} device(s) on {} interface(s)", devices.size(), interfaces.size());
         return devices;
     }
 
-    /**
-     * Build WS-Discovery Probe message using SOAP.
-     */
-    private String buildWsDiscoveryProbe() throws Exception {
-        MessageFactory messageFactory = MessageFactory.newInstance();
-        SOAPMessage soapMessage = messageFactory.createMessage();
-        SOAPPart soapPart = soapMessage.getSOAPPart();
-        SOAPEnvelope envelope = soapPart.getEnvelope();
+    private void probeInterface(java.net.NetworkInterface ni, Duration window, Map<String, Device> byKey) {
+        // Binding to the interface's own address makes the OS send the multicast
+        // out of that interface, which a socket on the wildcard address would
+        // send only over the default route.
+        InetAddress bindAddress = ni.getInterfaceAddresses().stream()
+                .map(java.net.InterfaceAddress::getAddress)
+                .filter(a -> a instanceof java.net.Inet4Address && !a.isLinkLocalAddress())
+                .findFirst().orElse(null);
+        if (bindAddress == null) {
+            return;
+        }
 
-        envelope.addNamespaceDeclaration("wsa", "http://schemas.xmlsoap.org/ws/2004/08/addressing");
-        envelope.addNamespaceDeclaration("wsd", "http://schemas.xmlsoap.org/ws/2005/04/discovery");
-        envelope.addNamespaceDeclaration("wsdp", "http://schemas.xmlsoap.org/ws/2006/02/devprof");
+        try (DatagramSocket socket = new DatagramSocket(new InetSocketAddress(bindAddress, 0))) {
+            socket.setSoTimeout(250);
 
-        SOAPHeader header = envelope.getHeader();
-        SOAPBody body = envelope.getBody();
+            byte[] probe = buildProbe().getBytes(StandardCharsets.UTF_8);
+            InetAddress group = InetAddress.getByName(WS_DISCOVERY_ADDRESS);
+            socket.send(new DatagramPacket(probe, probe.length, group, WS_DISCOVERY_PORT));
+            logger.debug("WS-Discovery probe sent on {}", ni.getName());
 
-        // Header elements
-        addHeaderElement(header, "wsa:Action", "http://schemas.xmlsoap.org/ws/2005/04/discovery/Probe");
-        addHeaderElement(header, "wsa:MessageID", AuthUtils.generateUUID());
-        addHeaderElement(header, "wsa:To", "urn:schemas-xmlsoap-org:ws:2005:04:discovery");
-
-        // Body - Probe
-        SOAPElement probe = body.addChildElement("Probe", "wsd");
-        SOAPElement types = probe.addChildElement("Types", "wsd");
-        types.setTextContent("wsdp:Device");
-
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        soapMessage.writeTo(out);
-        return out.toString("UTF-8");
-    }
-
-    private void addHeaderElement(SOAPHeader header, String qName, String value) throws Exception {
-        String[] parts = qName.split(":");
-        SOAPElement element = header.addChildElement(parts[1], parts[0]);
-        element.setTextContent(value);
-    }
-
-    /**
-     * Parse ProbeMatch response using DOM parser (NO REGEX).
-     */
-    private Device parseProbeMatch(String xml) {
-        try {
-            DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
-            factory.setNamespaceAware(true);
-            DocumentBuilder builder = factory.newDocumentBuilder();
-            Document doc = builder.parse(new ByteArrayInputStream(xml.getBytes("UTF-8")));
-
-            // Extract XAddrs (service URLs)
-            NodeList xAddrsList = doc.getElementsByTagNameNS("*", "XAddrs");
-            if (xAddrsList.getLength() == 0) {
-                return null;
-            }
-
-            String xAddrs = xAddrsList.item(0).getTextContent().trim();
-            if (xAddrs.isEmpty()) {
-                return null;
-            }
-
-            // Extract first URL and parse IP
-            String[] urls = xAddrs.split("\\s+");
-            String serviceUrl = urls[0];
-            String ipAddress = extractIpFromUrl(serviceUrl);
-
-            if (ipAddress == null) {
-                return null;
-            }
-
-            Device device = new Device(ipAddress);
-            device.setOnvifServiceUrl(serviceUrl);
-
-            // Extract UUID/EndpointReference for MAC resolution
-            // UUID often contains MAC in last 12 hex digits: uuid:xxxxxxxx-xxxx-xxxx-xxxx-AABBCCDDEEFF
-            NodeList endpointList = doc.getElementsByTagNameNS("*", "EndpointReference");
-            if (endpointList.getLength() > 0) {
-                Element endpoint = (Element) endpointList.item(0);
-                NodeList addressList = endpoint.getElementsByTagNameNS("*", "Address");
-                if (addressList.getLength() > 0) {
-                    String uuid = addressList.item(0).getTextContent().trim();
-                    if (device.getMacAddress() == null || device.getMacAddress().isEmpty()) {
-                        String mac = extractMacFromUuid(uuid);
-                        if (mac != null) {
-                            device.setMacAddress(mac);
-                            logger.info("Extracted MAC address from UUID for {}: {}", ipAddress, mac);
-                        }
-                    }
+            byte[] buffer = new byte[16 * 1024];
+            long deadline = System.nanoTime() + window.toNanos();
+            while (System.nanoTime() < deadline && !Thread.currentThread().isInterrupted()) {
+                try {
+                    DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
+                    socket.receive(packet);
+                    String xml = new String(packet.getData(), 0, packet.getLength(), StandardCharsets.UTF_8);
+                    parseProbeMatch(xml, packet.getAddress().getHostAddress())
+                            .ifPresent(d -> byKey.merge(discoveryKey(d), d, OnvifService::mergeDiscovered));
+                } catch (java.net.SocketTimeoutException e) {
+                    // keep listening until the window closes
+                } catch (Exception e) {
+                    logger.debug("Malformed WS-Discovery reply on {}: {}", ni.getName(), e.getMessage());
                 }
             }
-
-            return device;
-
         } catch (Exception e) {
-            logger.info("Error parsing ProbeMatch", e);
+            logger.debug("WS-Discovery failed on {}: {}", ni.getName(), e.getMessage());
+        }
+    }
+
+    private static String discoveryKey(Device device) {
+        return device.getIpAddress();
+    }
+
+    private static Device mergeDiscovered(Device existing, Device candidate) {
+        if (existing.getOnvifServiceUrl() == null) {
+            existing.setOnvifServiceUrl(candidate.getOnvifServiceUrl());
+        }
+        if (existing.getDeviceName() == null) {
+            existing.setDeviceName(candidate.getDeviceName());
+        }
+        if (existing.getManufacturer() == null) {
+            existing.setManufacturer(candidate.getManufacturer());
+        }
+        return existing;
+    }
+
+    private String buildProbe() {
+        return """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <s:Envelope xmlns:s="%s" xmlns:a="http://schemas.xmlsoap.org/ws/2004/08/addressing"\
+                 xmlns:d="http://schemas.xmlsoap.org/ws/2005/04/discovery"\
+                 xmlns:dn="http://www.onvif.org/ver10/network/wsdl">
+                <s:Header>
+                <a:Action s:mustUnderstand="1">http://schemas.xmlsoap.org/ws/2005/04/discovery/Probe</a:Action>
+                <a:MessageID>%s</a:MessageID>
+                <a:To s:mustUnderstand="1">urn:schemas-xmlsoap-org:ws:2005:04:discovery</a:To>
+                </s:Header>
+                <s:Body><d:Probe><d:Types>dn:NetworkVideoTransmitter</d:Types></d:Probe></s:Body>
+                </s:Envelope>""".formatted(NS_SOAP, AuthUtils.uuidUrn());
+    }
+
+    /**
+     * Build a Device from a ProbeMatch.
+     *
+     * <p>No MAC address is derived from the endpoint UUID: many vendors put a
+     * random value there. On the test camera that produced a multicast address
+     * that is not a device MAC at all, which then suppressed the real ARP lookup.
+     */
+    Optional<Device> parseProbeMatch(String xml, String sourceAddress) {
+        try {
+            Document doc = XmlUtils.parse(xml);
+            String xAddrs = XmlUtils.text(doc, "XAddrs");
+            if (xAddrs == null || xAddrs.isBlank()) {
+                return Optional.empty();
+            }
+
+            String serviceUrl = null;
+            String ip = null;
+            for (String candidate : xAddrs.trim().split("\\s+")) {
+                String hostAddress = hostOf(candidate);
+                if (hostAddress != null && NetworkUtils.isValidIP(hostAddress)) {
+                    serviceUrl = candidate;
+                    ip = hostAddress;
+                    break;
+                }
+            }
+            if (ip == null) {
+                // Hostname-only XAddrs: fall back to the datagram source.
+                if (!NetworkUtils.isValidIP(sourceAddress)) {
+                    return Optional.empty();
+                }
+                ip = sourceAddress;
+                serviceUrl = xAddrs.trim().split("\\s+")[0];
+            }
+
+            Device device = new Device(ip);
+            device.setOnvifServiceUrl(serviceUrl);
+            device.setType(Device.DeviceType.CAMERA);
+            device.addDiscoverySource("WS-Discovery");
+            applyScopes(device, XmlUtils.text(doc, "Scopes"));
+            return Optional.of(device);
+        } catch (Exception e) {
+            logger.debug("Cannot parse ProbeMatch from {}: {}", sourceAddress, e.getMessage());
+            return Optional.empty();
+        }
+    }
+
+    /** Read name/hardware/location hints from the ONVIF scope list. */
+    private void applyScopes(Device device, String scopes) {
+        if (scopes == null || scopes.isBlank()) {
+            return;
+        }
+        for (String scope : scopes.trim().split("\\s+")) {
+            String value = scope.substring(scope.lastIndexOf('/') + 1);
+            if (value.isEmpty()) {
+                continue;
+            }
+            String decoded = java.net.URLDecoder.decode(value, StandardCharsets.UTF_8);
+            if (scope.contains("/name/") && device.getDeviceName() == null) {
+                device.setDeviceName(decoded);
+            } else if (scope.contains("/hardware/") && device.getHardwareId() == null) {
+                device.setHardwareId(decoded);
+            } else if (scope.contains("/type/") && decoded.toLowerCase(Locale.ROOT).contains("networkvideostorage")) {
+                device.setType(Device.DeviceType.RECORDER);
+            }
+        }
+    }
+
+    private static String hostOf(String url) {
+        try {
+            return URI.create(url).getHost();
+        } catch (RuntimeException e) {
             return null;
         }
     }
 
-    /**
-     * Extract IP address from ONVIF service URL.
-     * Uses java.net.URI instead of deprecated java.net.URL constructor.
-     */
-    private String extractIpFromUrl(String url) {
-        try {
-            java.net.URI uri = new java.net.URI(url);
-            String host = uri.getHost();
-            // Check if host is IP address (not hostname)
-            if (host != null && host.matches("\\d+\\.\\d+\\.\\d+\\.\\d+")) {
-                return host;
-            }
-        } catch (Exception e) {
-            logger.info("Error extracting IP from URL: {}", url);
+    // --------------------------------------------------------------- Requests
+
+    /** Outcome of one SOAP exchange. */
+    private record SoapResult(int status, String body, List<String> authenticateHeaders) {
+        boolean ok() {
+            return status == 200;
         }
-        return null;
+
+        boolean unauthorized() {
+            return status == 401;
+        }
     }
 
     /**
-     * Get device information using ONVIF GetDeviceInformation.
+     * POST a SOAP body. When credentials are supplied the request carries a
+     * WS-Security UsernameToken; if the device answers 401 with an HTTP
+     * challenge instead, the request is retried with HTTP Digest or Basic, which
+     * is what several recorders require.
      */
-    public boolean getDeviceInformation(Device device, String username, String password) {
-        if (device.getOnvifServiceUrl() == null) {
-            logger.warn("No ONVIF service URL set for device {}", device.getIpAddress());
+    private SoapResult post(String serviceUrl, String bodyXml, String username, String password) {
+        long offset = clockOffsets.getOrDefault(serviceUrl, 0L);
+        String envelope = envelope(bodyXml, username, password, offset);
+        SoapResult first = send(serviceUrl, envelope, null);
+        if (!first.unauthorized() || username == null || username.isEmpty()) {
+            return first;
+        }
+
+        List<AuthUtils.AuthChallenge> challenges = AuthUtils.parseChallenges(first.authenticateHeaders());
+        if (challenges.isEmpty()) {
+            return first;
+        }
+        AuthUtils.Authenticator authenticator = new AuthUtils.Authenticator(challenges.getFirst(), username, password);
+        logger.debug("ONVIF {} requires HTTP authentication ({})", serviceUrl, challenges.getFirst());
+        String uri = pathOf(serviceUrl);
+        return send(serviceUrl, envelope, authenticator.authorization("POST", uri));
+    }
+
+    private SoapResult send(String serviceUrl, String envelope, String authorization) {
+        try {
+            HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(serviceUrl))
+                    .timeout(Duration.ofMillis(config.getSocketReadTimeout()))
+                    .header("Content-Type", "application/soap+xml; charset=utf-8")
+                    .header("User-Agent", "CCTV-Discovery/2.0")
+                    .POST(HttpRequest.BodyPublishers.ofString(envelope, StandardCharsets.UTF_8));
+            if (authorization != null) {
+                builder.header("Authorization", authorization);
+            }
+            HttpResponse<String> response = httpClient.send(builder.build(),
+                    HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+            if (logger.isTraceEnabled()) {
+                logger.trace("ONVIF {} -> {} body:\n{}", serviceUrl, response.statusCode(),
+                        AuthUtils.redact(response.body()));
+            }
+            return new SoapResult(response.statusCode(), response.body(),
+                    response.headers().allValues("WWW-Authenticate"));
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return new SoapResult(-1, "", List.of());
+        } catch (Exception e) {
+            logger.debug("ONVIF request to {} failed: {}", serviceUrl, e.getMessage());
+            return new SoapResult(-1, "", List.of());
+        }
+    }
+
+    private static String pathOf(String url) {
+        try {
+            URI uri = URI.create(url);
+            String path = uri.getRawPath();
+            return path == null || path.isEmpty() ? "/" : path;
+        } catch (RuntimeException e) {
+            return "/";
+        }
+    }
+
+    private String envelope(String bodyXml, String username, String password, long clockOffsetMillis) {
+        String header = username == null || username.isEmpty()
+                ? ""
+                : "<s:Header>" + AuthUtils.wsSecurityHeader(username, password, clockOffsetMillis) + "</s:Header>";
+        return "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+                + "<s:Envelope xmlns:s=\"" + NS_SOAP + "\""
+                + " xmlns:tds=\"" + NS_DEVICE + "\""
+                + " xmlns:trt=\"" + NS_MEDIA + "\""
+                + " xmlns:tr2=\"" + NS_MEDIA2 + "\""
+                + " xmlns:tt=\"" + NS_SCHEMA + "\">"
+                + header
+                + "<s:Body>" + bodyXml + "</s:Body></s:Envelope>";
+    }
+
+    /** True when the SOAP body is a Fault reporting an authentication failure. */
+    private static boolean isAuthFault(String body) {
+        if (body == null || body.isEmpty()) {
             return false;
         }
-        return getDeviceInformation(device, device.getOnvifServiceUrl(), username, password);
+        String lower = body.toLowerCase(Locale.ROOT);
+        return lower.contains("notauthorized") || lower.contains("failedauthentication")
+                || lower.contains("sender not authorized");
+    }
+
+    // ---------------------------------------------------------------- Queries
+
+    /**
+     * Unauthenticated GetSystemDateAndTime. Every ONVIF device must answer this
+     * without credentials; it gives the device clock (needed for the audit and
+     * for WS-Security tokens that cameras with a skewed clock will accept).
+     *
+     * @return device clock minus host clock in milliseconds, or empty
+     */
+    public Optional<Long> getSystemClockOffset(String serviceUrl) {
+        SoapResult result = post(serviceUrl, "<tds:GetSystemDateAndTime/>", null, null);
+        if (!result.ok()) {
+            return Optional.empty();
+        }
+        try {
+            Document doc = XmlUtils.parse(result.body());
+            List<Element> utc = XmlUtils.elementList(doc, "UTCDateTime");
+            if (utc.isEmpty()) {
+                return Optional.empty();
+            }
+            Element time = (Element) XmlUtils.elements(utc.getFirst(), "Time").item(0);
+            Element date = (Element) XmlUtils.elements(utc.getFirst(), "Date").item(0);
+            if (time == null || date == null) {
+                return Optional.empty();
+            }
+            LocalDateTime deviceTime = LocalDateTime.of(
+                    intOf(date, "Year"), intOf(date, "Month"), intOf(date, "Day"),
+                    intOf(time, "Hour"), intOf(time, "Minute"), intOf(time, "Second"));
+            long deviceMillis = deviceTime.toInstant(ZoneOffset.UTC).toEpochMilli();
+            long offset = deviceMillis - System.currentTimeMillis();
+            clockOffsets.put(serviceUrl, offset);
+            return Optional.of(offset);
+        } catch (Exception e) {
+            logger.debug("Cannot read device clock from {}: {}", serviceUrl, e.getMessage());
+            return Optional.empty();
+        }
+    }
+
+    private static int intOf(Element parent, String name) {
+        String value = XmlUtils.text(parent, name);
+        return value == null ? 0 : Integer.parseInt(value.trim());
     }
 
     /**
-     * Get device information using ONVIF GetDeviceInformation with explicit service
-     * URL.
+     * Authenticate against the device service and fill identity fields.
+     *
+     * @return true when the device accepted the credentials
      */
     public boolean getDeviceInformation(Device device, String serviceUrl, String username, String password) {
-        logger.info("ONVIF GetDeviceInformation request to {} with user {}", serviceUrl, username);
+        // Align the WS-Security timestamp with the device clock before authenticating.
+        clockOffsets.computeIfAbsent(serviceUrl, url -> getSystemClockOffset(url).orElse(0L));
 
+        SoapResult result = post(serviceUrl, "<tds:GetDeviceInformation/>", username, password);
+        if (!result.ok() || isAuthFault(result.body())) {
+            logger.debug("GetDeviceInformation rejected by {} (status {})", serviceUrl, result.status());
+            return false;
+        }
         try {
-            String soapRequest = buildGetDeviceInformationRequest(username, password);
-            String response = sendOnvifRequest(serviceUrl, soapRequest, username, password);
+            Document doc = XmlUtils.parse(result.body());
+            String manufacturer = XmlUtils.text(doc, "Manufacturer");
+            String model = XmlUtils.text(doc, "Model");
+            String firmware = XmlUtils.text(doc, "FirmwareVersion");
+            String serial = XmlUtils.text(doc, "SerialNumber");
+            String hardwareId = XmlUtils.text(doc, "HardwareId");
 
-            if (response == null) {
-                logger.warn("ONVIF GetDeviceInformation FAILED for {} - no response", serviceUrl);
-                return false;
+            if (manufacturer != null && !manufacturer.isBlank()) {
+                device.setManufacturer(MacLookupService.getInstance().brandFor(manufacturer));
             }
-
-            parseDeviceInformation(device, response);
+            if (model != null && !model.isBlank()) {
+                device.setModel(model);
+            }
+            if (firmware != null && !firmware.isBlank()) {
+                device.setFirmwareVersion(firmware);
+            }
+            if (serial != null && !serial.isBlank()) {
+                device.setSerialNumber(serial);
+            }
+            if (hardwareId != null && !hardwareId.isBlank()) {
+                device.setHardwareId(hardwareId);
+            }
+            device.setOnvifServiceUrl(serviceUrl);
             device.setUsername(username);
             device.setPassword(password);
             device.setOnvifAuthMethod(Device.OnvifAuthMethod.WS_SECURITY);
+            device.addDiscoverySource("ONVIF");
 
-            logger.info("ONVIF GetDeviceInformation SUCCESS - Model: {}, Manufacturer: {}",
-                    device.getModel(), device.getManufacturer());
+            long offset = clockOffsets.getOrDefault(serviceUrl, 0L);
+            device.setTimeDifferenceSeconds(Math.round(offset / 1000.0));
 
+            logger.info("ONVIF identified {}: {} {} (firmware {})", device.getIpAddress(),
+                    device.getManufacturer(), device.getModel(), device.getFirmwareVersion());
             return true;
-
         } catch (Exception e) {
-            logger.error("ONVIF GetDeviceInformation FAILED for {}: {}", serviceUrl, e.getMessage());
+            logger.debug("Cannot parse GetDeviceInformation from {}: {}", serviceUrl, e.getMessage());
             return false;
         }
     }
 
+    /** Candidate device service URLs for a port, http or https as appropriate. */
+    public static List<String> serviceUrlsFor(String ip, int port) {
+        String scheme = (port == 443 || port == 8443) ? "https" : "http";
+        String base = scheme + "://" + ip + ":" + port;
+        return List.of(base + "/onvif/device_service", base + "/onvif/services", base + "/onvif/device");
+    }
+
     /**
-     * Try ONVIF device discovery using constructed URLs from detected ports.
-     * Used when WS-Discovery fails (IGMP blocked) but device has HTTP/HTTPS ports
-     * open.
+     * Probe one HTTP port for an ONVIF device service without credentials.
+     * GetSystemDateAndTime must be answered unauthenticated, so a well-formed
+     * reply confirms ONVIF even when the password is unknown.
+     *
+     * @return the working device service URL, or empty
      */
-    public boolean discoverDeviceByPort(Device device, int port, String username, String password) {
-        String protocol = (port == 443 || port == 8443) ? "https" : "http";
-        String serviceUrl = protocol + "://" + device.getIpAddress() + ":" + port + "/onvif/device_service";
-
-        logger.info("Attempting ONVIF on constructed URL: {}", serviceUrl);
-
-        // Try to get device information
-        boolean success = getDeviceInformation(device, serviceUrl, username, password);
-
-        if (success) {
-            device.setOnvifServiceUrl(serviceUrl);
-            logger.info("ONVIF successful on {}, service URL set", serviceUrl);
-            return true;
+    public Optional<String> findDeviceService(String ip, int port) {
+        for (String url : serviceUrlsFor(ip, port)) {
+            SoapResult result = post(url, "<tds:GetSystemDateAndTime/>", null, null);
+            if (result.ok() && result.body().contains("GetSystemDateAndTimeResponse")) {
+                logger.debug("ONVIF device service at {}", url);
+                return Optional.of(url);
+            }
+            if (result.unauthorized() || isAuthFault(result.body())) {
+                // Answering with a challenge still proves an ONVIF endpoint exists.
+                logger.debug("ONVIF device service at {} (requires authentication)", url);
+                return Optional.of(url);
+            }
         }
-
-        logger.info("ONVIF failed on {}", serviceUrl);
-        return false;
+        return Optional.empty();
     }
 
     /**
-     * Build GetDeviceInformation SOAP request with WS-Security.
+     * Resolve the media service address via GetCapabilities.
+     *
+     * <p>Media requests must go to this address: the test camera answers
+     * {@code ActionNotSupported} when GetProfiles is sent to the device service.
      */
-    private String buildGetDeviceInformationRequest(String username, String password) throws Exception {
-        MessageFactory messageFactory = MessageFactory.newInstance();
-        SOAPMessage soapMessage = messageFactory.createMessage();
-        SOAPPart soapPart = soapMessage.getSOAPPart();
-        SOAPEnvelope envelope = soapPart.getEnvelope();
-
-        envelope.addNamespaceDeclaration("tds", "http://www.onvif.org/ver10/device/wsdl");
-
-        SOAPHeader header = envelope.getHeader();
-        SOAPBody body = envelope.getBody();
-
-        // Add WS-Security header
-        String securityHeader = AuthUtils.generateWsSecurityHeader(username, password);
-        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
-        factory.setNamespaceAware(true);
-        Document secDoc = factory.newDocumentBuilder().parse(
-                new ByteArrayInputStream(securityHeader.getBytes("UTF-8")));
-        header.appendChild(header.getOwnerDocument().importNode(secDoc.getDocumentElement(), true));
-
-        // Add body
-        body.addChildElement("GetDeviceInformation", "tds");
-
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        soapMessage.writeTo(out);
-        return out.toString("UTF-8");
+    public String resolveMediaUrl(Device device) {
+        if (device.getOnvifMediaUrl() != null) {
+            return device.getOnvifMediaUrl();
+        }
+        String serviceUrl = device.getOnvifServiceUrl();
+        SoapResult result = post(serviceUrl,
+                "<tds:GetCapabilities><tds:Category>Media</tds:Category></tds:GetCapabilities>",
+                device.getUsername(), device.getPassword());
+        if (result.ok()) {
+            try {
+                Document doc = XmlUtils.parse(result.body());
+                for (Element media : XmlUtils.elementList(doc, "Media")) {
+                    String xAddr = XmlUtils.text(media, "XAddr");
+                    if (xAddr != null && !xAddr.isBlank()) {
+                        String resolved = rehost(xAddr.trim(), device.getIpAddress());
+                        device.setOnvifMediaUrl(resolved);
+                        logger.debug("ONVIF media service for {}: {}", device.getIpAddress(), resolved);
+                        return resolved;
+                    }
+                }
+            } catch (Exception e) {
+                logger.debug("Cannot parse GetCapabilities from {}: {}", serviceUrl, e.getMessage());
+            }
+        }
+        device.setOnvifMediaUrl(serviceUrl);
+        return serviceUrl;
     }
 
     /**
-     * Parse GetDeviceInformation response.
+     * Replace the host in a device-advertised URL with the address we reached it
+     * on. Cameras behind NAT or with a stale static address often advertise an
+     * unreachable host here.
      */
-    private void parseDeviceInformation(Device device, String xml) throws Exception {
-        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
-        factory.setNamespaceAware(true);
-        DocumentBuilder builder = factory.newDocumentBuilder();
-        Document doc = builder.parse(new ByteArrayInputStream(xml.getBytes("UTF-8")));
-
-        String manufacturer = getElementText(doc, "Manufacturer");
-        String model = getElementText(doc, "Model");
-        String serialNumber = getElementText(doc, "SerialNumber");
-
-        device.setManufacturer(manufacturer != null ? manufacturer : "Unknown");
-        device.setModel(model);
-        device.setSerialNumber(serialNumber);
-    }
-
-    /**
-     * Get video sources (channels) from ONVIF device.
-     */
-    public List<String> getVideoSources(Device device) {
-        List<String> sources = new ArrayList<>();
-        logger.info("Retrieving video sources for device: {}", device.getIpAddress());
-
+    private static String rehost(String url, String reachableIp) {
         try {
-            String soapRequest = buildGetVideoSourcesRequest(device.getUsername(), device.getPassword());
-            String response = sendOnvifRequest(device.getOnvifServiceUrl(), soapRequest,
-                    device.getUsername(), device.getPassword());
-
-            if (response != null) {
-                sources = parseVideoSources(response);
-                logger.info("Retrieved {} video sources from ONVIF for {}", sources.size(), device.getIpAddress());
-            } else {
-                logger.warn("No response from GetVideoSources for {}", device.getIpAddress());
+            URI uri = URI.create(url);
+            String host = uri.getHost();
+            if (host == null || host.equals(reachableIp)) {
+                return url;
             }
-
+            int port = uri.getPort();
+            return new URI(uri.getScheme(), null, reachableIp, port, uri.getPath(), uri.getQuery(), null).toString();
         } catch (Exception e) {
-            logger.error("Error getting video sources for {}: {}", device.getIpAddress(), e.getMessage());
+            return url;
         }
-        return sources;
     }
 
     /**
-     * Build GetVideoSources SOAP request.
+     * Decide whether a device is a recorder or a single camera.
+     *
+     * <p>Counting video sources alone is not enough: the CP Plus test camera
+     * publishes one "video source" per encoder profile, so a plain camera
+     * reports two. Recorders are recognised by a larger channel count, by an
+     * ONVIF scope that names storage, or by the model name.
      */
-    private String buildGetVideoSourcesRequest(String username, String password) throws Exception {
-        MessageFactory messageFactory = MessageFactory.newInstance();
-        SOAPMessage soapMessage = messageFactory.createMessage();
-        SOAPPart soapPart = soapMessage.getSOAPPart();
-        SOAPEnvelope envelope = soapPart.getEnvelope();
-
-        envelope.addNamespaceDeclaration("trt", "http://www.onvif.org/ver10/media/wsdl");
-
-        SOAPHeader header = envelope.getHeader();
-        SOAPBody body = envelope.getBody();
-
-        // Add WS-Security header
-        String securityHeader = AuthUtils.generateWsSecurityHeader(username, password);
-        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
-        factory.setNamespaceAware(true);
-        Document secDoc = factory.newDocumentBuilder().parse(
-                new ByteArrayInputStream(securityHeader.getBytes("UTF-8")));
-        header.appendChild(header.getOwnerDocument().importNode(secDoc.getDocumentElement(), true));
-
-        // Add body
-        body.addChildElement("GetVideoSources", "trt");
-
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        soapMessage.writeTo(out);
-        return out.toString("UTF-8");
-    }
-
-    /**
-     * Parse GetVideoSources response.
-     */
-    private List<String> parseVideoSources(String xml) throws Exception {
-        List<String> sources = new ArrayList<>();
-        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
-        factory.setNamespaceAware(true);
-        DocumentBuilder builder = factory.newDocumentBuilder();
-        Document doc = builder.parse(new ByteArrayInputStream(xml.getBytes("UTF-8")));
-
-        NodeList videoSourcesList = doc.getElementsByTagNameNS("*", "VideoSources");
-        for (int i = 0; i < videoSourcesList.getLength(); i++) {
-            Element videoSource = (Element) videoSourcesList.item(i);
-            String token = videoSource.getAttribute("token");
-            if (token != null && !token.isEmpty()) {
-                sources.add(token);
-            }
+    public Device.DeviceType classifyType(Device device, int videoSourceCount) {
+        if (device.getType() == Device.DeviceType.RECORDER) {
+            return Device.DeviceType.RECORDER; // already established from scopes
         }
+        String text = ((device.getModel() == null ? "" : device.getModel()) + " "
+                + (device.getDeviceName() == null ? "" : device.getDeviceName())).toUpperCase(Locale.ROOT);
+        if (text.contains("NVR") || text.contains("DVR") || text.contains("XVR") || text.contains("RECORDER")) {
+            return Device.DeviceType.RECORDER;
+        }
+        if (videoSourceCount >= 4) {
+            return Device.DeviceType.RECORDER;
+        }
+        return videoSourceCount >= 1 ? Device.DeviceType.CAMERA : device.getType();
+    }
 
-        return sources;
+    /** Number of video sources the media service reports. */
+    public int getVideoSourceCount(Device device) {
+        String mediaUrl = resolveMediaUrl(device);
+        SoapResult result = post(mediaUrl, "<trt:GetVideoSources/>", device.getUsername(), device.getPassword());
+        if (!result.ok()) {
+            return 0;
+        }
+        try {
+            Document doc = XmlUtils.parse(result.body());
+            int count = XmlUtils.elementList(doc, "VideoSources").size();
+            logger.debug("{} reports {} video source(s)", device.getIpAddress(), count);
+            return count;
+        } catch (Exception e) {
+            return 0;
+        }
+    }
+
+    /** A media profile token and its display name. */
+    private record Profile(String token, String name) {
     }
 
     /**
-     * Retrieve the actual RTSP stream URLs from the device using the ONVIF
-     * media service (GetProfiles followed by GetStreamUri for each profile).
-     *
-     * This is the authoritative way to obtain stream URLs - when it succeeds,
-     * callers should analyze ONLY these URLs and must NOT fall back to guessing
-     * RTSP paths.
-     *
-     * @param device Authenticated device (username/password must be set)
-     * @return List of RTSP streams advertised by the device (de-duplicated by URL),
-     *         or an empty list if none could be retrieved.
+     * Authoritative stream URLs via GetProfiles then GetStreamUri, sent to the
+     * media service. When these succeed the caller must not guess RTSP paths.
      */
     public List<RTSPStream> getStreamUris(Device device) {
+        String mediaUrl = resolveMediaUrl(device);
+        SoapResult profilesResult = post(mediaUrl, "<trt:GetProfiles/>", device.getUsername(), device.getPassword());
+        if (!profilesResult.ok()) {
+            logger.debug("GetProfiles failed for {} (status {})", device.getIpAddress(), profilesResult.status());
+            return List.of();
+        }
+
+        List<Profile> profiles = parseProfiles(profilesResult.body());
+        if (profiles.isEmpty()) {
+            return List.of();
+        }
+
         List<RTSPStream> streams = new ArrayList<>();
-
-        if (device.getOnvifServiceUrl() == null || device.getUsername() == null) {
-            logger.info("Cannot retrieve ONVIF stream URIs for {} - missing service URL or credentials",
-                    device.getIpAddress());
-            return streams;
-        }
-
-        String username = device.getUsername();
-        String password = device.getPassword();
-
-        // Resolve the media service URL (may differ from the device service URL)
-        String mediaUrl = getMediaServiceUrl(device, username, password);
-        logger.info("Using ONVIF media service URL for {}: {}", device.getIpAddress(), mediaUrl);
-
-        try {
-            // Step 1: GetProfiles
-            String profilesRequest = buildGetProfilesRequest(username, password);
-            String profilesResponse = sendOnvifRequest(mediaUrl, profilesRequest, username, password);
-
-            if (profilesResponse == null) {
-                logger.warn("ONVIF GetProfiles returned no response for {}", device.getIpAddress());
-                return streams;
+        Set<String> seen = new LinkedHashSet<>();
+        for (Profile profile : profiles) {
+            String body = "<trt:GetStreamUri>"
+                    + "<trt:StreamSetup><tt:Stream>RTP-Unicast</tt:Stream>"
+                    + "<tt:Transport><tt:Protocol>RTSP</tt:Protocol></tt:Transport></trt:StreamSetup>"
+                    + "<trt:ProfileToken>" + XmlUtils.escape(profile.token()) + "</trt:ProfileToken>"
+                    + "</trt:GetStreamUri>";
+            SoapResult uriResult = post(mediaUrl, body, device.getUsername(), device.getPassword());
+            if (!uriResult.ok()) {
+                continue;
             }
-
-            List<ProfileInfo> profiles = parseProfiles(profilesResponse);
-            logger.info("ONVIF GetProfiles returned {} profile(s) for {}", profiles.size(), device.getIpAddress());
-
-            // Step 2: GetStreamUri for each profile
-            java.util.Set<String> seenUrls = new java.util.LinkedHashSet<>();
-            for (ProfileInfo profile : profiles) {
-                if (profile.token == null || profile.token.isEmpty()) {
+            try {
+                Document doc = XmlUtils.parse(uriResult.body());
+                String uri = XmlUtils.text(doc, "Uri");
+                if (uri == null || uri.isBlank()) {
                     continue;
                 }
-
-                String streamUriRequest = buildGetStreamUriRequest(username, password, profile.token);
-                String streamUriResponse = sendOnvifRequest(mediaUrl, streamUriRequest, username, password);
-
-                if (streamUriResponse == null) {
-                    logger.info("ONVIF GetStreamUri returned no response for profile {} on {}",
-                            profile.token, device.getIpAddress());
+                String normalized = rehostRtsp(uri.trim(), device.getIpAddress());
+                if (!seen.add(normalized)) {
                     continue;
                 }
-
-                String uri = parseStreamUri(streamUriResponse);
-                if (uri != null && !uri.isEmpty() && seenUrls.add(uri)) {
-                    String streamName = (profile.name != null && !profile.name.isEmpty())
-                            ? profile.name : profile.token;
-                    RTSPStream stream = new RTSPStream(streamName, uri);
-                    streams.add(stream);
-                    logger.info("ONVIF GetStreamUri resolved profile '{}' -> {}", streamName, uri);
-                }
+                String name = profile.name() == null || profile.name().isBlank() ? profile.token() : profile.name();
+                RTSPStream stream = new RTSPStream(name, normalized);
+                stream.setSource("ONVIF");
+                streams.add(stream);
+                logger.info("ONVIF profile '{}' on {} -> {}", name, device.getIpAddress(), normalized);
+            } catch (Exception e) {
+                logger.debug("Cannot parse GetStreamUri for {}: {}", profile.token(), e.getMessage());
             }
-
-        } catch (Exception e) {
-            logger.error("Error retrieving ONVIF stream URIs for {}: {}", device.getIpAddress(), e.getMessage());
         }
-
+        assignRoles(streams);
         return streams;
     }
 
     /**
-     * Determine the ONVIF media service URL via GetCapabilities.
-     * Falls back to the device service URL if the media capability cannot be
-     * resolved (many cameras accept media requests on the device endpoint too).
+     * Label the highest-resolution stream Main and the rest Sub.
+     *
+     * <p>Resolution is not known before analysis, so ordering falls back to the
+     * profile order the device returned, which is main-first on every device
+     * seen. Roles are refined after analysis by the stream analyzer.
      */
-    private String getMediaServiceUrl(Device device, String username, String password) {
-        try {
-            String request = buildGetCapabilitiesRequest(username, password, "Media");
-            String response = sendOnvifRequest(device.getOnvifServiceUrl(), request, username, password);
-            if (response != null) {
-                String mediaXAddr = parseMediaXAddr(response);
-                if (mediaXAddr != null && !mediaXAddr.isEmpty()) {
-                    return mediaXAddr;
-                }
+    private static void assignRoles(List<RTSPStream> streams) {
+        for (int i = 0; i < streams.size(); i++) {
+            RTSPStream stream = streams.get(i);
+            String lower = stream.getStreamName() == null ? "" : stream.getStreamName().toLowerCase(Locale.ROOT);
+            if (lower.contains("sub") || lower.contains("second") || lower.contains("low")) {
+                stream.setRole(RTSPStream.Role.SUB);
+            } else if (lower.contains("main") || lower.contains("primary") || lower.contains("high")) {
+                stream.setRole(RTSPStream.Role.MAIN);
+            } else {
+                stream.setRole(i == 0 ? RTSPStream.Role.MAIN : RTSPStream.Role.SUB);
             }
-        } catch (Exception e) {
-            logger.info("GetCapabilities failed for {}, using device service URL: {}",
-                    device.getIpAddress(), e.getMessage());
         }
-        // Fallback: device service URL
-        return device.getOnvifServiceUrl();
     }
 
-    /**
-     * Build GetCapabilities SOAP request with WS-Security.
-     */
-    private String buildGetCapabilitiesRequest(String username, String password, String category) throws Exception {
-        MessageFactory messageFactory = MessageFactory.newInstance();
-        SOAPMessage soapMessage = messageFactory.createMessage();
-        SOAPPart soapPart = soapMessage.getSOAPPart();
-        SOAPEnvelope envelope = soapPart.getEnvelope();
-
-        envelope.addNamespaceDeclaration("tds", "http://www.onvif.org/ver10/device/wsdl");
-
-        SOAPHeader header = envelope.getHeader();
-        SOAPBody body = envelope.getBody();
-
-        appendSecurityHeader(header, username, password);
-
-        SOAPElement getCapabilities = body.addChildElement("GetCapabilities", "tds");
-        SOAPElement categoryElement = getCapabilities.addChildElement("Category", "tds");
-        categoryElement.setTextContent(category);
-
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        soapMessage.writeTo(out);
-        return out.toString("UTF-8");
-    }
-
-    /**
-     * Parse the Media service XAddr from a GetCapabilities response.
-     */
-    private String parseMediaXAddr(String xml) {
+    private static String rehostRtsp(String uri, String reachableIp) {
         try {
-            DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
-            factory.setNamespaceAware(true);
-            DocumentBuilder builder = factory.newDocumentBuilder();
-            Document doc = builder.parse(new ByteArrayInputStream(xml.getBytes("UTF-8")));
-
-            NodeList mediaList = doc.getElementsByTagNameNS("*", "Media");
-            for (int i = 0; i < mediaList.getLength(); i++) {
-                Element media = (Element) mediaList.item(i);
-                NodeList xAddrList = media.getElementsByTagNameNS("*", "XAddr");
-                if (xAddrList.getLength() > 0) {
-                    String xAddr = xAddrList.item(0).getTextContent();
-                    if (xAddr != null && !xAddr.trim().isEmpty()) {
-                        return xAddr.trim();
-                    }
-                }
+            URI parsed = URI.create(uri);
+            String host = parsed.getHost();
+            if (host == null || host.equals(reachableIp)) {
+                return uri;
             }
+            int port = parsed.getPort();
+            String path = parsed.getRawPath() == null ? "" : parsed.getRawPath();
+            String query = parsed.getRawQuery() == null ? "" : "?" + parsed.getRawQuery();
+            return "rtsp://" + reachableIp + (port > 0 ? ":" + port : "") + path + query;
         } catch (Exception e) {
-            logger.info("Error parsing Media XAddr: {}", e.getMessage());
+            return uri;
         }
-        return null;
     }
 
-    /**
-     * Build GetProfiles SOAP request (media service) with WS-Security.
-     */
-    private String buildGetProfilesRequest(String username, String password) throws Exception {
-        MessageFactory messageFactory = MessageFactory.newInstance();
-        SOAPMessage soapMessage = messageFactory.createMessage();
-        SOAPPart soapPart = soapMessage.getSOAPPart();
-        SOAPEnvelope envelope = soapPart.getEnvelope();
-
-        envelope.addNamespaceDeclaration("trt", "http://www.onvif.org/ver10/media/wsdl");
-
-        SOAPHeader header = envelope.getHeader();
-        SOAPBody body = envelope.getBody();
-
-        appendSecurityHeader(header, username, password);
-
-        body.addChildElement("GetProfiles", "trt");
-
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        soapMessage.writeTo(out);
-        return out.toString("UTF-8");
-    }
-
-    /**
-     * Build GetStreamUri SOAP request for a specific profile token.
-     * Requests an RTP-Unicast stream over RTSP.
-     */
-    private String buildGetStreamUriRequest(String username, String password, String profileToken) throws Exception {
-        MessageFactory messageFactory = MessageFactory.newInstance();
-        SOAPMessage soapMessage = messageFactory.createMessage();
-        SOAPPart soapPart = soapMessage.getSOAPPart();
-        SOAPEnvelope envelope = soapPart.getEnvelope();
-
-        envelope.addNamespaceDeclaration("trt", "http://www.onvif.org/ver10/media/wsdl");
-        envelope.addNamespaceDeclaration("tt", "http://www.onvif.org/ver10/schema");
-
-        SOAPHeader header = envelope.getHeader();
-        SOAPBody body = envelope.getBody();
-
-        appendSecurityHeader(header, username, password);
-
-        SOAPElement getStreamUri = body.addChildElement("GetStreamUri", "trt");
-
-        SOAPElement streamSetup = getStreamUri.addChildElement("StreamSetup", "trt");
-        SOAPElement stream = streamSetup.addChildElement("Stream", "tt");
-        stream.setTextContent("RTP-Unicast");
-        SOAPElement transport = streamSetup.addChildElement("Transport", "tt");
-        SOAPElement protocol = transport.addChildElement("Protocol", "tt");
-        protocol.setTextContent("RTSP");
-
-        SOAPElement profileTokenElement = getStreamUri.addChildElement("ProfileToken", "trt");
-        profileTokenElement.setTextContent(profileToken);
-
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        soapMessage.writeTo(out);
-        return out.toString("UTF-8");
-    }
-
-    /**
-     * Lightweight holder for ONVIF media profile information.
-     */
-    private static class ProfileInfo {
-        String token;
-        String name;
-    }
-
-    /**
-     * Parse the profile tokens and names from a GetProfiles response.
-     */
-    private List<ProfileInfo> parseProfiles(String xml) {
-        List<ProfileInfo> profiles = new ArrayList<>();
+    private List<Profile> parseProfiles(String xml) {
+        List<Profile> profiles = new ArrayList<>();
         try {
-            DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
-            factory.setNamespaceAware(true);
-            DocumentBuilder builder = factory.newDocumentBuilder();
-            Document doc = builder.parse(new ByteArrayInputStream(xml.getBytes("UTF-8")));
-
-            NodeList profilesList = doc.getElementsByTagNameNS("*", "Profiles");
-            for (int i = 0; i < profilesList.getLength(); i++) {
-                Element profileElement = (Element) profilesList.item(i);
-                ProfileInfo info = new ProfileInfo();
-                info.token = profileElement.getAttribute("token");
-
-                NodeList nameList = profileElement.getElementsByTagNameNS("*", "Name");
-                if (nameList.getLength() > 0) {
-                    String name = nameList.item(0).getTextContent();
-                    if (name != null) {
-                        info.name = name.trim();
-                    }
+            Document doc = XmlUtils.parse(xml);
+            List<Element> elements = XmlUtils.elementList(doc, "Profiles");
+            if (elements.isEmpty()) {
+                elements = XmlUtils.elementList(doc, "Profile"); // Media2 spelling
+            }
+            for (Element element : elements) {
+                String token = element.getAttribute("token");
+                if (token.isEmpty()) {
+                    continue;
                 }
-
-                if (info.token != null && !info.token.isEmpty()) {
-                    profiles.add(info);
-                }
+                profiles.add(new Profile(token, XmlUtils.text(element, "Name")));
             }
         } catch (Exception e) {
-            logger.info("Error parsing ONVIF profiles: {}", e.getMessage());
+            logger.debug("Cannot parse GetProfiles: {}", e.getMessage());
         }
         return profiles;
     }
 
-    /**
-     * Parse the RTSP URI from a GetStreamUri response.
-     */
-    private String parseStreamUri(String xml) {
-        try {
-            DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
-            factory.setNamespaceAware(true);
-            DocumentBuilder builder = factory.newDocumentBuilder();
-            Document doc = builder.parse(new ByteArrayInputStream(xml.getBytes("UTF-8")));
-
-            NodeList uriList = doc.getElementsByTagNameNS("*", "Uri");
-            if (uriList.getLength() > 0) {
-                String uri = uriList.item(0).getTextContent();
-                if (uri != null && !uri.trim().isEmpty()) {
-                    return uri.trim();
-                }
-            }
-        } catch (Exception e) {
-            logger.info("Error parsing ONVIF stream URI: {}", e.getMessage());
-        }
-        return null;
-    }
-
-    /**
-     * Append a WS-Security UsernameToken header to the given SOAP header.
-     * Shared helper used by all authenticated ONVIF requests.
-     */
-    private void appendSecurityHeader(SOAPHeader header, String username, String password) throws Exception {
-        String securityHeader = AuthUtils.generateWsSecurityHeader(username, password);
-        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
-        factory.setNamespaceAware(true);
-        Document secDoc = factory.newDocumentBuilder().parse(
-                new ByteArrayInputStream(securityHeader.getBytes("UTF-8")));
-        header.appendChild(header.getOwnerDocument().importNode(secDoc.getDocumentElement(), true));
-    }
-
-    /**
-     * Get device hostname using ONVIF GetHostname.
-     * Sets device name from the hostname if available.
-     */
+    /** Device hostname, stored as the display name when none is known yet. */
     public void getHostname(Device device) {
-        if (device.getOnvifServiceUrl() == null || device.getUsername() == null) {
+        SoapResult result = post(device.getOnvifServiceUrl(), "<tds:GetHostname/>",
+                device.getUsername(), device.getPassword());
+        if (!result.ok()) {
             return;
         }
-        logger.info("Retrieving hostname for device: {}", device.getIpAddress());
-
         try {
-            String soapRequest = buildGetHostnameRequest(device.getUsername(), device.getPassword());
-            String response = sendOnvifRequest(device.getOnvifServiceUrl(), soapRequest,
-                    device.getUsername(), device.getPassword());
-
-            if (response != null) {
-                parseHostname(device, response);
-            } else {
-                logger.info("No response from GetHostname for {}", device.getIpAddress());
+            Document doc = XmlUtils.parse(result.body());
+            String name = XmlUtils.text(doc, "Name");
+            if (name != null && !name.isBlank() && device.getDeviceName() == null) {
+                device.setDeviceName(name.trim());
             }
         } catch (Exception e) {
-            logger.info("Failed to get hostname for {}: {}", device.getIpAddress(), e.getMessage());
+            logger.debug("Cannot parse GetHostname for {}: {}", device.getIpAddress(), e.getMessage());
         }
     }
 
     /**
-     * Build GetHostname SOAP request with WS-Security.
+     * MAC address straight from the device, used when ARP cannot help (the
+     * device is on another subnet). Only genuine unicast addresses are accepted.
      */
-    private String buildGetHostnameRequest(String username, String password) throws Exception {
-        MessageFactory messageFactory = MessageFactory.newInstance();
-        SOAPMessage soapMessage = messageFactory.createMessage();
-        SOAPPart soapPart = soapMessage.getSOAPPart();
-        SOAPEnvelope envelope = soapPart.getEnvelope();
-
-        envelope.addNamespaceDeclaration("tds", "http://www.onvif.org/ver10/device/wsdl");
-
-        SOAPHeader header = envelope.getHeader();
-        SOAPBody body = envelope.getBody();
-
-        // Add WS-Security header
-        String securityHeader = AuthUtils.generateWsSecurityHeader(username, password);
-        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
-        factory.setNamespaceAware(true);
-        Document secDoc = factory.newDocumentBuilder().parse(
-                new ByteArrayInputStream(securityHeader.getBytes("UTF-8")));
-        header.appendChild(header.getOwnerDocument().importNode(secDoc.getDocumentElement(), true));
-
-        // Add body
-        body.addChildElement("GetHostname", "tds");
-
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        soapMessage.writeTo(out);
-        return out.toString("UTF-8");
-    }
-
-    /**
-     * Parse GetHostname response.
-     * Response structure:
-     * <HostnameInformation><Name>hostname</Name></HostnameInformation>
-     */
-    private void parseHostname(Device device, String xml) throws Exception {
-        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
-        factory.setNamespaceAware(true);
-        DocumentBuilder builder = factory.newDocumentBuilder();
-        Document doc = builder.parse(new ByteArrayInputStream(xml.getBytes("UTF-8")));
-
-        String name = getElementText(doc, "Name");
-        if (name != null && !name.trim().isEmpty()) {
-            device.setDeviceName(name.trim());
-            logger.info("Retrieved hostname from ONVIF for {}: {}", device.getIpAddress(), name.trim());
-        } else {
-            logger.info("GetHostname returned empty name for {}", device.getIpAddress());
+    public Optional<String> getMacAddress(Device device) {
+        SoapResult result = post(device.getOnvifServiceUrl(), "<tds:GetNetworkInterfaces/>",
+                device.getUsername(), device.getPassword());
+        if (!result.ok()) {
+            return Optional.empty();
         }
-    }
-
-    /**
-     * Get network interfaces using ONVIF GetNetworkInterfaces.
-     * Retrieves MAC address (HwAddress) from the device directly.
-     * Used as fallback when ARP-based MAC resolution fails.
-     */
-    public void getNetworkInterfaces(Device device) {
-        if (device.getOnvifServiceUrl() == null || device.getUsername() == null) {
-            return;
-        }
-        logger.info("Retrieving network interfaces for device: {}", device.getIpAddress());
-
         try {
-            String soapRequest = buildGetNetworkInterfacesRequest(device.getUsername(), device.getPassword());
-            String response = sendOnvifRequest(device.getOnvifServiceUrl(), soapRequest,
-                    device.getUsername(), device.getPassword());
-
-            if (response != null) {
-                parseNetworkInterfaces(device, response);
-            } else {
-                logger.info("No response from GetNetworkInterfaces for {}", device.getIpAddress());
-            }
-        } catch (Exception e) {
-            logger.info("Failed to get network interfaces for {}: {}", device.getIpAddress(), e.getMessage());
-        }
-    }
-
-    /**
-     * Get network interfaces using ONVIF GetNetworkInterfaces WITHOUT authentication.
-     * Many cameras allow unauthenticated access to this API.
-     * Used as fallback for cross-subnet devices where ARP cannot resolve MAC.
-     *
-     * @param device     The device to update with MAC address
-     * @param serviceUrl The ONVIF service URL to probe
-     */
-    public void getNetworkInterfacesUnauthenticated(Device device, String serviceUrl) {
-        logger.info("Trying unauthenticated GetNetworkInterfaces for {} at {}", device.getIpAddress(), serviceUrl);
-        try {
-            String soapRequest = buildGetNetworkInterfacesRequestNoAuth();
-            String response = sendOnvifRequest(serviceUrl, soapRequest, null, null);
-
-            if (response != null) {
-                parseNetworkInterfaces(device, response);
-            }
-        } catch (Exception e) {
-            logger.info("Unauthenticated GetNetworkInterfaces failed for {}: {}", device.getIpAddress(), e.getMessage());
-        }
-    }
-
-    /**
-     * Build GetNetworkInterfaces SOAP request WITHOUT WS-Security (unauthenticated).
-     */
-    private String buildGetNetworkInterfacesRequestNoAuth() throws Exception {
-        MessageFactory messageFactory = MessageFactory.newInstance();
-        SOAPMessage soapMessage = messageFactory.createMessage();
-        SOAPPart soapPart = soapMessage.getSOAPPart();
-        SOAPEnvelope envelope = soapPart.getEnvelope();
-
-        envelope.addNamespaceDeclaration("tds", "http://www.onvif.org/ver10/device/wsdl");
-
-        // No WS-Security header - unauthenticated request
-        SOAPBody body = envelope.getBody();
-        body.addChildElement("GetNetworkInterfaces", "tds");
-
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        soapMessage.writeTo(out);
-        return out.toString("UTF-8");
-    }
-
-    /**
-     * Build GetNetworkInterfaces SOAP request with WS-Security.
-     */
-    private String buildGetNetworkInterfacesRequest(String username, String password) throws Exception {
-        MessageFactory messageFactory = MessageFactory.newInstance();
-        SOAPMessage soapMessage = messageFactory.createMessage();
-        SOAPPart soapPart = soapMessage.getSOAPPart();
-        SOAPEnvelope envelope = soapPart.getEnvelope();
-
-        envelope.addNamespaceDeclaration("tds", "http://www.onvif.org/ver10/device/wsdl");
-
-        SOAPHeader header = envelope.getHeader();
-        SOAPBody body = envelope.getBody();
-
-        // Add WS-Security header
-        String securityHeader = AuthUtils.generateWsSecurityHeader(username, password);
-        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
-        factory.setNamespaceAware(true);
-        Document secDoc = factory.newDocumentBuilder().parse(
-                new ByteArrayInputStream(securityHeader.getBytes("UTF-8")));
-        header.appendChild(header.getOwnerDocument().importNode(secDoc.getDocumentElement(), true));
-
-        // Add body
-        body.addChildElement("GetNetworkInterfaces", "tds");
-
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        soapMessage.writeTo(out);
-        return out.toString("UTF-8");
-    }
-
-    /**
-     * Parse GetNetworkInterfaces response.
-     * Response structure:
-     * <NetworkInterfaces><Info><HwAddress>xx:xx:xx:xx:xx:xx</HwAddress></Info></NetworkInterfaces>
-     */
-    private void parseNetworkInterfaces(Device device, String xml) throws Exception {
-        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
-        factory.setNamespaceAware(true);
-        DocumentBuilder builder = factory.newDocumentBuilder();
-        Document doc = builder.parse(new ByteArrayInputStream(xml.getBytes("UTF-8")));
-
-        String hwAddress = getElementText(doc, "HwAddress");
-        if (hwAddress != null && !hwAddress.trim().isEmpty()) {
-            String mac = hwAddress.trim().toUpperCase();
-            // Normalize to XX:XX:XX:XX:XX:XX format if needed
-            if (mac.contains("-")) {
-                mac = mac.replace("-", ":");
-            }
-            device.setMacAddress(mac);
-            logger.info("Retrieved MAC address from ONVIF for {}: {}", device.getIpAddress(), mac);
-        } else {
-            logger.info("GetNetworkInterfaces returned no HwAddress for {}", device.getIpAddress());
-        }
-    }
-
-    /**
-     * Send ONVIF SOAP request and get response.
-     */
-    private String sendOnvifRequest(String serviceUrl, String soapRequest, String username, String password) {
-        HttpURLConnection connection = null;
-        try {
-            URL url = new URL(serviceUrl);
-            connection = (HttpURLConnection) url.openConnection();
-            connection.setRequestMethod("POST");
-            connection.setRequestProperty("Content-Type", "application/soap+xml; charset=utf-8");
-            connection.setDoOutput(true);
-            connection.setConnectTimeout(5000);
-            connection.setReadTimeout(10000);
-
-            logger.info("ONVIF SOAP REQUEST");
-            logger.info("URL: {}", serviceUrl);
-            logger.info("Method: POST");
-            logger.info("Content-Type: application/soap+xml; charset=utf-8");
-            logger.info("SOAP Request Body:\n{}", soapRequest);
-
-            connection.getOutputStream().write(soapRequest.getBytes("UTF-8"));
-
-            int responseCode = connection.getResponseCode();
-            String responseMessage = connection.getResponseMessage();
-
-            logger.info("ONVIF SOAP RESPONSE");
-            logger.info("Response Code: {} {}", responseCode, responseMessage);
-
-            // Log response headers
-            logger.info("Response Headers:");
-            connection.getHeaderFields().forEach((key, values) -> {
-                if (key != null) {
-                    logger.info("  {}: {}", key, String.join(", ", values));
+            Document doc = XmlUtils.parse(result.body());
+            for (Element info : XmlUtils.elementList(doc, "Info")) {
+                String hwAddress = XmlUtils.text(info, "HwAddress");
+                String mac = NetworkUtils.normalizeMac(hwAddress);
+                if (mac != null && NetworkUtils.isUnicastMac(mac)) {
+                    return Optional.of(mac);
                 }
-            });
-
-            if (responseCode == 200) {
-                InputStream is = connection.getInputStream();
-                ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                byte[] buffer = new byte[1024];
-                int len;
-                while ((len = is.read(buffer)) != -1) {
-                    baos.write(buffer, 0, len);
-                }
-                String response = baos.toString("UTF-8");
-                logger.info("Response Body:\n{}", response);
-                return response;
-            } else {
-                // Try to read error response body
-                InputStream errorStream = connection.getErrorStream();
-                if (errorStream != null) {
-                    ByteArrayOutputStream errorBaos = new ByteArrayOutputStream();
-                    byte[] buffer = new byte[1024];
-                    int len;
-                    while ((len = errorStream.read(buffer)) != -1) {
-                        errorBaos.write(buffer, 0, len);
-                    }
-                    String errorBody = errorBaos.toString("UTF-8");
-                    logger.warn("ONVIF request failed with code: {}. Error body:\n{}", responseCode, errorBody);
-                } else {
-                    logger.warn("ONVIF request failed with code: {}", responseCode);
-                }
-                return null;
             }
-
-        } catch (javax.net.ssl.SSLException e) {
-            // SSL errors are common for non-ONVIF devices or incompatible SSL configs
-            logger.info("SSL error for {}: {}", serviceUrl, e.getMessage());
-            return null;
-        } catch (java.net.SocketException e) {
-            // Connection refused/reset - device doesn't support ONVIF on this port
-            logger.info("Connection error for {}: {}", serviceUrl, e.getMessage());
-            return null;
-        } catch (java.net.SocketTimeoutException e) {
-            // Timeout - device not responding
-            logger.info("Timeout for {}: {}", serviceUrl, e.getMessage());
-            return null;
         } catch (Exception e) {
-            // Other unexpected errors - log with stack trace
-            logger.error("Error sending ONVIF request to {}", serviceUrl, e);
-            return null;
-        } finally {
-            if (connection != null) {
-                connection.disconnect();
-            }
+            logger.debug("Cannot parse GetNetworkInterfaces for {}: {}", device.getIpAddress(), e.getMessage());
         }
-    }
-
-    /**
-     * Extract MAC address from ONVIF UUID endpoint reference.
-     * UUID format: uuid:xxxxxxxx-xxxx-xxxx-xxxx-AABBCCDDEEFF
-     * The last 12 hex digits often represent the device MAC address.
-     *
-     * @param uuid The UUID string from EndpointReference/Address
-     * @return Formatted MAC address (XX:XX:XX:XX:XX:XX) or null if not extractable
-     */
-    private String extractMacFromUuid(String uuid) {
-        if (uuid == null || uuid.isEmpty()) {
-            return null;
-        }
-
-        // Remove "uuid:" or "urn:uuid:" prefix if present
-        String cleanUuid = uuid;
-        if (cleanUuid.startsWith("urn:uuid:")) {
-            cleanUuid = cleanUuid.substring(9);
-        } else if (cleanUuid.startsWith("uuid:")) {
-            cleanUuid = cleanUuid.substring(5);
-        }
-
-        // Remove hyphens to get continuous hex string
-        String hex = cleanUuid.replace("-", "");
-
-        // UUID should be 32 hex characters; last 12 represent MAC
-        if (hex.length() < 12) {
-            return null;
-        }
-
-        // Validate that all characters are hex
-        String lastTwelve = hex.substring(hex.length() - 12).toUpperCase();
-        for (char c : lastTwelve.toCharArray()) {
-            if (!((c >= '0' && c <= '9') || (c >= 'A' && c <= 'F'))) {
-                return null;
-            }
-        }
-
-        // Skip if all zeros (not a real MAC)
-        if ("000000000000".equals(lastTwelve)) {
-            return null;
-        }
-
-        // Format as XX:XX:XX:XX:XX:XX
-        StringBuilder mac = new StringBuilder();
-        for (int i = 0; i < 12; i += 2) {
-            if (mac.length() > 0) {
-                mac.append(':');
-            }
-            mac.append(lastTwelve, i, i + 2);
-        }
-        return mac.toString();
-    }
-
-    /**
-     * Extract element text content by tag name.
-     */
-    private String getElementText(Document doc, String tagName) {
-        NodeList nodeList = doc.getElementsByTagNameNS("*", tagName);
-        if (nodeList.getLength() > 0) {
-            String text = nodeList.item(0).getTextContent();
-            return text != null ? text.trim() : null;
-        }
-        return null;
+        return Optional.empty();
     }
 }
