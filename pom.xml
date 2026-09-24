@@ -46,10 +46,17 @@
         <runtime.modules>java.base,java.desktop,java.logging,java.management,java.naming,java.net.http,java.prefs,java.scripting,java.sql,java.xml,java.xml.crypto,jdk.charsets,jdk.crypto.cryptoki,jdk.localedata,jdk.unsupported,jdk.zipfs</runtime.modules>
 
         <!-- Code signing is optional: pass -Dsign.keystore=... -Dsign.storepass=...
-             (or set the env vars) to sign with a real certificate. -->
+             (or set the env vars) to sign with a real certificate. The launcher
+             and the self-extracting archive go through the same script, so they
+             always carry the same signature. -->
         <sign.keystore>${env.CCTV_SIGN_KEYSTORE}</sign.keystore>
         <sign.storepass>${env.CCTV_SIGN_STOREPASS}</sign.storepass>
         <skip.signing>true</skip.signing>
+
+        <!-- Self-extracting archive. Built with IExpress, which ships with
+             Windows, so it is only produced on a Windows build. -->
+        <sfx.filename>${app.filename}-${project.version}-sfx</sfx.filename>
+        <skip.sfx>true</skip.sfx>
     </properties>
 
     <dependencies>
@@ -165,6 +172,7 @@
             <properties>
                 <javacpp.platform>windows-x86_64</javacpp.platform>
                 <javafx.platform>win</javafx.platform>
+                <skip.sfx>false</skip.sfx>
             </properties>
         </profile>
         <profile>
@@ -396,6 +404,14 @@
                             <outfile>${project.build.directory}/dist/${app.filename}.exe</outfile>
                             <jar>${app.filename}.jar</jar>
                             <dontWrapJar>true</dontWrapJar>
+                            <!-- Run from the launcher's own folder. The class path
+                                 below is relative, so without this the executable
+                                 starts a JVM that cannot find the jar and dies
+                                 silently whenever the caller's working directory
+                                 is somewhere else: a shortcut with a different
+                                 "Start in", a terminal, or the self-extracting
+                                 archive, which starts it from its unpack folder. -->
+                            <chdir>.</chdir>
                             <icon>src/main/resources/icon.ico</icon>
                             <errTitle>CCTV Discovery</errTitle>
                             <classPath>
@@ -429,7 +445,10 @@
                 </executions>
             </plugin>
 
-            <!-- Optional Authenticode signing with a supplied certificate -->
+            <!-- Optional Authenticode signing, then the self-extracting archive.
+                 Order matters: the launcher is signed before it is packed, and
+                 the archive is signed after it is built, because Authenticode
+                 covers the cabinet the archive carries. -->
             <plugin>
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>exec-maven-plugin</artifactId>
@@ -443,20 +462,61 @@
                         </goals>
                         <configuration>
                             <skip>${skip.signing}</skip>
-                            <executable>signtool</executable>
+                            <executable>powershell.exe</executable>
                             <arguments>
-                                <argument>sign</argument>
-                                <argument>/fd</argument>
-                                <argument>SHA256</argument>
-                                <argument>/f</argument>
-                                <argument>${sign.keystore}</argument>
-                                <argument>/p</argument>
-                                <argument>${sign.storepass}</argument>
-                                <argument>/tr</argument>
-                                <argument>http://timestamp.digicert.com</argument>
-                                <argument>/td</argument>
-                                <argument>SHA256</argument>
+                                <argument>-NoProfile</argument>
+                                <argument>-ExecutionPolicy</argument>
+                                <argument>Bypass</argument>
+                                <argument>-File</argument>
+                                <argument>${project.basedir}/scripts/Invoke-CodeSign.ps1</argument>
+                                <argument>-Path</argument>
                                 <argument>${project.build.directory}/dist/${app.filename}.exe</argument>
+                                <argument>-Keystore</argument>
+                                <argument>${sign.keystore}</argument>
+                                <argument>-Password</argument>
+                                <argument>${sign.storepass}</argument>
+                            </arguments>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>build-sfx</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>exec</goal>
+                        </goals>
+                        <configuration>
+                            <skip>${skip.sfx}</skip>
+                            <executable>powershell.exe</executable>
+                            <arguments>
+                                <argument>-NoProfile</argument>
+                                <argument>-ExecutionPolicy</argument>
+                                <argument>Bypass</argument>
+                                <argument>-File</argument>
+                                <argument>${project.basedir}/scripts/New-SfxPackage.ps1</argument>
+                                <argument>-DistDir</argument>
+                                <argument>${project.build.directory}/dist</argument>
+                                <argument>-OutFile</argument>
+                                <argument>${project.build.directory}/${sfx.filename}.exe</argument>
+                                <argument>-WorkDir</argument>
+                                <argument>${project.build.directory}/sfx</argument>
+                                <argument>-BootstrapTemplate</argument>
+                                <argument>${project.basedir}/src/main/packaging/sfx-bootstrap.cmd</argument>
+                                <argument>-AppName</argument>
+                                <argument>${app.filename}</argument>
+                                <argument>-AppVersion</argument>
+                                <argument>${project.version}</argument>
+                                <argument>-AppExe</argument>
+                                <argument>${app.filename}.exe</argument>
+                                <argument>-FriendlyName</argument>
+                                <argument>${project.name}</argument>
+                                <argument>-PayloadPlatform</argument>
+                                <argument>${javacpp.platform}</argument>
+                                <argument>-SignKeystore</argument>
+                                <argument>${sign.keystore}</argument>
+                                <argument>-SignPassword</argument>
+                                <argument>${sign.storepass}</argument>
+                                <argument>-SkipSigning</argument>
+                                <argument>${skip.signing}</argument>
                             </arguments>
                         </configuration>
                     </execution>

@@ -38,17 +38,17 @@
 
 ## Technical Requirements
 *   **Operating System**: Windows 10/11 (x64) recommended.
-*   **Java Runtime**: Requires Java 8 (JRE 8 is often bundled with the distribution).
+*   **Java Runtime**: None. A trimmed Java 25 runtime is bundled with the distribution.
 *   **Dependencies**:
-    *   **JavaFX**: For the modern graphical user interface.
-    *   **JavaCV / FFmpeg / OpenCV**: For advanced video stream analysis.
+    *   **JavaFX**: For the graphical user interface.
+    *   **JavaCV / FFmpeg**: For video stream analysis.
     *   **OSHI**: For low-level system hardware and OS information.
 
 ## Installation & Build
 
 ### Prerequisites
-*   JDK 1.8
-*   Apache Maven 3.6+
+*   JDK 25
+*   Apache Maven 3.9+
 
 ### Building from Source
 Clone the repository and run the Maven package command:
@@ -59,7 +59,47 @@ mvn clean package
 
 This will produce:
 1.  A shaded "fat" JAR in the `target/` directory.
-2.  A Windows executable (`.exe`) in `target/dist/` (via Launch4j).
+2.  A Windows executable (`.exe`) in `target/dist/`, next to the bundled runtime (via Launch4j and jlink).
+3.  A distribution ZIP, `target/CctvDiscovery-<version>.zip`.
+4.  A self-extracting archive, `target/CctvDiscovery-<version>-sfx.exe`.
+
+#### The self-extracting archive
+
+One file that carries the launcher, the fat JAR and the bundled runtime. Running
+it unpacks everything to `%LOCALAPPDATA%\Programs\CctvDiscovery\<version>` and
+starts the application; `CctvDiscovery-<version>-sfx.exe /T:<dir> /C` unpacks
+without starting anything.
+
+It is built with IExpress, which ships with Windows, so nothing has to be
+downloaded or vendored. Two consequences worth knowing:
+
+*   It is only built on Windows. Skip it with `-Dskip.sfx=true` when iterating,
+    since compressing the runtime adds a minute or so to the build.
+*   Build with a JDK of the architecture you are shipping. `jlink` copies the
+    architecture of whichever JDK runs it, so an ARM64 JDK produces an ARM64
+    runtime around an x64 JAR — an archive that installs cleanly and then fails
+    to start. The build refuses to package that mismatch rather than ship it.
+    `-Druntime.jdk=<path>` overrides just the bundled runtime if you need to
+    cross-build.
+
+    This is also why a Windows-on-ARM machine needs `JAVA_HOME` pointed at an
+    x64 JDK for a normal build: OpenJFX publishes Maven profiles for Windows
+    `amd64` and `x86` only, so on `aarch64` its own transitive coordinates never
+    resolve and dependency resolution fails before anything is compiled.
+
+### Signing
+
+Both the launcher and the self-extracting archive are signed with the same
+certificate, through `scripts/Invoke-CodeSign.ps1`. Signing is off unless a
+keystore is supplied:
+
+```bash
+mvn clean package "-Dsign.keystore=C:\path\to\cert.pfx" -Dsign.storepass=...
+```
+
+`signtool` is located on `PATH` or under the installed Windows SDK, so no
+Developer Command Prompt is needed. Signatures are timestamped, which keeps them
+valid after the certificate expires.
 
 ## Usage Guide
 
