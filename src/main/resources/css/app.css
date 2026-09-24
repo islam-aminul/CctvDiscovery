@@ -213,12 +213,21 @@
     -fx-background-color: -teal-600;
 }
 
+/*
+ * Secondary actions are outlined rather than filled, so a panel of buttons has
+ * three legible tiers instead of a wall of solid blocks.
+ */
 .button-secondary {
-    -fx-background-color: -sage-600;
+    -fx-background-color: transparent;
+    -fx-text-fill: -sage-700;
+    -fx-border-color: -sage-500;
+    -fx-border-width: 1px;
+    -fx-border-radius: 4px;
 }
 
 .button-secondary:hover {
-    -fx-background-color: -sage-500;
+    -fx-background-color: -paper-100;
+    -fx-border-color: -sage-600;
 }
 
 .button-danger {

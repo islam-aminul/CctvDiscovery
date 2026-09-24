@@ -46,12 +46,14 @@
     -fx-background-color: -teal-600;
 }
 
+/* sage-700 sat at 2.15:1 on the midnight band, under the 3:1 a control needs */
 .header-button-secondary {
-    -fx-background-color: -sage-700;
+    -fx-background-color: -sage-600;
 }
 
 .header-button-secondary:hover {
-    -fx-background-color: -sage-600;
+    -fx-background-color: -sage-500;
+    -fx-text-fill: -midnight-700;
 }
 
 /* Typography */
@@ -63,30 +65,55 @@
     -fx-text-fill: -teal-300;
 }
 
-/* Buttons: midnight is the surface now, so primary lifts to its 300 stop. */
+/*
+ * Buttons. Midnight cannot be both figure and ground: with midnight carrying
+ * the surfaces here, a midnight fill sat at 1.37:1 against the panel behind it,
+ * well under the 3:1 that WCAG 1.4.11 asks of a control. So in this theme
+ * Midnight keeps the header and the surfaces, and the accents take the buttons:
+ * Sage for the preparatory steps, Teal for the one high-intent action.
+ */
+.button {
+    -fx-background-color: -sage-600;
+    -fx-text-fill: -paper-0;
+}
+
+.button:hover {
+    -fx-background-color: -sage-500;
+    -fx-text-fill: -midnight-700;
+}
+
 .button:pressed {
-    -fx-background-color: -midnight-600;
+    -fx-background-color: -sage-700;
+    -fx-text-fill: -paper-0;
 }
 
 .button:disabled {
     -fx-background-color: #23264D;
     -fx-text-fill: #6E7796;
+    -fx-border-color: transparent;
 }
 
+/* Starting the scan: the brightest thing in the window, as it should be. */
 .button-success {
-    -fx-background-color: -teal-700;
+    -fx-background-color: -teal-400;
+    -fx-text-fill: -midnight-700;
 }
 
 .button-success:hover {
-    -fx-background-color: -teal-600;
+    -fx-background-color: -teal-300;
+    -fx-text-fill: -midnight-700;
 }
 
 .button-secondary {
-    -fx-background-color: -sage-700;
+    -fx-background-color: transparent;
+    -fx-text-fill: -sage-300;
+    -fx-border-color: -sage-400;
 }
 
 .button-secondary:hover {
-    -fx-background-color: -sage-600;
+    -fx-background-color: #1D2049;
+    -fx-text-fill: -sage-300;
+    -fx-border-color: -sage-300;
 }
 
 /* Inputs */

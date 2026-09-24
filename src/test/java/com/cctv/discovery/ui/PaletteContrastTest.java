@@ -166,4 +166,138 @@ class PaletteContrastTest {
         Matcher m = Pattern.compile("(-(?:midnight|teal|sage|paper|surface)-\\d+):\\s*#").matcher(dark);
         assertFalse(m.find(), m.hitEnd() ? "" : "dark.css redefines the ramp token " + m.group(1));
     }
+
+    // ------------------------------------------------------------- 1.4.11
+
+    /** The declared value of a property inside a selector block, or null. */
+    private static String declaredValue(String css, String selector, String property) {
+        int at = 0;
+        while (true) {
+            at = css.indexOf(selector, at);
+            if (at < 0) {
+                return null;
+            }
+            // The selector must stand alone, not be the tail of a longer one.
+            char before = at == 0 ? '\n' : css.charAt(at - 1);
+            int after = at + selector.length();
+            char next = after < css.length() ? css.charAt(after) : ' ';
+            boolean standalone = (before == '\n' || before == ' ' || before == ',')
+                    && (next == ' ' || next == '{' || next == ',' || next == '\n');
+            int brace = css.indexOf('{', after);
+            int nextSelector = css.indexOf('}', after);
+            if (standalone && brace >= 0 && (nextSelector < 0 || brace < nextSelector)) {
+                String block = css.substring(brace, css.indexOf('}', brace));
+                Matcher m = Pattern.compile(property + ":\\s*([^;]+);").matcher(block);
+                if (m.find()) {
+                    return m.group(1).trim();
+                }
+            }
+            at = after;
+        }
+    }
+
+    /** Resolve a declared value to a hex colour, following one token hop. */
+    private static String resolve(String value, Map<String, String> extra) {
+        if (value == null) {
+            return null;
+        }
+        String v = value.trim();
+        if (v.startsWith("#")) {
+            return v.toUpperCase();
+        }
+        String direct = extra.get(v);
+        if (direct == null) {
+            direct = tokens.get(v);
+        }
+        if (direct == null) {
+            return null;
+        }
+        return direct.startsWith("#") ? direct.toUpperCase() : resolve(direct, extra);
+    }
+
+    private static String read(String resource) throws Exception {
+        try (InputStream in = PaletteContrastTest.class.getResourceAsStream(resource)) {
+            assertTrue(in != null, resource + " is missing");
+            return new String(in.readAllBytes(), StandardCharsets.UTF_8);
+        }
+    }
+
+    /** Role tokens a sheet defines in its own .root block. */
+    private static Map<String, String> roles(String css) {
+        Map<String, String> map = new LinkedHashMap<>();
+        Matcher m = Pattern.compile("(-app-[a-z-]+):\\s*([^;]+);").matcher(css);
+        while (m.find()) {
+            map.put(m.group(1), m.group(2).trim());
+        }
+        return map;
+    }
+
+    /**
+     * WCAG 1.4.11: a control has to be distinguishable from what it sits on,
+     * at 3:1.
+     *
+     * <p>This reads the fill each stylesheet actually declares rather than the
+     * one the test expects, because the first version of this check asserted
+     * its own assumptions and so still passed while a midnight button sat on a
+     * midnight surface at 1.37:1.
+     */
+    @Test
+    @DisplayName("Every button fill separates from the surface behind it")
+    void controlsSeparateFromTheirSurface() throws Exception {
+        String light = read("/css/app.css");
+        String dark = read("/css/dark.css");
+
+        Map<String, String> lightRoles = roles(light);
+        Map<String, String> darkRoles = roles(dark);
+
+        // The left rail, which is where the step buttons sit in both themes.
+        String lightPanel = resolve(lightRoles.get("-app-surface-quiet"), lightRoles);
+        String darkPanel = resolve(darkRoles.get("-app-surface-quiet"), darkRoles);
+        assertTrue(lightPanel != null && darkPanel != null, "both themes must define -app-surface-quiet");
+
+        for (String selector : List.of(".button", ".button-success")) {
+            String lightFill = resolve(declaredValue(light, selector, "-fx-background-color"), lightRoles);
+            assertTrue(lightFill != null, "light theme declares no fill for " + selector);
+            assertComponent("light " + selector, lightFill, lightPanel);
+
+            String darkDeclared = declaredValue(dark, selector, "-fx-background-color");
+            String darkFill = darkDeclared == null ? lightFill : resolve(darkDeclared, darkRoles);
+            assertTrue(darkFill != null, "dark theme declares an unresolvable fill for " + selector);
+            assertComponent("dark " + selector, darkFill, darkPanel);
+        }
+
+        // The secondary button is outlined, so its border carries the boundary.
+        for (String[] theme : new String[][]{{"light", light, lightPanel}, {"dark", dark, darkPanel}}) {
+            Map<String, String> themeRoles = theme[0].equals("light") ? lightRoles : darkRoles;
+            String border = resolve(declaredValue(theme[1], ".button-secondary", "-fx-border-color"), themeRoles);
+            assertTrue(border != null, theme[0] + " theme declares no border for .button-secondary");
+            assertComponent(theme[0] + " .button-secondary border", border, theme[2]);
+        }
+    }
+
+    @Test
+    @DisplayName("The header band separates from the buttons placed on it")
+    void headerButtonsSeparateFromTheBand() throws Exception {
+        String light = read("/css/app.css");
+        String dark = read("/css/dark.css");
+        for (String[] theme : new String[][]{{"light", light}, {"dark", dark}}) {
+            Map<String, String> themeRoles = roles(theme[1]);
+            String band = resolve(declaredValue(theme[1], ".app-header", "-fx-background-color"), themeRoles);
+            if (band == null) {
+                continue; // the light sheet supplies it
+            }
+            for (String selector : List.of(".header-button", ".header-button-secondary")) {
+                String fill = resolve(declaredValue(theme[1], selector, "-fx-background-color"), themeRoles);
+                if (fill != null) {
+                    assertComponent(theme[0] + " " + selector, fill, band);
+                }
+            }
+        }
+    }
+
+    private static void assertComponent(String what, String fill, String surface) {
+        double ratio = contrast(fill, surface);
+        assertTrue(ratio >= 3.0, String.format(
+                "%s: %s on %s is %.2f:1, below the 3:1 a control needs", what, fill, surface, ratio));
+    }
 }
