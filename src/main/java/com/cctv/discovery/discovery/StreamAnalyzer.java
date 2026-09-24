@@ -182,10 +182,19 @@ public final class StreamAnalyzer implements AutoCloseable {
         int videoStream = grabber.getVideoStream();
         double timeBase = videoTimeBaseSeconds(grabber, videoStream);
         long start = System.nanoTime();
-        long deadline = start + TimeUnit.SECONDS.toNanos(Math.max(1, seconds));
+        double target = Math.max(1, seconds);
+        // Sample until enough *stream* time has passed, capped by a wall-clock
+        // limit for cameras that stall or deliver far slower than real time.
+        // Stopping purely on wall clock let a burst of buffered frames, which
+        // spans very little stream time, inflate the bitrate several-fold.
+        long deadline = start + TimeUnit.SECONDS.toNanos((long) Math.ceil(target * 3));
 
         try {
             while (System.nanoTime() < deadline && !cancelled) {
+                if (timeBase > 0 && firstPts != Long.MIN_VALUE && lastPts > firstPts
+                        && (lastPts - firstPts) * timeBase >= target) {
+                    break;
+                }
                 AVPacket packet = grabber.grabPacket();
                 if (packet == null) {
                     break;

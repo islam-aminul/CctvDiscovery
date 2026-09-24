@@ -275,3 +275,84 @@
     -fx-background-radius: 3px;
     -fx-padding: 6px 10px;
 }
+
+/* ---------------------------------------------------------------------------
+   Result rows. Colour carries meaning, so each state also has a distinct
+   text weight: colour alone is hard to read for some users and disappears
+   in a printed screenshot.
+   --------------------------------------------------------------------------- */
+.table-row-cell.row-completed {
+    -fx-background-color: #E8F5E9;
+}
+
+.table-row-cell.row-completed .table-cell {
+    -fx-text-fill: #1B5E20;
+}
+
+.table-row-cell.row-working {
+    -fx-background-color: #FFF8E1;
+}
+
+.table-row-cell.row-working .table-cell {
+    -fx-text-fill: #8D6E00;
+    -fx-font-style: italic;
+}
+
+.table-row-cell.row-auth-failed {
+    -fx-background-color: #FFEBEE;
+}
+
+.table-row-cell.row-auth-failed .table-cell {
+    -fx-text-fill: #B71C1C;
+}
+
+.table-row-cell.row-unknown {
+    -fx-background-color: #F5F5F5;
+}
+
+.table-row-cell.row-unknown .table-cell {
+    -fx-text-fill: #616161;
+}
+
+.table-row-cell.row-pending {
+    -fx-background-color: #E3F2FD;
+}
+
+.table-row-cell.row-pending .table-cell {
+    -fx-text-fill: #0D47A1;
+}
+
+.table-row-cell:selected .table-cell {
+    -fx-text-fill: #0D2B45;
+}
+
+/* A measured value outside the agreed limits */
+.cell-flagged {
+    -fx-text-fill: #B71C1C;
+    -fx-font-weight: bold;
+}
+
+/* The one-line explanation under each control */
+.summary-label {
+    -fx-text-fill: #546E7A;
+    -fx-font-size: 11px;
+}
+
+/* Details pane */
+.titled-pane > .title {
+    -fx-background-color: #ECEFF1;
+    -fx-font-weight: bold;
+    -fx-font-size: 11px;
+    -fx-padding: 4px 8px;
+}
+
+.titled-pane > .content {
+    -fx-background-color: white;
+    -fx-border-color: #CFD8DC;
+}
+
+/* Tooltips wrap rather than running off the screen */
+.tooltip {
+    -fx-max-width: 340px;
+    -fx-wrap-text: true;
+}

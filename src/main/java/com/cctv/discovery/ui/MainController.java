@@ -84,7 +84,7 @@ public class MainController {
 
     // Credentials
     private TextField tfUsername;
-    private TextField tfPassword;
+    private PasswordField tfPassword;
     private Button btnAddCredential;
     private ListView<Credential> lvCredentials;
     private ObservableList<Credential> credentials;
@@ -95,6 +95,12 @@ public class MainController {
 
     // Actions
     private Button btnStart;
+    private Button btnStop;
+    private Label lblResultSummary;
+    private TableView<RTSPStream> tvStreams;
+    private ListView<String> lvFindings;
+    private Label lblDeviceDetail;
+    private volatile boolean cancelRequested;
     private Button btnExport;
 
     // Verification Method (left panel)
@@ -156,7 +162,21 @@ public class MainController {
         });
     }
 
+    /**
+     * A tooltip that appears promptly, wraps, and stays long enough to read a
+     * full sentence. JavaFX defaults hide after a few seconds.
+     */
+    private static Tooltip tip(String text) {
+        Tooltip tooltip = new Tooltip(text);
+        tooltip.setShowDelay(javafx.util.Duration.millis(350));
+        tooltip.setShowDuration(javafx.util.Duration.seconds(30));
+        tooltip.setWrapText(true);
+        tooltip.setMaxWidth(340);
+        return tooltip;
+    }
+
     public Scene createScene() {
+
         // Create full-width header at the top
         HBox header = createHeaderPanel();
 
@@ -217,10 +237,12 @@ public class MainController {
 
         Button btnSettings = new Button("Settings");
         btnSettings.setOnAction(e -> showSettings());
+        btnSettings.setTooltip(tip("Ports to scan, extra stream paths and check timings."));
         btnSettings.setStyle("-fx-background-color: #0078d4; -fx-text-fill: white; -fx-font-weight: bold;");
 
         Button btnHelp = new Button("Help");
         btnHelp.setOnAction(e -> showHelpManual());
+        btnHelp.setTooltip(tip("A short guide to running a survey."));
         btnHelp.setStyle("-fx-background-color: #17a2b8; -fx-text-fill: white; -fx-font-weight: bold;");
 
         // Spacer to push buttons to the right
@@ -264,13 +286,20 @@ public class MainController {
         // Progress Section - AT BOTTOM
         VBox progressSection = createProgressSection();
 
-        // Add all sections in numbered order (Progress at bottom)
+        // Steps in order, with progress pinned underneath.
+        Region spacer = new Region();
+        VBox.setVgrow(spacer, Priority.ALWAYS);
+
         vbox.getChildren().addAll(
                 networkSection,
+                new Separator(),
                 credentialSection,
+                new Separator(),
                 verificationSection,
+                new Separator(),
                 discoverySection,
                 exportSection,
+                spacer,
                 progressSection);
 
         return vbox;
@@ -279,17 +308,19 @@ public class MainController {
     private VBox createNetworkSection() {
         VBox vbox = new VBox(6);
 
-        Label lblTitle = new Label("1. Network Selection");
+        Label lblTitle = new Label("1. Where to look");
         lblTitle.getStyleClass().add("section-title");
 
-        btnConfigureNetwork = new Button("Select Network");
+        btnConfigureNetwork = new Button("Choose network...");
         btnConfigureNetwork.setMaxWidth(Double.MAX_VALUE);
-        btnConfigureNetwork.setPrefHeight(35);
+        btnConfigureNetwork.setPrefHeight(34);
         btnConfigureNetwork.setOnAction(e -> showNetworkConfigDialog());
+        btnConfigureNetwork.setTooltip(tip("""
+                Pick the network to scan: an adapter on this computer, an address \
+                range, a CIDR block, or a list of addresses."""));
 
         lblNetworkSummary = new Label("Not configured");
-        lblNetworkSummary.getStyleClass().add("label-info");
-        lblNetworkSummary.setStyle("-fx-font-style: italic; -fx-text-fill: #0078d4;");
+        lblNetworkSummary.getStyleClass().add("summary-label");
         lblNetworkSummary.setWrapText(true);
 
         vbox.getChildren().addAll(lblTitle, btnConfigureNetwork, lblNetworkSummary);
@@ -301,10 +332,14 @@ public class MainController {
 
         // Radio buttons
         ToggleGroup tg = new ToggleGroup();
-        rbInterface = new RadioButton("Network Interface");
-        rbManualRange = new RadioButton("Manual IP Range");
-        rbCIDR = new RadioButton("CIDR Notation");
-        rbIpList = new RadioButton("IP Address List");
+        rbInterface = new RadioButton("An adapter on this computer");
+        rbInterface.setTooltip(tip("Scan the network one of this computer's adapters is on."));
+        rbManualRange = new RadioButton("An address range");
+        rbManualRange.setTooltip(tip("Scan every address between a first and last address."));
+        rbCIDR = new RadioButton("A CIDR block");
+        rbCIDR.setTooltip(tip("Scan a whole subnet, for example 192.168.1.0/24."));
+        rbIpList = new RadioButton("A list of addresses");
+        rbIpList.setTooltip(tip("Scan named addresses only. Ranges and CIDR blocks are accepted here too."));
         rbInterface.setToggleGroup(tg);
         rbManualRange.setToggleGroup(tg);
         rbCIDR.setToggleGroup(tg);
@@ -313,17 +348,18 @@ public class MainController {
 
         // Interface dropdown
         cbInterfaces = new ComboBox<>();
+        cbInterfaces.setTooltip(tip("Each entry shows the address and the size of its network."));
         populateNetworkInterfaces();
         cbInterfaces.setMaxWidth(Double.MAX_VALUE);
 
         // Manual range - side by side
         tfStartIP = new TextField();
-        tfStartIP.setPromptText("Start IP (e.g., 192.168.1.1)");
+        tfStartIP.setPromptText("First address");
         tfStartIP.setDisable(true);
         addIPValidation(tfStartIP);
 
         tfEndIP = new TextField();
-        tfEndIP.setPromptText("End IP (e.g., 192.168.1.254)");
+        tfEndIP.setPromptText("Last address");
         tfEndIP.setDisable(true);
         addIPValidation(tfEndIP);
 
@@ -333,12 +369,20 @@ public class MainController {
 
         // CIDR
         tfCIDR = new TextField();
-        tfCIDR.setPromptText("CIDR (e.g., 192.168.1.0/24)");
+        tfCIDR.setPromptText("192.168.1.0/24");
+        tfCIDR.setTooltip(tip("Network address and prefix length."));
         tfCIDR.setDisable(true);
 
         // IP Address List - accepts multiple IPs separated by commas, spaces, or newlines
         taIpList = new TextArea();
-        taIpList.setPromptText("IP addresses separated by commas, spaces, or newlines\n(e.g., 192.168.1.10, 192.168.1.20\n192.168.1.30)");
+        taIpList.setPromptText("""
+                192.168.1.10, 192.168.1.20
+                192.168.1.30-192.168.1.60
+                192.168.2.0/24""");
+        taIpList.setTooltip(tip("""
+                One or more addresses, ranges (10.0.0.1-10.0.0.50 or 10.0.0.1-50) \
+                and CIDR blocks, separated by commas, spaces or new lines. \
+                Overlapping entries are scanned once."""));
         taIpList.setPrefRowCount(4);
         taIpList.setWrapText(true);
         taIpList.setDisable(true);
@@ -749,17 +793,20 @@ public class MainController {
     private VBox createCredentialSection() {
         VBox vbox = new VBox(6);
 
-        Label lblTitle = new Label("2. Credentials");
+        Label lblTitle = new Label("2. Sign-in details");
         lblTitle.getStyleClass().add("section-title");
 
-        btnManageCredentials = new Button("Set Credentials");
+        btnManageCredentials = new Button("Add credentials...");
         btnManageCredentials.setMaxWidth(Double.MAX_VALUE);
-        btnManageCredentials.setPrefHeight(35);
+        btnManageCredentials.setPrefHeight(34);
         btnManageCredentials.setOnAction(e -> showCredentialManagementDialog());
+        btnManageCredentials.setTooltip(tip("""
+                Usernames and passwords to try on each device. Every credential is \
+                tried in turn until one is accepted. Optional: devices that need no \
+                password are still found without any."""));
 
-        lblCredentialSummary = new Label("No credentials added");
-        lblCredentialSummary.getStyleClass().add("label-info");
-        lblCredentialSummary.setStyle("-fx-font-style: italic; -fx-text-fill: #0078d4;");
+        lblCredentialSummary = new Label("None added (optional)");
+        lblCredentialSummary.getStyleClass().add("summary-label");
         lblCredentialSummary.setWrapText(true);
 
         vbox.getChildren().addAll(lblTitle, btnManageCredentials, lblCredentialSummary);
@@ -768,25 +815,19 @@ public class MainController {
 
     private VBox createProgressSection() {
         VBox vbox = new VBox(6);
-        vbox.setPadding(new Insets(10));
+        vbox.setPadding(new Insets(10, 0, 0, 0));
 
         Label lblTitle = new Label("Progress");
         lblTitle.getStyleClass().add("section-title");
-        lblTitle.setAlignment(Pos.CENTER);
-        lblTitle.setMaxWidth(Double.MAX_VALUE);
-        lblTitle.setStyle("-fx-font-weight: bold;");
 
         progressBar = new ProgressBar(0);
         progressBar.setMaxWidth(Double.MAX_VALUE);
-        progressBar.setPrefHeight(18);
-        progressBar.setStyle("-fx-accent: #008080;");
+        progressBar.setPrefHeight(16);
 
-        // Progress label - center aligned and italic with teal text
         lblProgress = new Label("Ready");
-        lblProgress.getStyleClass().add("label-info");
-        lblProgress.setAlignment(Pos.CENTER);
+        lblProgress.getStyleClass().add("summary-label");
         lblProgress.setMaxWidth(Double.MAX_VALUE);
-        lblProgress.setStyle("-fx-font-style: italic; -fx-text-fill: #008080;");
+        lblProgress.setWrapText(true);
 
         vbox.getChildren().addAll(lblTitle, progressBar, lblProgress);
         return vbox;
@@ -795,13 +836,17 @@ public class MainController {
     private VBox createVerificationMethodSection() {
         VBox vbox = new VBox(6);
 
-        Label lblTitle = new Label("3. Verification Method");
+        Label lblTitle = new Label("3. How thoroughly to check");
         lblTitle.getStyleClass().add("section-title");
 
-        btnVerificationMethod = new Button("Set Verification Method");
+        btnVerificationMethod = new Button("Choose how to check...");
         btnVerificationMethod.setMaxWidth(Double.MAX_VALUE);
         btnVerificationMethod.setPrefHeight(35);
         btnVerificationMethod.setOnAction(e -> showVerificationMethodDialog());
+        btnVerificationMethod.setTooltip(tip("""
+                How thoroughly each stream is checked. A more thorough check \
+                takes longer but is less likely to report a stream that does \
+                not actually play."""));
 
         // Load saved preference
         String savedMethod = config.getRtspValidationMethod();
@@ -1001,17 +1046,26 @@ public class MainController {
     private VBox createDiscoverySection() {
         VBox vbox = new VBox(6);
 
-        Label lblTitle = new Label("4. Start Discovery");
+        Label lblTitle = new Label("4. Run the scan");
         lblTitle.getStyleClass().add("section-title");
 
-        btnStart = new Button("Start Discovery");
+        btnStart = new Button("Start scan");
         btnStart.getStyleClass().add("button-success");
         btnStart.setMaxWidth(Double.MAX_VALUE);
-        btnStart.setPrefHeight(35);
+        btnStart.setPrefHeight(38);
         btnStart.setDisable(true);
         btnStart.setOnAction(e -> startDiscovery());
 
-        vbox.getChildren().addAll(lblTitle, btnStart);
+        btnStop = new Button("Stop");
+        btnStop.getStyleClass().add("button-danger");
+        btnStop.setMaxWidth(Double.MAX_VALUE);
+        btnStop.setPrefHeight(30);
+        btnStop.setVisible(false);
+        btnStop.setManaged(false);
+        btnStop.setOnAction(e -> stopDiscovery());
+        btnStop.setTooltip(tip("Stop the scan. Everything found so far is kept and can be exported."));
+
+        vbox.getChildren().addAll(lblTitle, btnStart, btnStop);
         updateStartButtonState();
         return vbox;
     }
@@ -1019,227 +1073,260 @@ public class MainController {
     private VBox createExportSection() {
         VBox vbox = new VBox(6);
 
-        Label lblTitle = new Label("5. Export");
+        Label lblTitle = new Label("5. Report");
         lblTitle.getStyleClass().add("section-title");
 
-        btnExport = new Button("Export to Excel");
+        btnExport = new Button("Export to Excel...");
         btnExport.setMaxWidth(Double.MAX_VALUE);
-        btnExport.setPrefHeight(35);
+        btnExport.setPrefHeight(34);
         btnExport.setDisable(true);
         btnExport.setOnAction(e -> exportToExcel());
+        btnExport.setTooltip(tip("""
+                Write the findings to an Excel workbook. You choose whether to \
+                include camera passwords and whether to encrypt the file."""));
 
         vbox.getChildren().addAll(lblTitle, btnExport);
         return vbox;
     }
 
     private VBox createRightPanel() {
-        VBox vbox = new VBox(10);
-        vbox.setPadding(new Insets(15));
+        VBox vbox = new VBox(8);
+        vbox.setPadding(new Insets(12));
 
-        Label lblTitle = new Label("Discovered Devices");
+        Label lblTitle = new Label("Devices found");
         lblTitle.getStyleClass().add("section-title");
 
-        tvResults = new TableView<>(devices);
-        tvResults.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
+        lblResultSummary = new Label("No scan has run yet.");
+        lblResultSummary.getStyleClass().add("summary-label");
 
-        TableColumn<Device, String> colIp = new TableColumn<>("IP Address");
-        colIp.setCellValueFactory(new PropertyValueFactory<>("ipAddress"));
-        colIp.setCellFactory(column -> new TableCell<Device, String>() {
-            @Override
-            protected void updateItem(String item, boolean empty) {
-                super.updateItem(item, empty);
-                if (empty || item == null) {
-                    setText(null);
-                    setStyle("");
-                } else {
-                    setText(item);
-                    Device device = getTableView().getItems().get(getIndex());
-                    String textColor = getRowTextColor(device);
-                    setStyle("-fx-text-fill: " + textColor + ";");
+        HBox titleRow = new HBox(12, lblTitle, lblResultSummary);
+        titleRow.setAlignment(Pos.BASELINE_LEFT);
+
+        tvResults = buildResultsTable();
+        VBox details = buildDetailsPane();
+
+        SplitPane split = new SplitPane(tvResults, details);
+        split.setOrientation(javafx.geometry.Orientation.VERTICAL);
+        split.setDividerPositions(0.62);
+        VBox.setVgrow(split, Priority.ALWAYS);
+
+        vbox.getChildren().addAll(titleRow, split);
+        return vbox;
+    }
+
+    private TableView<Device> buildResultsTable() {
+        TableView<Device> table = new TableView<>(devices);
+        table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
+        table.setPlaceholder(new Label("Choose a network and start a scan."));
+
+        table.getColumns().add(textColumn("Address", 130, Device::getIpAddress));
+        table.getColumns().add(textColumn("Status", 105, d -> d.getStatus().label()));
+        table.getColumns().add(textColumn("Type", 110, Device::getDeviceType));
+        table.getColumns().add(textColumn("Name", 150, Device::getDeviceName));
+        table.getColumns().add(textColumn("Make", 110, Device::getManufacturer));
+        table.getColumns().add(textColumn("Model", 140, Device::getModel));
+
+        TableColumn<Device, String> streams = textColumn("Streams", 85,
+                d -> String.valueOf(d.getRtspStreams().size()));
+        streams.setStyle("-fx-alignment: CENTER;");
+        table.getColumns().add(streams);
+
+        TableColumn<Device, String> findings = textColumn("Issues", 75,
+                d -> d.getFindings().isEmpty() ? "" : String.valueOf(d.getFindings().size()));
+        findings.setStyle("-fx-alignment: CENTER;");
+        table.getColumns().add(findings);
+
+        table.getColumns().add(textColumn("Note", 180, Device::getErrorMessage));
+
+        table.setRowFactory(tv -> {
+            TableRow<Device> row = new TableRow<>() {
+                @Override
+                protected void updateItem(Device device, boolean empty) {
+                    super.updateItem(device, empty);
+                    getStyleClass().removeAll("row-completed", "row-working", "row-auth-failed",
+                            "row-unknown", "row-pending");
+                    if (!empty && device != null) {
+                        getStyleClass().add(rowStyleClass(device));
+                    }
                 }
-            }
-        });
-
-        TableColumn<Device, String> colStatus = new TableColumn<>("Status");
-        colStatus.setCellValueFactory(cellData -> {
-            Device.DeviceStatus status = cellData.getValue().getStatus();
-            return new javafx.beans.property.SimpleStringProperty(status != null ? status.toString() : "");
-        });
-        colStatus.setCellFactory(column -> new TableCell<Device, String>() {
-            @Override
-            protected void updateItem(String item, boolean empty) {
-                super.updateItem(item, empty);
-                if (empty || item == null) {
-                    setText(null);
-                    setStyle("");
-                } else {
-                    setText(item);
-                    Device device = getTableView().getItems().get(getIndex());
-                    String textColor = getRowTextColor(device);
-                    setStyle("-fx-text-fill: " + textColor + ";");
+            };
+            row.setOnMouseClicked(event -> {
+                if (event.getClickCount() == 2 && !row.isEmpty()) {
+                    showRetryCredentialDialog(row.getItem());
                 }
-            }
+            });
+            return row;
         });
 
-        TableColumn<Device, String> colName = new TableColumn<>("Device Name");
-        colName.setCellValueFactory(new PropertyValueFactory<>("deviceName"));
-        colName.setCellFactory(column -> new TableCell<Device, String>() {
-            @Override
-            protected void updateItem(String item, boolean empty) {
-                super.updateItem(item, empty);
-                if (empty || item == null) {
-                    setText(null);
-                    setStyle("");
-                } else {
-                    setText(item);
-                    Device device = getTableView().getItems().get(getIndex());
-                    String textColor = getRowTextColor(device);
-                    setStyle("-fx-text-fill: " + textColor + ";");
-                }
-            }
-        });
-
-        TableColumn<Device, String> colManufacturer = new TableColumn<>("Manufacturer");
-        colManufacturer.setCellValueFactory(new PropertyValueFactory<>("manufacturer"));
-        colManufacturer.setCellFactory(column -> new TableCell<Device, String>() {
-            @Override
-            protected void updateItem(String item, boolean empty) {
-                super.updateItem(item, empty);
-                if (empty || item == null) {
-                    setText(null);
-                    setStyle("");
-                } else {
-                    setText(item);
-                    Device device = getTableView().getItems().get(getIndex());
-                    String textColor = getRowTextColor(device);
-                    setStyle("-fx-text-fill: " + textColor + ";");
-                }
-            }
-        });
-
-        TableColumn<Device, String> colStreams = new TableColumn<>("Streams");
-        colStreams.setCellValueFactory(cellData -> {
-            int count = cellData.getValue().getRtspStreams().size();
-            return new javafx.beans.property.SimpleStringProperty(String.valueOf(count));
-        });
-        colStreams.setCellFactory(column -> new TableCell<Device, String>() {
-            @Override
-            protected void updateItem(String item, boolean empty) {
-                super.updateItem(item, empty);
-                if (empty || item == null) {
-                    setText(null);
-                    setStyle("");
-                } else {
-                    setText(item);
-                    int count = Integer.parseInt(item);
-                    // Streams > 0: green, Streams = 0: red
-                    String textColor = count > 0 ? "#155724" : "#A94442";
-                    setStyle("-fx-text-fill: " + textColor + ";");
-                }
-            }
-        });
-
-        TableColumn<Device, String> colError = new TableColumn<>("Error");
-        colError.setCellValueFactory(new PropertyValueFactory<>("errorMessage"));
-        colError.setCellFactory(column -> new TableCell<Device, String>() {
-            @Override
-            protected void updateItem(String item, boolean empty) {
-                super.updateItem(item, empty);
-                if (empty || item == null || item.isEmpty()) {
-                    setText(null);
-                    setStyle("");
-                } else {
-                    setText(item);
-                    Device device = getTableView().getItems().get(getIndex());
-                    String textColor = getRowTextColor(device);
-                    setStyle("-fx-text-fill: " + textColor + ";");
-                }
-            }
-        });
-
-        tvResults.getColumns().add(colIp);
-        tvResults.getColumns().add(colStatus);
-        tvResults.getColumns().add(colName);
-        tvResults.getColumns().add(colManufacturer);
-        tvResults.getColumns().add(colStreams);
-        tvResults.getColumns().add(colError);
-
-        // Add row factory for background colors only
-        tvResults.setRowFactory(tv -> new TableRow<Device>() {
-            @Override
-            protected void updateItem(Device device, boolean empty) {
-                super.updateItem(device, empty);
-                if (empty || device == null) {
-                    setStyle("");
-                } else {
-                    String backgroundColor = getRowBackgroundColor(device);
-                    setStyle("-fx-background-color: " + backgroundColor + ";");
-                }
-            }
-        });
-
-        // Add context menu for device retry
-        ContextMenu deviceContextMenu = new ContextMenu();
-
-        MenuItem retryMenuItem = new MenuItem("Retry with Different Credential");
-        retryMenuItem.setOnAction(e -> {
-            Device selected = tvResults.getSelectionModel().getSelectedItem();
+        MenuItem retry = new MenuItem("Try other credentials...");
+        retry.setOnAction(e -> {
+            Device selected = table.getSelectionModel().getSelectedItem();
             if (selected != null) {
                 showRetryCredentialDialog(selected);
             }
         });
-
-        deviceContextMenu.getItems().add(retryMenuItem);
-        tvResults.setContextMenu(deviceContextMenu);
-
-        // Only enable if device is selected
-        tvResults.setOnContextMenuRequested(event -> {
-            Device selected = tvResults.getSelectionModel().getSelectedItem();
-            retryMenuItem.setDisable(selected == null);
+        MenuItem copyUrls = new MenuItem("Copy stream addresses");
+        copyUrls.setOnAction(e -> copyStreamUrls(table.getSelectionModel().getSelectedItem()));
+        ContextMenu menu = new ContextMenu(retry, copyUrls);
+        table.setContextMenu(menu);
+        table.setOnContextMenuRequested(e -> {
+            boolean none = table.getSelectionModel().getSelectedItem() == null;
+            retry.setDisable(none);
+            copyUrls.setDisable(none);
         });
 
-        VBox.setVgrow(tvResults, Priority.ALWAYS);
+        table.getSelectionModel().selectedItemProperty()
+                .addListener((obs, old, selected) -> showDeviceDetails(selected));
+        return table;
+    }
 
-        vbox.getChildren().addAll(lblTitle, tvResults);
-        return vbox;
+    private TableColumn<Device, String> textColumn(String title, double width,
+                                                   java.util.function.Function<Device, String> getter) {
+        TableColumn<Device, String> column = new TableColumn<>(title);
+        column.setPrefWidth(width);
+        column.setCellValueFactory(data -> {
+            String value = getter.apply(data.getValue());
+            return new javafx.beans.property.SimpleStringProperty(value == null ? "" : value);
+        });
+        return column;
+    }
+
+    /** Style class driving the row colour; the palette lives in app.css. */
+    private static String rowStyleClass(Device device) {
+        return switch (device.getStatus()) {
+            case COMPLETED -> "row-completed";
+            case AUTHENTICATING, ANALYZING, SCANNING -> "row-working";
+            case AUTH_FAILED -> device.isAuthFailed() ? "row-auth-failed" : "row-unknown";
+            default -> "row-pending";
+        };
+    }
+
+    /** Streams and findings for whichever device is selected. */
+    private VBox buildDetailsPane() {
+        lblDeviceDetail = new Label("Select a device to see its streams and any issues.");
+        lblDeviceDetail.getStyleClass().add("summary-label");
+        lblDeviceDetail.setWrapText(true);
+
+        tvStreams = new TableView<>();
+        tvStreams.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
+        tvStreams.setPlaceholder(new Label("No streams"));
+        tvStreams.setPrefHeight(150);
+
+        tvStreams.getColumns().add(streamColumn("Stream", 120, RTSPStream::getStreamName));
+        tvStreams.getColumns().add(streamColumn("Role", 60, s2 -> s2.getRole().label()));
+        tvStreams.getColumns().add(streamColumn("Resolution", 100, RTSPStream::getResolution, "Resolution"));
+        tvStreams.getColumns().add(streamColumn("Codec", 70, RTSPStream::getCodec, "Codec"));
+        tvStreams.getColumns().add(streamColumn("Profile", 95, RTSPStream::getProfile, "profile"));
+        tvStreams.getColumns().add(streamColumn("kbps", 70,
+                s2 -> s2.getBitrateKbps() == null ? "" : String.valueOf(s2.getBitrateKbps()), "Bitrate"));
+        tvStreams.getColumns().add(streamColumn("fps", 60,
+                s2 -> s2.getFps() == null ? "" : String.format("%.1f", s2.getFps())));
+        tvStreams.getColumns().add(streamColumn("Address", 260, RTSPStream::getRtspUrl));
+        tvStreams.setTooltip(tip("Double-click a device above to retry it with other credentials."));
+
+        lvFindings = new ListView<>();
+        lvFindings.setPrefHeight(90);
+        lvFindings.setPlaceholder(new Label("No issues found"));
+        lvFindings.setTooltip(tip("Problems worth acting on, most serious first."));
+
+        TitledPane streamPane = new TitledPane("Streams", tvStreams);
+        streamPane.setCollapsible(false);
+        TitledPane findingPane = new TitledPane("Issues", lvFindings);
+        findingPane.setCollapsible(false);
+
+        VBox box = new VBox(6, lblDeviceDetail, streamPane, findingPane);
+        box.setPadding(new Insets(8, 0, 0, 0));
+        VBox.setVgrow(streamPane, Priority.ALWAYS);
+        return box;
+    }
+
+    private TableColumn<RTSPStream, String> streamColumn(String title, double width,
+                                                          java.util.function.Function<RTSPStream, String> getter) {
+        return streamColumn(title, width, getter, null);
     }
 
     /**
-     * Get background color for table row based on device status
+     * A stream column. When {@code issueKeyword} is given, the cell is marked
+     * only if the compliance text mentions it, so a single broken rule does not
+     * paint the whole row as wrong.
      */
-    private String getRowBackgroundColor(Device device) {
-        if (device.getStatus() == Device.DeviceStatus.COMPLETED) {
-            return "#D4EDDA"; // Green - success
-        } else if (device.getStatus() == Device.DeviceStatus.AUTHENTICATING) {
-            return "#FFF3CD"; // Yellow - in progress
-        } else if (device.getStatus() == Device.DeviceStatus.AUTH_FAILED) {
-            if (device.isAuthFailed()) {
-                return "#F8D7DA"; // Red - authentication failure
-            } else {
-                return "#E7E8EA"; // Gray - unknown device type
+    private TableColumn<RTSPStream, String> streamColumn(String title, double width,
+                                                          java.util.function.Function<RTSPStream, String> getter,
+                                                          String issueKeyword) {
+        TableColumn<RTSPStream, String> column = new TableColumn<>(title);
+        column.setPrefWidth(width);
+        column.setCellValueFactory(data -> {
+            String value = getter.apply(data.getValue());
+            return new javafx.beans.property.SimpleStringProperty(value == null ? "" : value);
+        });
+        column.setCellFactory(c -> new TableCell<>() {
+            @Override
+            protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                setText(empty ? null : item);
+                getStyleClass().remove("cell-flagged");
+                if (empty || issueKeyword == null || getTableRow() == null) {
+                    return;
+                }
+                RTSPStream stream = getTableRow().getItem();
+                if (stream != null && stream.getComplianceIssues() != null
+                        && stream.getComplianceIssues().toLowerCase(java.util.Locale.ROOT)
+                                .contains(issueKeyword.toLowerCase(java.util.Locale.ROOT))) {
+                    getStyleClass().add("cell-flagged");
+                }
             }
-        } else {
-            return "#D1ECF1"; // Blue - discovered but not processed
-        }
+        });
+        return column;
     }
 
-    /**
-     * Get text color for table row based on device status
-     */
-    private String getRowTextColor(Device device) {
-        if (device.getStatus() == Device.DeviceStatus.COMPLETED) {
-            return "#155724"; // Dark green
-        } else if (device.getStatus() == Device.DeviceStatus.AUTHENTICATING) {
-            return "#856404"; // Dark amber
-        } else if (device.getStatus() == Device.DeviceStatus.AUTH_FAILED) {
-            if (device.isAuthFailed()) {
-                return "#A94442"; // Dark red
-            } else {
-                return "#383D41"; // Dark gray
-            }
-        } else {
-            return "#0C5460"; // Dark blue
+    /** Fill the details pane for one device. */
+    private void showDeviceDetails(Device device) {
+        if (device == null) {
+            lblDeviceDetail.setText("Select a device to see its streams and any issues.");
+            tvStreams.getItems().clear();
+            lvFindings.getItems().clear();
+            return;
         }
+
+        StringBuilder sb = new StringBuilder();
+        sb.append(device.getIpAddress());
+        if (device.getMacAddress() != null) {
+            sb.append("  •  ").append(device.getMacAddress());
+        }
+        if (device.getVendorFromMac() != null && !MacLookupService.UNKNOWN.equals(device.getVendorFromMac())) {
+            sb.append(" (").append(device.getVendorFromMac()).append(')');
+        }
+        if (device.getFirmwareVersion() != null) {
+            sb.append("  •  firmware ").append(device.getFirmwareVersion());
+        }
+        if (!device.getAllOpenPorts().isEmpty()) {
+            sb.append("  •  ports ").append(device.getAllOpenPorts());
+        }
+        if (device.getTimeDifferenceSeconds() != null) {
+            sb.append("  •  clock ").append(device.getTimeDifferenceSeconds()).append("s from this computer");
+        }
+        lblDeviceDetail.setText(sb.toString());
+
+        tvStreams.getItems().setAll(device.getRtspStreams());
+        lvFindings.getItems().setAll(device.getFindings().stream()
+                .sorted(java.util.Comparator.comparingInt(f -> f.severity().ordinal()))
+                .map(f -> f.severity().label() + " - " + f.title() + ": " + f.recommendation())
+                .toList());
+    }
+
+    /** Put the selected device's stream addresses on the clipboard. */
+    private void copyStreamUrls(Device device) {
+        if (device == null || device.getRtspStreams().isEmpty()) {
+            return;
+        }
+        String text = device.getRtspStreams().stream()
+                .map(RTSPStream::getRtspUrl)
+                .reduce((a, b) -> a + System.lineSeparator() + b)
+                .orElse("");
+        javafx.scene.input.ClipboardContent content = new javafx.scene.input.ClipboardContent();
+        content.putString(text);
+        javafx.scene.input.Clipboard.getSystemClipboard().setContent(content);
+        lblProgress.setText("Copied " + device.getRtspStreams().size() + " stream address(es).");
     }
 
     /** True when the text is a CIDR block this tool can scan. */
@@ -1527,50 +1614,67 @@ public class MainController {
         return menu;
     }
 
+    /**
+     * The scan needs a network. Credentials are optional: plenty of devices
+     * answer without any, and the test camera serves RTSP with none at all.
+     * Requiring them, as the old build did, blocked those scans entirely.
+     */
     private void updateStartButtonState() {
-        // Skip if button hasn't been created yet (during initialization)
         if (btnStart == null) {
             return;
         }
-
-        boolean hasCredentials = !credentials.isEmpty();
-
-        btnStart.setDisable(!networkConfigured || !hasCredentials || discoveryInProgress);
-
-        // After a completed discovery, restyle to blue and rename
+        btnStart.setDisable(!networkConfigured || discoveryInProgress);
+        if (!networkConfigured) {
+            btnStart.setTooltip(tip("Choose a network first."));
+        } else if (credentials.isEmpty()) {
+            btnStart.setTooltip(tip("""
+                    Scan without credentials. Devices that require a password will \
+                    be listed but their streams cannot be checked."""));
+        } else {
+            btnStart.setTooltip(tip("Scan the chosen network."));
+        }
         if (discoveryCompleted && !discoveryInProgress) {
-            btnStart.setText("Restart Discovery");
-            btnStart.getStyleClass().remove("button-success");
-            btnStart.setStyle("-fx-background-color: #0078d4; -fx-text-fill: white; -fx-font-weight: bold;");
+            btnStart.setText("Scan again");
         }
     }
 
     private void startDiscovery() {
-        // Lock UI
         discoveryInProgress = true;
+        cancelRequested = false;
         disableInputs();
         devices.clear();
-        progressBar.setProgress(0);
-        lblProgress.setText("Starting discovery...");
+        showDeviceDetails(null);
+        progressBar.setProgress(ProgressBar.INDETERMINATE_PROGRESS);
+        lblProgress.setText("Starting...");
+        lblResultSummary.setText("");
+        btnStop.setVisible(true);
+        btnStop.setManaged(true);
 
-        // Configure RTSP validation method before discovery
         configureRtspValidation();
-
-        // Clear any stale shutdown/probe state from a previous run so a
-        // "Restart Discovery" does not abort prematurely.
         rtspService.reset();
 
         executorService.submit(() -> {
             try {
                 runDiscovery();
             } catch (Exception e) {
-                logger.error("Discovery error", e);
+                logger.error("Scan failed", e);
                 Platform.runLater(() -> {
-                    showAlert("Discovery Error", "An error occurred: " + e.getMessage(), Alert.AlertType.ERROR);
-                    enableInputs();
+                    showAlert("Scan failed", String.valueOf(e.getMessage()), Alert.AlertType.ERROR);
+                    finishDiscovery();
                 });
             }
         });
+    }
+
+    /** Ask every running stage to stop; partial results are kept. */
+    private void stopDiscovery() {
+        cancelRequested = true;
+        btnStop.setDisable(true);
+        lblProgress.setText("Stopping...");
+        networkScanner.cancel();
+        rtspService.shutdown();
+        streamAnalyzer.cancel();
+        logger.info("Scan cancelled by the user");
     }
 
     private void configureRtspValidation() {
@@ -1602,113 +1706,179 @@ public class MainController {
         }
     }
 
+    /**
+     * Run the scan: announce, scan, identify, measure.
+     *
+     * <p>Devices appear in the table as they are found, and identification runs
+     * several devices at a time. The previous version collected everything
+     * first, then worked through the list one device at a time, and stopped
+     * mid-scan to ask a question in a modal dialog.
+     */
     private void runDiscovery() {
-        // Phase 1: WS-Discovery
-        Platform.runLater(() -> lblProgress.setText("Running WS-Discovery..."));
-        List<Device> wsDevices = networkScanner.performWsDiscovery();
+        long started = System.currentTimeMillis();
 
-        // Ask for port scan
-        boolean doPortScan = false;
-        if (wsDevices.isEmpty()) {
-            doPortScan = true;
-            logger.info("WS-Discovery found 0 devices (IGMP may be blocked), automatically starting port scan");
-            Platform.runLater(() -> lblProgress.setText("No ONVIF devices found via multicast. Running port scan..."));
-        } else {
-            // Ask user
-            final boolean[] result = { false };
-            Platform.runLater(() -> {
-                Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
-                alert.setTitle("WS-Discovery Complete");
-                alert.setHeaderText("Found " + wsDevices.size() + " device(s) via ONVIF WS-Discovery");
-                alert.setContentText(
-                        "Expected more devices?\n\n" +
-                                "Port scanning can find:\n" +
-                                "• Devices without ONVIF support\n" +
-                                "• Devices where IGMP/multicast is blocked\n" +
-                                "• Devices on non-standard ports\n\n" +
-                                "Do you want to perform port scan?");
-                Optional<ButtonType> response = alert.showAndWait();
-                synchronized (result) {
-                    result[0] = response.isPresent() && response.get() == ButtonType.OK;
-                    logger.info("User chose {} for port scan", result[0] ? "YES" : "NO");
-                    result.notifyAll();
+        progress(0.02, "Listening for cameras that announce themselves...");
+        List<Device> announced = networkScanner.performWsDiscovery();
+        if (!announced.isEmpty()) {
+            publish(announced);
+            progress(0.08, "Found " + announced.size() + " device(s) by announcement.");
+        }
+        if (cancelRequested) {
+            Platform.runLater(this::finishDiscovery);
+            return;
+        }
+
+        TargetParser.Targets targets = getTargets();
+        List<Device> scanned = List.of();
+        if (!targets.isEmpty()) {
+            long total = targets.count();
+            progress(0.1, "Scanning " + total + " address(es)...");
+            scanned = networkScanner.performPortScan(targets, (current, count) -> {
+                if (current % 16 == 0 || current == count) {
+                    progress(0.1 + 0.35 * current / count, "Scanning address " + current + " of " + count);
                 }
             });
-
-            synchronized (result) {
-                try {
-                    result.wait();
-                    doPortScan = result[0];
-                } catch (InterruptedException e) {
-                    // Ignore
-                }
-            }
         }
 
-        // Phase 2: Port scan
-        final List<Device> finalDevices;
-        if (doPortScan) {
-            List<String> ips = getIPList();
-            List<Device> portScanDevices = networkScanner.performPortScan(ips, (current, total) -> {
-                double progress = (double) current / total * 0.3; // 30% of total
-                Platform.runLater(() -> {
-                    progressBar.setProgress(progress);
-                    lblProgress.setText("Port scanning... " + current + " of " + total);
-                });
-            });
-
-            finalDevices = networkScanner.mergeDeviceLists(wsDevices, portScanDevices);
-        } else {
-            finalDevices = new ArrayList<>(wsDevices);
-        }
-
-        // Add devices to table
-        Platform.runLater(() -> devices.addAll(finalDevices));
-
-        // Phase 3: Authentication & Stream Discovery
-        int total = finalDevices.size();
-        int[] current = { 0 };
-
-        for (Device device : finalDevices) {
-            authenticateAndDiscoverStreams(device);
-            current[0]++;
-            final int c = current[0];
-            Platform.runLater(() -> {
-                double progress = 0.3 + ((double) c / total * 0.5);
-                progressBar.setProgress(progress);
-                lblProgress.setText("Processing " + c + " of " + total + " devices...");
-                tvResults.refresh();
-            });
-        }
-
-        // Phase 4: Stream Analysis
-        current[0] = 0;
-        for (Device device : finalDevices) {
-            if (!device.getRtspStreams().isEmpty()) {
-                streamAnalyzer.analyzeDevice(device);
-            }
-            current[0]++;
-            final int c = current[0];
-            Platform.runLater(() -> {
-                double progress = 0.8 + ((double) c / total * 0.2);
-                progressBar.setProgress(progress);
-                lblProgress.setText("Analyzing streams... " + c + " of " + total);
-                tvResults.refresh();
-            });
-        }
-
-        // Complete
+        List<Device> all = networkScanner.mergeDeviceLists(announced, scanned);
         Platform.runLater(() -> {
-            progressBar.setProgress(1.0);
-            long successCount = finalDevices.stream()
-                    .filter(d -> d.getStatus() == Device.DeviceStatus.COMPLETED)
-                    .count();
-            lblProgress.setText("Discovery complete! Found " + successCount + " devices.");
-            discoveryCompleted = true;
-            enableInputs();
-            btnExport.setDisable(finalDevices.isEmpty());
-            updateExportButtonColor();
+            devices.setAll(all);
+            updateResultSummary();
         });
+
+        if (all.isEmpty() || cancelRequested) {
+            Platform.runLater(this::finishDiscovery);
+            return;
+        }
+
+        identifyDevices(all);
+        if (!cancelRequested) {
+            measureStreams(all);
+        }
+
+        long seconds = (System.currentTimeMillis() - started) / 1000;
+        Platform.runLater(() -> {
+            lblProgress.setText(cancelRequested
+                    ? "Stopped after " + seconds + "s."
+                    : "Finished in " + seconds + "s.");
+            discoveryCompleted = true;
+            finishDiscovery();
+        });
+    }
+
+    /** Identify devices in parallel, bounded by the configured fan-out. */
+    private void identifyDevices(List<Device> all) {
+        java.util.concurrent.atomic.AtomicInteger done = new java.util.concurrent.atomic.AtomicInteger();
+        java.util.concurrent.Semaphore permits =
+                new java.util.concurrent.Semaphore(config.getDeviceParallelism());
+
+        try (var scope = java.util.concurrent.StructuredTaskScope.open(
+                java.util.concurrent.StructuredTaskScope.Joiner.<Void>awaitAll(),
+                cfg -> cfg.withName("identify"))) {
+            for (Device device : all) {
+                scope.fork(() -> {
+                    if (cancelRequested) {
+                        return null;
+                    }
+                    permits.acquire();
+                    try {
+                        authenticateAndDiscoverStreams(device);
+                    } catch (Exception e) {
+                        logger.warn("Could not identify {}: {}", device.getIpAddress(), e.toString());
+                        device.setStatus(Device.DeviceStatus.ERROR);
+                        device.setErrorMessage(String.valueOf(e.getMessage()));
+                    } finally {
+                        permits.release();
+                    }
+                    int count = done.incrementAndGet();
+                    progress(0.45 + 0.35 * count / all.size(),
+                            "Identified " + count + " of " + all.size() + " devices");
+                    Platform.runLater(() -> {
+                        tvResults.refresh();
+                        updateResultSummary();
+                    });
+                    return null;
+                });
+            }
+            scope.join();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    /** Measure the streams of every device that has any. */
+    private void measureStreams(List<Device> all) {
+        List<Device> withStreams = all.stream().filter(d -> !d.getRtspStreams().isEmpty()).toList();
+        if (withStreams.isEmpty()) {
+            return;
+        }
+        int index = 0;
+        for (Device device : withStreams) {
+            if (cancelRequested) {
+                return;
+            }
+            device.setStatus(Device.DeviceStatus.ANALYZING);
+            Platform.runLater(tvResults::refresh);
+            streamAnalyzer.analyzeDevice(device);
+            device.setStatus(device.getRtspStreams().isEmpty()
+                    ? Device.DeviceStatus.AUTH_FAILED : Device.DeviceStatus.COMPLETED);
+            index++;
+            progress(0.8 + 0.2 * index / withStreams.size(),
+                    "Measured " + index + " of " + withStreams.size() + " devices");
+            Device shown = tvResults.getSelectionModel().getSelectedItem();
+            Platform.runLater(() -> {
+                tvResults.refresh();
+                updateResultSummary();
+                if (shown == device) {
+                    showDeviceDetails(device);
+                }
+            });
+        }
+    }
+
+    /** Add devices to the table as soon as they are known. */
+    private void publish(List<Device> found) {
+        Platform.runLater(() -> {
+            for (Device device : found) {
+                if (devices.stream().noneMatch(d -> d.getIpAddress().equals(device.getIpAddress()))) {
+                    devices.add(device);
+                }
+            }
+            updateResultSummary();
+        });
+    }
+
+    private void progress(double fraction, String message) {
+        Platform.runLater(() -> {
+            progressBar.setProgress(Math.min(1.0, Math.max(0.0, fraction)));
+            lblProgress.setText(message);
+        });
+    }
+
+    /** One line above the table counting what was found. */
+    private void updateResultSummary() {
+        long withStreams = devices.stream().filter(d -> !d.getRtspStreams().isEmpty()).count();
+        long streams = devices.stream().mapToLong(d -> d.getRtspStreams().size()).sum();
+        long issues = devices.stream().mapToLong(d -> d.getFindings().size()).sum();
+        if (devices.isEmpty()) {
+            lblResultSummary.setText("");
+            return;
+        }
+        lblResultSummary.setText(String.format("%d device%s, %d with video, %d stream%s, %d issue%s",
+                devices.size(), devices.size() == 1 ? "" : "s",
+                withStreams, streams, streams == 1 ? "" : "s", issues, issues == 1 ? "" : "s"));
+    }
+
+    /** Return the window to its idle state. */
+    private void finishDiscovery() {
+        progressBar.setProgress(cancelRequested ? 0 : 1.0);
+        btnStop.setVisible(false);
+        btnStop.setManaged(false);
+        btnStop.setDisable(false);
+        btnExport.setDisable(devices.isEmpty());
+        updateExportButtonColor();
+        updateResultSummary();
+        enableInputs();
     }
 
     /**
@@ -2047,160 +2217,168 @@ public class MainController {
         return getTargets().toList(config.getMaxTargets());
     }
 
+    /**
+     * Collect the report details, then write the workbook.
+     */
     private void exportToExcel() {
-        // Step 1: Get Site ID
-        TextInputDialog siteDialog = new TextInputDialog();
-        siteDialog.setTitle("Export Report");
-        siteDialog.setHeaderText("Enter Report Details");
-        siteDialog.setContentText("Site ID (required):");
-
-        // Set window icon
-        siteDialog.setOnShown(e -> {
-            try {
-                javafx.stage.Stage stage = (javafx.stage.Stage) siteDialog.getDialogPane().getScene().getWindow();
-                java.io.InputStream iconStream = getClass().getResourceAsStream("/icon.png");
-                if (iconStream != null) {
-                    stage.getIcons().add(new javafx.scene.image.Image(iconStream));
-                }
-            } catch (Exception ex) {
-                logger.info("Could not load icon for export dialog", ex);
-            }
-        });
-
-        // Style buttons
-        siteDialog.setOnShowing(dialogEvent -> {
-            Button okBtn = (Button) siteDialog.getDialogPane().lookupButton(ButtonType.OK);
-            Button cancelBtn = (Button) siteDialog.getDialogPane().lookupButton(ButtonType.CANCEL);
-
-            if (okBtn != null) {
-                okBtn.setStyle(
-                        "-fx-background-color: #28a745; -fx-text-fill: white; -fx-font-weight: bold; -fx-pref-width: 80px; -fx-pref-height: 30px;");
-            }
-            if (cancelBtn != null) {
-                cancelBtn.setStyle(
-                        "-fx-background-color: #6c757d; -fx-text-fill: white; -fx-font-weight: bold; -fx-pref-width: 80px; -fx-pref-height: 30px;");
-            }
-        });
-
-        Optional<String> siteId = siteDialog.showAndWait();
-        if (!siteId.isPresent() || siteId.get().trim().isEmpty()) {
+        ExportRequest request = promptForExportDetails();
+        if (request == null) {
             return;
         }
 
-        // Step 2: ask for the password that will encrypt the workbook. The old
-        // build derived one from the device count, the date and a fixed code
-        // shipped in the application, which anyone with a copy could reproduce.
-        String workbookPassword = null;
-        if (config.isExportEncryptionDefault()) {
-            workbookPassword = promptForExportPassword();
-            if (workbookPassword == null) {
-                return; // cancelled
-            }
-            if (workbookPassword.isEmpty()) {
-                workbookPassword = null; // export unencrypted by choice
-            }
-        }
-        final String generatedPassword = workbookPassword;
-
-        // Step 3: Choose file location with default from config
         FileChooser fileChooser = new FileChooser();
-        fileChooser.setTitle("Save Excel Report");
+        fileChooser.setTitle("Save report");
+        String timestamp = java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd-HHmm")
+                .format(java.time.LocalDateTime.now());
+        fileChooser.setInitialFileName("cctv-report-" + safeFileName(request.siteId()) + "-" + timestamp + ".xlsx");
 
-        // Format: cctv-discovery-report-{SITE ID}-YYYYMMDD-HHMM.xlsx
-        String timestamp = new java.text.SimpleDateFormat("yyyyMMdd-HHmm").format(new java.util.Date());
-        fileChooser.setInitialFileName("cctv-discovery-report-" + siteId.get() + "-" + timestamp + ".xlsx");
-
-        // Set initial directory from config
-        String exportDir = config.getExportDefaultDirectory();
-        File initialDir = new File(exportDir);
-        if (initialDir.exists() && initialDir.isDirectory()) {
-            fileChooser.setInitialDirectory(initialDir);
-        } else {
-            // Fallback to user home if configured directory doesn't exist
-            fileChooser.setInitialDirectory(new File(System.getProperty("user.home")));
-        }
-
-        fileChooser.getExtensionFilters().add(
-                new FileChooser.ExtensionFilter("Excel Files", "*.xlsx"));
+        File initialDir = new File(config.getExportDefaultDirectory());
+        fileChooser.setInitialDirectory(initialDir.isDirectory()
+                ? initialDir : new File(System.getProperty("user.home")));
+        fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Excel workbook", "*.xlsx"));
 
         File file = fileChooser.showSaveDialog(primaryStage);
-        if (file != null) {
-            try {
-                // Export with auto-generated password protection and host audit data
-                excelExporter.exportToExcel(new ArrayList<>(devices), siteId.get(), null, null, file, generatedPassword,
-                        hostAuditData);
+        if (file == null) {
+            return;
+        }
 
-                // Show success WITHOUT password (authority will derive it)
-                showAlert("Export Complete",
-                        "Report exported successfully to:\n" + file.getAbsolutePath() +
-                                "\n\n🔒 WORKSHEET PROTECTED" +
-                                "\n\nThe worksheet has been password-protected." +
-                                "\nYour supervisor can access the file using the standard procedure." +
-                                "\n\nSubmit this report to your authority.",
-                        Alert.AlertType.INFORMATION);
-
-                logger.info("Excel export completed successfully for site: {}", siteId.get());
-            } catch (Exception e) {
-                logger.error("Export error", e);
-                showAlert("Export Error", "Failed to export: " + e.getMessage(), Alert.AlertType.ERROR);
-            }
+        ExcelExporter.ReportOptions options = new ExcelExporter.ReportOptions(
+                request.siteId(), request.premise(), request.surveyor(),
+                request.includeCredentials(), request.password());
+        try {
+            excelExporter.export(new ArrayList<>(devices), hostAuditData, options, file);
+            String protection = options.encrypted()
+                    ? "The workbook is encrypted. It cannot be opened without the password you set."
+                    : "The workbook is not encrypted. Anyone with the file can read it.";
+            String credentials = request.includeCredentials()
+                    ? "\n\nIt contains camera usernames and passwords."
+                    : "";
+            showAlert("Report saved", file.getAbsolutePath() + "\n\n" + protection + credentials,
+                    Alert.AlertType.INFORMATION);
+            logger.info("Report written for site {} ({})", request.siteId(),
+                    options.encrypted() ? "encrypted" : "unencrypted");
+        } catch (Exception e) {
+            logger.error("Export failed", e);
+            showAlert("Could not save the report", e.getMessage(), Alert.AlertType.ERROR);
         }
     }
 
+    /** Strip characters that cannot appear in a file name. */
+    private static String safeFileName(String text) {
+        String cleaned = text.replaceAll("[\\\\/:*?\"<>|]", "-").trim();
+        return cleaned.isEmpty() ? "site" : cleaned;
+    }
+
+    /** What the user chose in the export dialog. */
+    private record ExportRequest(String siteId, String premise, String surveyor,
+                                 boolean includeCredentials, String password) {
+    }
+
     /**
-     * Ask for the workbook password.
-     *
-     * @return the password, an empty string to export unencrypted, or null when
-     *         the user cancels
+     * One dialog for the report details, what to include and the password.
+     * The old flow asked for the site in one dialog and derived the password
+     * from the device count, the date and a fixed code compiled into the
+     * application, which anyone holding a copy could reproduce.
      */
-    private String promptForExportPassword() {
-        Dialog<String> dialog = new Dialog<>();
-        dialog.setTitle("Protect Report");
-        dialog.setHeaderText("Set a password for the exported workbook");
+    private ExportRequest promptForExportDetails() {
+        Dialog<ExportRequest> dialog = new Dialog<>();
+        dialog.setTitle("Export report");
+        dialog.setHeaderText("Report details");
         applyDialogIcon(dialog);
+
+        TextField tfSite = new TextField();
+        tfSite.setPromptText("Required, for example BLR-WH-02");
+        tfSite.setTooltip(tip("Identifies the site in the report and in the file name."));
+
+        TextField tfPremise = new TextField();
+        tfPremise.setPromptText("Optional");
+        tfPremise.setTooltip(tip("The building or area surveyed."));
+
+        TextField tfSurveyor = new TextField(System.getProperty("user.name", ""));
+        tfSurveyor.setTooltip(tip("Recorded on the summary sheet as who ran the survey."));
+
+        CheckBox cbCredentials = new CheckBox("Include camera usernames and passwords");
+        cbCredentials.setSelected(config.isExportIncludeCredentialsDefault());
+        cbCredentials.setTooltip(tip("""
+                Ticked, the report carries the credentials that worked and stream \
+                URLs that include them, which is what an installer needs. Unticked, \
+                both are left out so the file can be shared more widely."""));
+
+        CheckBox cbEncrypt = new CheckBox("Encrypt the workbook with a password");
+        cbEncrypt.setSelected(config.isExportEncryptionDefault());
+        cbEncrypt.setTooltip(tip("Excel will ask for this password before opening the file."));
 
         PasswordField pfPassword = new PasswordField();
         pfPassword.setPromptText("Password");
         PasswordField pfConfirm = new PasswordField();
         pfConfirm.setPromptText("Repeat password");
 
-        Label hint = new Label("""
-                The report contains camera addresses and passwords. It is encrypted \
-                with this password, so anyone opening it must have it. Leave both \
-                boxes empty to save the report without encryption.""");
-        hint.setWrapText(true);
-        hint.setMaxWidth(380);
-        hint.setStyle("-fx-font-size: 11px; -fx-text-fill: #555;");
-
-        Label mismatch = new Label();
-        mismatch.setStyle("-fx-text-fill: #A94442; -fx-font-size: 11px;");
+        Label message = new Label();
+        message.setWrapText(true);
+        message.setMaxWidth(420);
+        message.getStyleClass().add("label-error");
 
         GridPane grid = new GridPane();
         grid.setHgap(10);
         grid.setVgap(8);
         grid.setPadding(new Insets(16));
-        grid.add(hint, 0, 0, 2, 1);
-        grid.add(new Label("Password:"), 0, 1);
-        grid.add(pfPassword, 1, 1);
-        grid.add(new Label("Confirm:"), 0, 2);
-        grid.add(pfConfirm, 1, 2);
-        grid.add(mismatch, 0, 3, 2, 1);
+        int row = 0;
+        grid.add(new Label("Site ID:"), 0, row);
+        grid.add(tfSite, 1, row++);
+        grid.add(new Label("Premise:"), 0, row);
+        grid.add(tfPremise, 1, row++);
+        grid.add(new Label("Surveyed by:"), 0, row);
+        grid.add(tfSurveyor, 1, row++);
+        grid.add(new Separator(), 0, row++, 2, 1);
+        grid.add(cbCredentials, 0, row++, 2, 1);
+        grid.add(cbEncrypt, 0, row++, 2, 1);
+        grid.add(new Label("Password:"), 0, row);
+        grid.add(pfPassword, 1, row++);
+        grid.add(new Label("Confirm:"), 0, row);
+        grid.add(pfConfirm, 1, row++);
+        grid.add(message, 0, row, 2, 1);
         dialog.getDialogPane().setContent(grid);
 
-        ButtonType okType = new ButtonType("Save Report", ButtonBar.ButtonData.OK_DONE);
-        dialog.getDialogPane().getButtonTypes().addAll(okType, ButtonType.CANCEL);
+        ButtonType saveType = new ButtonType("Choose file...", ButtonBar.ButtonData.OK_DONE);
+        dialog.getDialogPane().getButtonTypes().addAll(saveType, ButtonType.CANCEL);
+        Node saveButton = dialog.getDialogPane().lookupButton(saveType);
 
-        Node okButton = dialog.getDialogPane().lookupButton(okType);
         Runnable validate = () -> {
-            boolean matched = pfPassword.getText().equals(pfConfirm.getText());
-            okButton.setDisable(!matched);
-            mismatch.setText(matched ? "" : "The two passwords do not match.");
-        };
-        pfPassword.textProperty().addListener((obs, old, val) -> validate.run());
-        pfConfirm.textProperty().addListener((obs, old, val) -> validate.run());
-        Platform.runLater(pfPassword::requestFocus);
+            boolean encrypt = cbEncrypt.isSelected();
+            pfPassword.setDisable(!encrypt);
+            pfConfirm.setDisable(!encrypt);
 
-        dialog.setResultConverter(button -> button == okType ? pfPassword.getText() : null);
+            String problem = null;
+            if (tfSite.getText().trim().isEmpty()) {
+                problem = "Enter a site ID.";
+            } else if (encrypt && pfPassword.getText().isEmpty()) {
+                problem = "Enter a password, or untick encryption.";
+            } else if (encrypt && !pfPassword.getText().equals(pfConfirm.getText())) {
+                problem = "The two passwords do not match.";
+            } else if (!encrypt && cbCredentials.isSelected()) {
+                problem = null; // allowed, but warned about below
+            }
+            message.setText(problem == null && !encrypt && cbCredentials.isSelected()
+                    ? "This file will hold camera passwords and will not be encrypted."
+                    : (problem == null ? "" : problem));
+            message.getStyleClass().setAll("label", problem == null ? "label-warning" : "label-error");
+            saveButton.setDisable(problem != null);
+        };
+        tfSite.textProperty().addListener((o, a, b) -> validate.run());
+        pfPassword.textProperty().addListener((o, a, b) -> validate.run());
+        pfConfirm.textProperty().addListener((o, a, b) -> validate.run());
+        cbEncrypt.selectedProperty().addListener((o, a, b) -> validate.run());
+        cbCredentials.selectedProperty().addListener((o, a, b) -> validate.run());
+        validate.run();
+        Platform.runLater(tfSite::requestFocus);
+
+        dialog.setResultConverter(button -> button != saveType ? null : new ExportRequest(
+                tfSite.getText().trim(),
+                tfPremise.getText().trim(),
+                tfSurveyor.getText().trim(),
+                cbCredentials.isSelected(),
+                cbEncrypt.isSelected() ? pfPassword.getText() : null));
+
         return dialog.showAndWait().orElse(null);
     }
 
@@ -2248,29 +2426,23 @@ public class MainController {
         content.setPadding(new Insets(12));
         content.setPrefWidth(500);
 
-        Label quickGuide = new Label(
-                "Quick Start Guide:\n" +
-                        "1. Network Selection:\n" +
-                        "   • Simple Mode: Network interface, manual IP range, CIDR, or IP address list\n" +
-                        "   • Advanced Mode: Enable to select multiple sources\n" +
-                        "2. Add Credentials (Required - Max 4):\n" +
-                        "   • Default username 'admin' is pre-filled\n" +
-                        "   • Enter password and click 'Add Credential'\n" +
-                        "   • Right-click credentials to Edit or Delete\n" +
-                        "3. Verification Method:\n" +
-                        "   • Quick Check: Fast (~3s), ~60% accurate\n" +
-                        "   • Stream Test: Medium (~5s), ~90% accurate\n" +
-                        "   • Video Capture: Thorough (~10s), ~98% accurate (Default)\n" +
-                        "4. Configure Settings (Optional):\n" +
-                        "   • Click 'Settings' to configure custom ports and RTSP paths\n" +
-                        "5. Start Discovery:\n" +
-                        "   • Click 'Start Discovery' and monitor progress\n" +
-                        "6. View Results:\n" +
-                        "   • Color-coded: Green (success), Yellow (in progress),\n" +
-                        "     Red (failed), Gray (not camera), Blue (discovered)\n" +
-                        "   • Right-click failed devices to retry with different credentials\n" +
-                        "7. Export Results:\n" +
-                        "   • Enter Site ID and click 'Export to Excel'");
+        Label quickGuide = new Label("""
+                1. Where to look
+                   Pick an adapter on this computer, or type an address range, a                 CIDR block, or a list. Overlapping entries are scanned once.
+
+                2. Sign-in details (optional)
+                   Add the usernames and passwords used on site. Each is tried in                 turn. Devices that need no password are found without any.
+
+                3. How thoroughly to check
+                   Quick check reads the stream description. Stream test confirms                 video is actually flowing. Video capture decodes a picture, which                 is the most reliable and the slowest.
+
+                4. Run the scan
+                   Devices appear as they are found. Stop keeps whatever has been                 found so far.
+
+                5. Report
+                   Export to Excel. You choose whether to include camera passwords                 and whether to encrypt the file.
+
+                Row colours: green finished, amber working, red no credential                 accepted, grey not a camera, blue found but not yet checked.                 Select a row to see its streams and issues; right-click for more.""");
         quickGuide.setWrapText(true);
         quickGuide.setStyle("-fx-font-size: 10px;");
 
@@ -2565,7 +2737,7 @@ public class MainController {
     private void showCredentialManagementDialog() {
         Dialog<ButtonType> dialog = new Dialog<>();
         dialog.setTitle("Credential Management");
-        dialog.setHeaderText("Add and Manage Credentials (Max 4)");
+        dialog.setHeaderText("Credentials to try on each device");
         dialog.getDialogPane().setPrefWidth(500);
         dialog.getDialogPane().setPrefHeight(400);
 
@@ -2589,10 +2761,13 @@ public class MainController {
         Label lblUsername = new Label("Username:");
         tfUsername = new TextField("admin");
         tfUsername.setPromptText("Username");
+        tfUsername.setTooltip(tip("The account name configured on the camera or recorder."));
 
         Label lblPassword = new Label("Password:");
-        tfPassword = new TextField();
+        // A password field, so the value is not shown to anyone standing nearby.
+        tfPassword = new PasswordField();
         tfPassword.setPromptText("Password");
+        tfPassword.setTooltip(tip("Stored only for this session and used to sign in to devices."));
 
         btnAddCredential = new Button("Add Credential");
         btnAddCredential.setMaxWidth(Double.MAX_VALUE);
