@@ -1,11 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
     <!--
-      Logs go to a per-user directory so the application also works when it is
-      installed somewhere the user cannot write, such as Program Files.
-      Override with -Dcctv.log.dir=<path>.
+      Logs go beside the settings and the path cache, in the one per-user folder
+      AppPaths describes, so the application also works when it is installed
+      somewhere the user cannot write. Asking the class rather than repeating
+      its rules here keeps a single definition of that folder.
+      Override with -Dcctv.log.dir=<path>, or move everything with
+      -Dcctv.data.dir=<path>.
     -->
-    <property name="LOG_DIR" value="${cctv.log.dir:-${LOCALAPPDATA:-${user.home}}/CctvDiscovery/logs}"/>
+    <define name="LOG_DIR" class="com.cctv.discovery.config.LogDirectoryDefiner"/>
 
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>

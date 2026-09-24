@@ -68,6 +68,9 @@
     -app-danger: #8C2F2A;
     -app-danger-hover: #A4382F;
     -app-warning-text: #7A5000;
+    /* The accent for a chosen option, and the wash behind it. */
+    -app-accent: -teal-600;
+    -app-accent-soft: #E4F4EE;
 
     -fx-background-color: -app-background;
     -fx-font-family: "Segoe UI", "Inter", "Arial", sans-serif;
@@ -470,17 +473,132 @@
 
 /* --------------------------------------------------- Dialogs, menus, chrome */
 
-.dialog-pane {
-    -fx-background-color: -app-surface-quiet;
+/*
+ * Every modal is built by Modals, so one set of rules dresses all of them:
+ * a header band, a padded body on the plain surface, and a footer of
+ * equal-width buttons. Only role tokens are used here, which is what lets the
+ * dark sheet restyle the whole family by redefining five colours.
+ */
+.dialog-pane,
+.app-dialog {
+    -fx-background-color: -app-surface;
 }
 
 .dialog-pane .header-panel {
-    -fx-background-color: -paper-100;
+    -fx-background-color: -app-surface-quiet;
 }
 
 .dialog-pane .header-panel .label {
-    -fx-text-fill: -midnight-700;
+    -fx-text-fill: -app-text;
     -fx-font-weight: bold;
+}
+
+.dialog-header {
+    -fx-background-color: -app-surface-quiet;
+    -fx-border-color: transparent transparent -app-border transparent;
+    -fx-border-width: 0 0 1px 0;
+    -fx-padding: 14px 18px;
+}
+
+.dialog-headline {
+    -fx-font-size: 14px;
+    -fx-font-weight: bold;
+    -fx-text-fill: -app-text;
+}
+
+.dialog-subhead {
+    -fx-font-size: 11px;
+    -fx-text-fill: -app-text-quiet;
+}
+
+/* The padding lives here rather than on the content node, so a dialog that
+   holds a tab pane is inset exactly like one that holds a form. */
+.app-dialog > .content {
+    -fx-padding: 16px 18px;
+    -fx-background-color: -app-surface;
+}
+
+.dialog-content {
+    -fx-background-color: transparent;
+}
+
+.app-dialog > .button-bar {
+    -fx-background-color: -app-surface-quiet;
+    -fx-border-color: -app-border transparent transparent transparent;
+    -fx-border-width: 1px 0 0 0;
+}
+
+.app-dialog > .button-bar > .container {
+    -fx-padding: 12px 18px;
+}
+
+/*
+ * A pickable card: the verification choices, and anything else offered as a
+ * short list of alternatives rather than a combo box.
+ */
+.choice-card {
+    -fx-background-color: -app-surface;
+    -fx-border-color: -app-border;
+    -fx-border-width: 1px;
+    -fx-border-radius: 5px;
+    -fx-background-radius: 5px;
+    -fx-padding: 10px;
+    -fx-cursor: hand;
+}
+
+.choice-card:hover {
+    -fx-border-color: -app-accent;
+}
+
+.choice-card-selected {
+    -fx-background-color: -app-accent-soft;
+    -fx-border-color: -app-accent;
+    -fx-border-width: 2px;
+}
+
+.choice-card-title {
+    -fx-font-weight: bold;
+    -fx-font-size: 12px;
+    -fx-text-fill: -app-text;
+}
+
+.choice-card-detail {
+    -fx-font-size: 11px;
+    -fx-text-fill: -app-text;
+}
+
+.choice-card-cost {
+    -fx-font-size: 10px;
+    -fx-font-style: italic;
+    -fx-text-fill: -app-text-quiet;
+}
+
+.badge {
+    -fx-background-color: -app-accent;
+    -fx-text-fill: -paper-0;
+    -fx-background-radius: 9px;
+    -fx-padding: 1px 8px;
+    -fx-font-size: 10px;
+}
+
+/* A block of related fields, set off from the rest of the body. */
+.dialog-section {
+    -fx-background-color: -app-surface-quiet;
+    -fx-border-color: -app-border;
+    -fx-border-radius: 4px;
+    -fx-background-radius: 4px;
+    -fx-padding: 12px;
+}
+
+.dialog-section-title {
+    -fx-font-weight: bold;
+    -fx-font-size: 12px;
+    -fx-text-fill: -app-text;
+}
+
+.dialog-note {
+    -fx-font-size: 11px;
+    -fx-text-fill: -app-text-quiet;
 }
 
 .tab-pane .tab-header-background {

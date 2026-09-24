@@ -20,6 +20,7 @@ import com.cctv.discovery.util.RtspClient;
 import com.cctv.discovery.util.TargetParser;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
+import javafx.event.ActionEvent;
 import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -40,9 +41,6 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.net.InetAddress;
-import java.net.InterfaceAddress;
-import java.net.NetworkInterface;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -138,6 +136,8 @@ public class MainController {
 
     public MainController(Stage primaryStage) {
         this.primaryStage = primaryStage;
+        // Every modal opens over this window and inherits its appearance.
+        Modals.setOwner(primaryStage);
         this.credentials = FXCollections.observableArrayList();
         this.devices = FXCollections.observableArrayList();
         this.networkInterfaces = FXCollections.observableArrayList();
@@ -573,12 +573,9 @@ public class MainController {
 
                 if (isDuplicate) {
                     // Show error alert
-                    Alert alert = new Alert(Alert.AlertType.ERROR);
-                    alert.setTitle("Duplicate IP Range");
-                    alert.setHeaderText("This IP range already exists");
-                    alert.setContentText(String.format("IP Range: %s - %s\n\nPlease enter a different IP range.",
-                            newValue, range.getEndIp()));
-                    alert.showAndWait();
+                    Modals.error("Duplicate IP Range", "This range is already listed",
+                            String.format("%s to %s is already in the list. Enter a different range.",
+                                    newValue, range.getEndIp()));
 
                     // Apply error styling and revert to old value
                     textField.setStyle(
@@ -593,13 +590,10 @@ public class MainController {
                     if (i != getIndex()) {
                         IpRangeItem other = getTableView().getItems().get(i);
                         if (isOverlappingIpRange(newValue, range.getEndIp(), other.getStartIp(), other.getEndIp())) {
-                            Alert warning = new Alert(Alert.AlertType.WARNING);
-                            warning.setTitle("Overlapping IP Range");
-                            warning.setHeaderText("This IP range overlaps with an existing range");
-                            warning.setContentText(String.format(
-                                    "New Range: %s - %s\nExisting Range: %s - %s\n\nThis is allowed but may cause redundant scanning.",
-                                    newValue, range.getEndIp(), other.getStartIp(), other.getEndIp()));
-                            warning.showAndWait();
+                            Modals.warn("Overlapping IP Range", "This range overlaps another",
+                                    String.format("%s to %s overlaps %s to %s. That is allowed; "
+                                            + "the overlap is scanned once.",
+                                            newValue, range.getEndIp(), other.getStartIp(), other.getEndIp()));
                             break; // Only show warning once
                         }
                     }
@@ -668,12 +662,9 @@ public class MainController {
 
                 if (isDuplicate) {
                     // Show error alert
-                    Alert alert = new Alert(Alert.AlertType.ERROR);
-                    alert.setTitle("Duplicate IP Range");
-                    alert.setHeaderText("This IP range already exists");
-                    alert.setContentText(String.format("IP Range: %s - %s\n\nPlease enter a different IP range.",
-                            range.getStartIp(), newValue));
-                    alert.showAndWait();
+                    Modals.error("Duplicate IP Range", "This range is already listed",
+                            String.format("%s to %s is already in the list. Enter a different range.",
+                                    range.getStartIp(), newValue));
 
                     // Apply error styling and revert to old value
                     textField.setStyle(
@@ -688,13 +679,10 @@ public class MainController {
                     if (i != getIndex()) {
                         IpRangeItem other = getTableView().getItems().get(i);
                         if (isOverlappingIpRange(range.getStartIp(), newValue, other.getStartIp(), other.getEndIp())) {
-                            Alert warning = new Alert(Alert.AlertType.WARNING);
-                            warning.setTitle("Overlapping IP Range");
-                            warning.setHeaderText("This IP range overlaps with an existing range");
-                            warning.setContentText(String.format(
-                                    "New Range: %s - %s\nExisting Range: %s - %s\n\nThis is allowed but may cause redundant scanning.",
-                                    range.getStartIp(), newValue, other.getStartIp(), other.getEndIp()));
-                            warning.showAndWait();
+                            Modals.warn("Overlapping IP Range", "This range overlaps another",
+                                    String.format("%s to %s overlaps %s to %s. That is allowed; "
+                                            + "the overlap is scanned once.",
+                                            range.getStartIp(), newValue, other.getStartIp(), other.getEndIp()));
                             break; // Only show warning once
                         }
                     }
@@ -793,12 +781,8 @@ public class MainController {
 
                 if (isDuplicate) {
                     // Show error alert
-                    Alert alert = new Alert(Alert.AlertType.ERROR);
-                    alert.setTitle("Duplicate CIDR");
-                    alert.setHeaderText("This CIDR notation already exists");
-                    alert.setContentText(
-                            String.format("CIDR: %s\n\nPlease enter a different CIDR notation.", newValue));
-                    alert.showAndWait();
+                    Modals.error("Duplicate Block", "This block is already listed",
+                            String.format("%s is already in the list. Enter a different block.", newValue));
 
                     // Apply error styling and revert to old value
                     textField.setStyle(
@@ -940,31 +924,12 @@ public class MainController {
     }
 
     private void showVerificationMethodDialog() {
-        Dialog<ButtonType> dialog = new Dialog<>();
-        dialog.setTitle("Verification Method");
-        dialog.setHeaderText("Choose Camera Verification Method");
-        dialog.getDialogPane().setPrefWidth(520);
+        Dialog<ButtonType> dialog = Modals.dialog("Verification Method", "How thoroughly to check",
+                "A more thorough check takes longer but gives a more reliable answer.");
+        dialog.getDialogPane().setPrefWidth(540);
 
-        // Set window icon
-        dialog.setOnShown(e -> {
-            try {
-                javafx.stage.Stage stage = (javafx.stage.Stage) dialog.getDialogPane().getScene().getWindow();
-                java.io.InputStream iconStream = getClass().getResourceAsStream("/icon.png");
-                if (iconStream != null) {
-                    stage.getIcons().add(new javafx.scene.image.Image(iconStream));
-                }
-            } catch (Exception ex) {
-                logger.info("Could not load icon for verification method dialog", ex);
-            }
-        });
-
-        VBox content = new VBox(12);
-        content.setPadding(new Insets(15));
-
-        Label lblIntro = new Label(
-                "Choose how the tool confirms a camera is working.\nMore thorough methods take longer but give more reliable results.");
-        lblIntro.setWrapText(true);
-        lblIntro.setStyle("-fx-font-size: 11px; -fx-text-fill: #555;");
+        VBox content = Modals.content();
+        content.setSpacing(12);
 
         ToggleGroup validationGroup = new ToggleGroup();
 
@@ -998,43 +963,28 @@ public class MainController {
         // Select current method
         if ("SDP_ONLY".equals(selectedValidationMethod)) {
             rb1.setSelected(true);
-            card1.setStyle(getSelectedCardStyle());
         } else if ("RTP_PACKET".equals(selectedValidationMethod)) {
             rb2.setSelected(true);
-            card2.setStyle(getSelectedCardStyle());
         } else {
             rb3.setSelected(true);
-            card3.setStyle(getSelectedCardStyle());
         }
 
-        // Update card styles on selection change
-        validationGroup.selectedToggleProperty().addListener((obs, oldToggle, newToggle) -> {
-            card1.setStyle(rb1.isSelected() ? getSelectedCardStyle() : getUnselectedCardStyle());
-            card2.setStyle(rb2.isSelected() ? getSelectedCardStyle() : getUnselectedCardStyle());
-            card3.setStyle(rb3.isSelected() ? getSelectedCardStyle() : getUnselectedCardStyle());
-        });
+        Runnable markSelection = () -> {
+            setCardSelected(card1, rb1.isSelected());
+            setCardSelected(card2, rb2.isSelected());
+            setCardSelected(card3, rb3.isSelected());
+        };
+        markSelection.run();
+        validationGroup.selectedToggleProperty().addListener((obs, oldToggle, newToggle) -> markSelection.run());
 
-        content.getChildren().addAll(lblIntro, card1, card2, card3);
+        content.getChildren().addAll(card1, card2, card3);
         dialog.getDialogPane().setContent(content);
 
-        // Buttons
-        ButtonType okButton = new ButtonType("OK", ButtonBar.ButtonData.OK_DONE);
+        ButtonType okButton = new ButtonType("Use this method", ButtonBar.ButtonData.OK_DONE);
         ButtonType cancelButton = new ButtonType("Cancel", ButtonBar.ButtonData.CANCEL_CLOSE);
         dialog.getDialogPane().getButtonTypes().addAll(okButton, cancelButton);
-
-        // Style buttons
-        dialog.setOnShowing(dialogEvent -> {
-            Button okBtn = (Button) dialog.getDialogPane().lookupButton(okButton);
-            Button cancelBtn = (Button) dialog.getDialogPane().lookupButton(cancelButton);
-            if (okBtn != null) {
-                okBtn.getStyleClass().add("button-success");
-                okBtn.setPrefSize(80, 30);
-            }
-            if (cancelBtn != null) {
-                cancelBtn.getStyleClass().add("button-secondary");
-                cancelBtn.setPrefSize(80, 30);
-            }
-        });
+        Modals.primary(dialog, okButton);
+        Modals.secondary(dialog, cancelButton);
 
         Optional<ButtonType> result = dialog.showAndWait();
 
@@ -1055,15 +1005,14 @@ public class MainController {
     private VBox createVerificationCard(ToggleGroup group, String title, String description, String stats,
             boolean recommended) {
         VBox card = new VBox(4);
-        card.setPadding(new Insets(10));
-        card.setStyle(getUnselectedCardStyle());
+        card.getStyleClass().add("choice-card");
 
         RadioButton rb = new RadioButton();
         rb.setToggleGroup(group);
 
         // Title row with radio button
         Label lblTitle = new Label(title);
-        lblTitle.setStyle("-fx-font-weight: bold; -fx-font-size: 12px;");
+        lblTitle.getStyleClass().add("choice-card-title");
 
         HBox titleRow = new HBox(8);
         titleRow.setAlignment(Pos.CENTER_LEFT);
@@ -1071,16 +1020,16 @@ public class MainController {
 
         if (recommended) {
             Label badge = new Label("Recommended");
-            badge.getStyleClass().add("button-success");
+            badge.getStyleClass().add("badge");
             titleRow.getChildren().add(badge);
         }
 
         Label lblDesc = new Label(description);
-        lblDesc.setStyle("-fx-font-size: 11px; -fx-text-fill: #555;");
+        lblDesc.getStyleClass().add("choice-card-detail");
         lblDesc.setPadding(new Insets(0, 0, 0, 24));
 
         Label lblStats = new Label(stats);
-        lblStats.setStyle("-fx-font-size: 10px; -fx-text-fill: #888; -fx-font-style: italic;");
+        lblStats.getStyleClass().add("choice-card-cost");
         lblStats.setPadding(new Insets(0, 0, 0, 24));
 
         card.getChildren().addAll(titleRow, lblDesc, lblStats);
@@ -1094,12 +1043,16 @@ public class MainController {
         return card;
     }
 
-    private String getSelectedCardStyle() {
-        return "-fx-border-color: #0078d4; -fx-border-width: 2; -fx-border-radius: 5; -fx-background-color: #e8f0fe; -fx-background-radius: 5;";
-    }
-
-    private String getUnselectedCardStyle() {
-        return "-fx-border-color: #cccccc; -fx-border-width: 1; -fx-border-radius: 5; -fx-background-color: #ffffff; -fx-background-radius: 5;";
+    /**
+     * Mark a card as the chosen one. A style class rather than an inline style,
+     * so the selected look follows the theme instead of being a fixed blue that
+     * belongs to neither palette.
+     */
+    private static void setCardSelected(VBox card, boolean selected) {
+        card.getStyleClass().remove("choice-card-selected");
+        if (selected) {
+            card.getStyleClass().add("choice-card-selected");
+        }
     }
 
     private VBox createDiscoverySection() {
@@ -1578,11 +1531,6 @@ public class MainController {
         updateStartButtonState();
     }
 
-    /**
-     * Get the IP count for a selected interface from the combo box.
-     * Parses the display string to extract IP, finds the NetworkInterface,
-     * and calculates actual subnet size based on prefix length.
-     */
     /** Usable addresses on the subnet of the interface chosen in the combo box. */
     private long getSelectedInterfaceIpCount(String displayString) {
         return findSelectedInterface(displayString)
@@ -2163,27 +2111,12 @@ public class MainController {
     private void showRetryCredentialDialog(Device device) {
         logger.info("User requested retry for device: {}", device.getIpAddress());
 
-        Dialog<ButtonType> dialog = new Dialog<>();
-        dialog.setTitle("Retry Authentication");
-        dialog.setHeaderText("Retry authentication for " + device.getIpAddress());
-
-        // Set window icon
-        dialog.setOnShown(e -> {
-            try {
-                javafx.stage.Stage stage = (javafx.stage.Stage) dialog.getDialogPane().getScene().getWindow();
-                java.io.InputStream iconStream = getClass().getResourceAsStream("/icon.png");
-                if (iconStream != null) {
-                    stage.getIcons().add(new javafx.scene.image.Image(iconStream));
-                }
-            } catch (Exception ex) {
-                logger.info("Could not load icon for retry authentication dialog", ex);
-            }
-        });
+        Dialog<ButtonType> dialog = Modals.dialog("Retry Sign-in", "Try other sign-in details",
+                "For " + device.getIpAddress() + ". What works here is kept for the devices after it.");
 
         GridPane grid = new GridPane();
         grid.setHgap(10);
         grid.setVgap(10);
-        grid.setPadding(new Insets(20));
 
         TextField tfRetryUsername = new TextField("admin");
         tfRetryUsername.setPromptText("Username");
@@ -2195,31 +2128,18 @@ public class MainController {
         tfRetryPassword.setPromptText("Password");
         tfRetryPassword.setTooltip(tip("Tried against this device only, and added to the list for later devices."));
 
-        grid.add(new Label("Username:"), 0, 0);
+        grid.add(new Label("Username"), 0, 0);
         grid.add(tfRetryUsername, 1, 0);
-        grid.add(new Label("Password:"), 0, 1);
+        grid.add(new Label("Password"), 0, 1);
         grid.add(tfRetryPassword, 1, 1);
 
-        dialog.getDialogPane().setContent(grid);
+        dialog.getDialogPane().setContent(Modals.content(grid));
 
         ButtonType retryButton = new ButtonType("Retry", ButtonBar.ButtonData.OK_DONE);
         ButtonType cancelButton = ButtonType.CANCEL;
         dialog.getDialogPane().getButtonTypes().addAll(retryButton, cancelButton);
-
-        // Style buttons
-        dialog.setOnShowing(dialogEvent -> {
-            Button retryBtn = (Button) dialog.getDialogPane().lookupButton(retryButton);
-            Button cancelBtn = (Button) dialog.getDialogPane().lookupButton(cancelButton);
-
-            if (retryBtn != null) {
-                retryBtn.getStyleClass().add("button-success");
-                retryBtn.setPrefSize(80, 30);
-            }
-            if (cancelBtn != null) {
-                cancelBtn.getStyleClass().add("button-secondary");
-                cancelBtn.setPrefSize(80, 30);
-            }
-        });
+        Modals.primary(dialog, retryButton);
+        Modals.secondary(dialog, cancelButton);
 
         Optional<ButtonType> result = dialog.showAndWait();
 
@@ -2379,12 +2299,10 @@ public class MainController {
             return;
         }
         if (!devices.isEmpty()) {
-            Alert confirm = new Alert(Alert.AlertType.CONFIRMATION,
-                    "Opening a saved scan replaces the results on screen. Export them first if you need them.",
-                    ButtonType.OK, ButtonType.CANCEL);
-            confirm.setTitle("Replace these results?");
-            confirm.setHeaderText(null);
-            if (confirm.showAndWait().orElse(ButtonType.CANCEL) != ButtonType.OK) {
+            boolean replace = Modals.confirm("Open a Saved Scan", "Replace these results?",
+                    "Opening a saved scan clears what is on screen. Export it first if you need it.",
+                    "Replace");
+            if (!replace) {
                 return;
             }
         }
@@ -2472,10 +2390,8 @@ public class MainController {
      * application, which anyone holding a copy could reproduce.
      */
     private ExportRequest promptForExportDetails() {
-        Dialog<ExportRequest> dialog = new Dialog<>();
-        dialog.setTitle("Export report");
-        dialog.setHeaderText("Report details");
-        applyDialogIcon(dialog);
+        Dialog<ExportRequest> dialog = Modals.dialog("Export Report", "Report details",
+                "These appear on the summary sheet and in the file name.");
 
         TextField tfSite = new TextField();
         tfSite.setPromptText("Required, for example BLR-WH-02");
@@ -2520,29 +2436,29 @@ public class MainController {
         GridPane grid = new GridPane();
         grid.setHgap(10);
         grid.setVgap(8);
-        grid.setPadding(new Insets(16));
         int row = 0;
-        grid.add(new Label("Site ID:"), 0, row);
+        grid.add(new Label("Site ID"), 0, row);
         grid.add(tfSite, 1, row++);
-        grid.add(new Label("Premise:"), 0, row);
+        grid.add(new Label("Premise"), 0, row);
         grid.add(tfPremise, 1, row++);
-        grid.add(new Label("Surveyed by:"), 0, row);
+        grid.add(new Label("Surveyed by"), 0, row);
         grid.add(tfSurveyor, 1, row++);
-        grid.add(new Label("Format:"), 0, row);
+        grid.add(new Label("Format"), 0, row);
         grid.add(cbFormat, 1, row++);
         grid.add(new Separator(), 0, row++, 2, 1);
         grid.add(cbCredentials, 0, row++, 2, 1);
         grid.add(cbEncrypt, 0, row++, 2, 1);
-        grid.add(new Label("Password:"), 0, row);
+        grid.add(new Label("Password"), 0, row);
         grid.add(pfPassword, 1, row++);
-        grid.add(new Label("Confirm:"), 0, row);
+        grid.add(new Label("Confirm"), 0, row);
         grid.add(pfConfirm, 1, row++);
         grid.add(message, 0, row, 2, 1);
-        dialog.getDialogPane().setContent(grid);
+        dialog.getDialogPane().setContent(Modals.content(grid));
 
         ButtonType saveType = new ButtonType("Choose file...", ButtonBar.ButtonData.OK_DONE);
         dialog.getDialogPane().getButtonTypes().addAll(saveType, ButtonType.CANCEL);
-        Node saveButton = dialog.getDialogPane().lookupButton(saveType);
+        Node saveButton = Modals.primary(dialog, saveType);
+        Modals.secondary(dialog, ButtonType.CANCEL);
 
         Runnable validate = () -> {
             ExportFormat format = cbFormat.getSelectionModel().getSelectedItem();
@@ -2595,21 +2511,6 @@ public class MainController {
         return dialog.showAndWait().orElse(null);
     }
 
-    /** Give a dialog the application icon. */
-    private void applyDialogIcon(Dialog<?> dialog) {
-        dialog.setOnShown(e -> {
-            try {
-                Stage stage = (Stage) dialog.getDialogPane().getScene().getWindow();
-                InputStream iconStream = getClass().getResourceAsStream("/icon.png");
-                if (iconStream != null) {
-                    stage.getIcons().add(new javafx.scene.image.Image(iconStream));
-                }
-            } catch (Exception ex) {
-                logger.debug("Could not load the dialog icon", ex);
-            }
-        });
-    }
-
     private void showSettings() {
         logger.info("Opening settings dialog");
         SettingsDialog settingsDialog = new SettingsDialog(primaryStage);
@@ -2617,27 +2518,12 @@ public class MainController {
     }
 
     private void showHelpManual() {
-        Dialog<Void> dialog = new Dialog<>();
-        dialog.setTitle("Help");
-        dialog.setHeaderText(AppConfig.getInstance().getAppName() + " - Quick Guide");
+        Dialog<Void> dialog = Modals.dialog("Help", "Quick guide",
+                AppConfig.getInstance().getAppName() + " in five steps.");
+        dialog.getDialogPane().setPrefWidth(560);
 
-        // Set window icon
-        dialog.setOnShown(e -> {
-            try {
-                javafx.stage.Stage stage = (javafx.stage.Stage) dialog.getDialogPane().getScene().getWindow();
-                java.io.InputStream iconStream = getClass().getResourceAsStream("/icon.png");
-                if (iconStream != null) {
-                    stage.getIcons().add(new javafx.scene.image.Image(iconStream));
-                }
-            } catch (Exception ex) {
-                logger.info("Could not load icon for help dialog", ex);
-            }
-        });
-
-        // Content
-        VBox content = new VBox(8);
-        content.setPadding(new Insets(12));
-        content.setPrefWidth(500);
+        VBox content = Modals.content();
+        content.setSpacing(8);
 
         Label quickGuide = new Label("""
                 1. Where to look
@@ -2659,35 +2545,23 @@ public class MainController {
         quickGuide.setWrapText(true);
         quickGuide.setStyle("-fx-font-size: 10px;");
 
-        // User Manual and Close buttons - horizontally aligned
-        Button btnUserManual = new Button("Open User Manual");
-        btnUserManual.setOnAction(e -> openUserManual());
-
-        Button btnCloseHelp = new Button("Close");
-        btnCloseHelp.getStyleClass().add("button-secondary");
-        btnCloseHelp.setPrefSize(80, 30);
-        btnCloseHelp.setOnAction(e -> {
-            dialog.setResult(null);
-            dialog.close();
-        });
-
-        Region buttonSpacer = new Region();
-        HBox.setHgrow(buttonSpacer, Priority.ALWAYS);
-
-        HBox buttonBox = new HBox(10, btnUserManual, buttonSpacer, btnCloseHelp);
-        buttonBox.setAlignment(Pos.CENTER_LEFT);
-        buttonBox.setPadding(new Insets(10, 0, 0, 0));
-
-        content.getChildren().addAll(quickGuide, new Separator(), buttonBox);
+        content.getChildren().add(quickGuide);
         dialog.getDialogPane().setContent(content);
 
-        // Add a hidden button type so the dialog can close (required by JavaFX Dialog)
-        ButtonType hiddenClose = new ButtonType("Close", ButtonBar.ButtonData.CANCEL_CLOSE);
-        dialog.getDialogPane().getButtonTypes().add(hiddenClose);
+        // In the real button bar rather than a hand-built row inside the body,
+        // so this dialog's footer matches every other one.
+        ButtonType manualType = new ButtonType("Open User Manual", ButtonBar.ButtonData.HELP_2);
+        ButtonType closeType = new ButtonType("Close", ButtonBar.ButtonData.CANCEL_CLOSE);
+        dialog.getDialogPane().getButtonTypes().addAll(manualType, closeType);
 
-        // Hide the default button bar since we have custom buttons
-        dialog.getDialogPane().lookupButton(hiddenClose).setVisible(false);
-        dialog.getDialogPane().lookupButton(hiddenClose).setManaged(false);
+        Button btnUserManual = Modals.secondary(dialog, manualType);
+        // The manual opens beside the dialog; consuming the event stops the
+        // button bar closing it, which is what a button type would normally do.
+        btnUserManual.addEventFilter(ActionEvent.ACTION, e -> {
+            e.consume();
+            openUserManual();
+        });
+        Modals.primary(dialog, closeType);
 
         dialog.showAndWait();
     }
@@ -2789,61 +2663,27 @@ public class MainController {
     }
 
     private void showAlert(String title, String content, Alert.AlertType type) {
-        Alert alert = new Alert(type);
-        alert.setTitle(title);
-        alert.setHeaderText(null);
-        alert.setContentText(content);
-
-        // Apply application icon to all alerts
-        try {
-            javafx.stage.Stage stage = (javafx.stage.Stage) alert.getDialogPane().getScene().getWindow();
-            java.io.InputStream iconStream = getClass().getResourceAsStream("/icon.png");
-            if (iconStream != null) {
-                stage.getIcons().add(new javafx.scene.image.Image(iconStream));
-            }
-        } catch (Exception e) {
-            logger.info("Could not load icon for alert dialog", e);
+        switch (type) {
+            case ERROR -> Modals.error(title, title, content);
+            case WARNING -> Modals.warn(title, title, content);
+            default -> Modals.inform(title, title, content);
         }
-
-        alert.showAndWait();
     }
 
     private void showNetworkConfigDialog() {
-        Dialog<ButtonType> dialog = new Dialog<>();
-        dialog.setTitle("Network Configuration");
-        dialog.setHeaderText("Configure Network Selection");
-        dialog.getDialogPane().setPrefWidth(600);
+        Dialog<ButtonType> dialog = Modals.dialog("Select Network", "Where to look",
+                "Choose an adapter on this computer, or enter the addresses to scan.");
+        dialog.getDialogPane().setPrefWidth(620);
 
-        // Set window icon
-        dialog.setOnShown(e -> {
-            try {
-                javafx.stage.Stage stage = (javafx.stage.Stage) dialog.getDialogPane().getScene().getWindow();
-                java.io.InputStream iconStream = getClass().getResourceAsStream("/icon.png");
-                if (iconStream != null) {
-                    stage.getIcons().add(new javafx.scene.image.Image(iconStream));
-                }
-            } catch (Exception ex) {
-                logger.info("Could not load icon for network config dialog", ex);
-            }
-        });
-
-        // Create tab pane
         TabPane tabPane = new TabPane();
         tabPane.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
 
-        // Tab 1: Simple Mode
-        Tab simpleTab = new Tab("Simple Mode");
-        VBox simpleContent = createSimpleNetworkBox();
-        simpleContent.setPadding(new Insets(15));
-        simpleTab.setContent(simpleContent);
+        Tab simpleTab = new Tab("Simple");
+        simpleTab.setContent(createSimpleNetworkBox());
 
-        // Tab 2: Advanced Mode
-        Tab advancedTab = new Tab("Advanced Mode");
-        VBox advancedContent = createAdvancedNetworkBox();
-        advancedContent.setPadding(new Insets(15));
-        advancedTab.setContent(advancedContent);
+        Tab advancedTab = new Tab("Advanced");
+        advancedTab.setContent(createAdvancedNetworkBox());
 
-        // Add tabs
         tabPane.getTabs().addAll(simpleTab, advancedTab);
 
         // Set active tab based on current mode
@@ -2857,27 +2697,13 @@ public class MainController {
             updateAdvancedIpCount();
         });
 
-        dialog.getDialogPane().setContent(tabPane);
+        dialog.getDialogPane().setContent(Modals.content(tabPane));
 
-        // Buttons
-        ButtonType okButton = new ButtonType("OK", ButtonBar.ButtonData.OK_DONE);
+        ButtonType okButton = new ButtonType("Use this network", ButtonBar.ButtonData.OK_DONE);
         ButtonType cancelButton = new ButtonType("Cancel", ButtonBar.ButtonData.CANCEL_CLOSE);
         dialog.getDialogPane().getButtonTypes().addAll(okButton, cancelButton);
-
-        // Style buttons
-        dialog.setOnShowing(dialogEvent -> {
-            Button okBtn = (Button) dialog.getDialogPane().lookupButton(okButton);
-            Button cancelBtn = (Button) dialog.getDialogPane().lookupButton(cancelButton);
-
-            if (okBtn != null) {
-                okBtn.getStyleClass().add("button-success");
-                okBtn.setPrefSize(80, 30);
-            }
-            if (cancelBtn != null) {
-                cancelBtn.getStyleClass().add("button-secondary");
-                cancelBtn.setPrefSize(80, 30);
-            }
-        });
+        Modals.primary(dialog, okButton);
+        Modals.secondary(dialog, cancelButton);
 
         Optional<ButtonType> result = dialog.showAndWait();
 
@@ -2946,72 +2772,43 @@ public class MainController {
     }
 
     private void showCredentialManagementDialog() {
-        Dialog<ButtonType> dialog = new Dialog<>();
-        dialog.setTitle("Credential Management");
-        dialog.setHeaderText("Credentials to try on each device");
-        dialog.getDialogPane().setPrefWidth(500);
-        dialog.getDialogPane().setPrefHeight(400);
+        Dialog<ButtonType> dialog = Modals.dialog("Add Credential", "Sign-in details",
+                "Each is tried in turn on every device. Devices that need no password are found without any.");
+        dialog.getDialogPane().setPrefWidth(520);
 
-        // Set window icon
-        dialog.setOnShown(e -> {
-            try {
-                javafx.stage.Stage stage = (javafx.stage.Stage) dialog.getDialogPane().getScene().getWindow();
-                java.io.InputStream iconStream = getClass().getResourceAsStream("/icon.png");
-                if (iconStream != null) {
-                    stage.getIcons().add(new javafx.scene.image.Image(iconStream));
-                }
-            } catch (Exception ex) {
-                logger.info("Could not load icon for credential management dialog", ex);
-            }
-        });
-
-        VBox content = new VBox(10);
-        content.setPadding(new Insets(15));
-
-        // Username and Password fields
-        Label lblUsername = new Label("Username:");
+        Label lblUsername = new Label("Username");
         tfUsername = new TextField("admin");
         tfUsername.setPromptText("Username");
         tfUsername.setTooltip(tip("The account name configured on the camera or recorder."));
 
-        Label lblPassword = new Label("Password:");
+        Label lblPassword = new Label("Password");
         // A password field, so the value is not shown to anyone standing nearby.
         tfPassword = new PasswordField();
         tfPassword.setPromptText("Password");
         tfPassword.setTooltip(tip("Stored only for this session and used to sign in to devices."));
 
-        btnAddCredential = new Button("Add Credential");
+        btnAddCredential = new Button("Add");
         btnAddCredential.setMaxWidth(Double.MAX_VALUE);
         btnAddCredential.setPrefHeight(30);
         btnAddCredential.setOnAction(e -> addCredential());
 
-        // Credentials list
-        Label lblList = new Label("Added Credentials:");
+        VBox entry = new VBox(8, lblUsername, tfUsername, lblPassword, tfPassword, btnAddCredential);
+        entry.getStyleClass().add("dialog-section");
+
+        Label lblList = new Label("Added so far");
+        lblList.getStyleClass().add("dialog-section-title");
         lvCredentials = new ListView<>(credentials);
         lvCredentials.setPrefHeight(150);
+        lvCredentials.setPlaceholder(new Label("None yet. Devices without a password are still found."));
         lvCredentials.setCellFactory(param -> new CredentialListCell());
         lvCredentials.setContextMenu(createCredentialContextMenu());
+        VBox.setVgrow(lvCredentials, Priority.ALWAYS);
 
-        content.getChildren().addAll(
-                lblUsername, tfUsername,
-                lblPassword, tfPassword,
-                btnAddCredential,
-                new Separator(),
-                lblList, lvCredentials);
+        dialog.getDialogPane().setContent(Modals.content(entry, lblList, lvCredentials));
 
-        dialog.getDialogPane().setContent(content);
-
-        // OK button
-        ButtonType okButton = new ButtonType("OK", ButtonBar.ButtonData.OK_DONE);
-        dialog.getDialogPane().getButtonTypes().add(okButton);
-
-        // Style button
-        dialog.setOnShowing(dialogEvent -> {
-            Button okBtn = (Button) dialog.getDialogPane().lookupButton(okButton);
-            if (okBtn != null) {
-                okBtn.setPrefSize(80, 30);
-            }
-        });
+        ButtonType doneButton = new ButtonType("Done", ButtonBar.ButtonData.OK_DONE);
+        dialog.getDialogPane().getButtonTypes().add(doneButton);
+        Modals.primary(dialog, doneButton);
 
         dialog.showAndWait();
 

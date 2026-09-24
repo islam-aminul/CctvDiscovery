@@ -23,6 +23,8 @@
     -app-danger: #C2564E;
     -app-danger-hover: #D4675E;
     -app-warning-text: #E0B252;
+    -app-accent: -teal-400;
+    -app-accent-soft: #12303A;
 
     -fx-background-color: -app-background;
     -fx-text-fill: -app-text;
@@ -114,6 +116,22 @@
     -fx-background-color: #1D2049;
     -fx-text-fill: -sage-300;
     -fx-border-color: -sage-300;
+}
+
+/*
+ * Restated here even though app.css already sets it from -app-danger. JavaFX
+ * breaks equal specificity by declaration order, and this sheet's own .button
+ * rule above is declared later than app.css's .button-danger, so without this
+ * the Reset button came out sage and read as an ordinary action.
+ */
+.button-danger {
+    -fx-background-color: -app-danger;
+    -fx-text-fill: -paper-0;
+}
+
+.button-danger:hover {
+    -fx-background-color: -app-danger-hover;
+    -fx-text-fill: -paper-0;
 }
 
 /* Inputs */
@@ -340,4 +358,9 @@
 .field-invalid {
     -fx-border-color: -app-danger;
     -fx-background-color: #3A1A18;
+}
+
+/* The badge sits on teal-400, which carries dark text rather than white. */
+.badge {
+    -fx-text-fill: -midnight-700;
 }

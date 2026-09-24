@@ -3,24 +3,30 @@ package com.cctv.discovery.ui;
 import com.cctv.discovery.config.AppConfig;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
+import javafx.event.ActionEvent;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
-import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
-import javafx.stage.Modality;
 import javafx.stage.Stage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Simplified settings dialog for non-technical users.
- * Only allows configuration of ports and custom RTSP paths.
+ * Ports, extra stream paths and how thoroughly each stream is checked.
+ *
+ * <p>Built through {@link Modals} like every other modal. It used to be a bare
+ * {@link Stage} with its own title block and its own row of buttons, which is
+ * why it never looked like the rest of them.
  */
-public class SettingsDialog extends Stage {
+public class SettingsDialog {
     private static final Logger logger = LoggerFactory.getLogger(SettingsDialog.class);
 
     private final AppConfig config = AppConfig.getInstance();
+    private final Dialog<ButtonType> dialog;
+    private final ButtonType saveType = new ButtonType("Save", ButtonBar.ButtonData.OK_DONE);
+    private final ButtonType resetType = new ButtonType("Reset to Defaults", ButtonBar.ButtonData.LEFT);
+    private final ButtonType cancelType = new ButtonType("Cancel", ButtonBar.ButtonData.CANCEL_CLOSE);
 
     // Port Fields
     private TextField tfHttpPorts;
@@ -39,98 +45,84 @@ public class SettingsDialog extends Stage {
     private TextField tfCustomTimeout;
 
     public SettingsDialog(Stage owner) {
-        initOwner(owner);
-        initModality(Modality.APPLICATION_MODAL);
-        setTitle("Settings");
-        setResizable(false);
-
-        // Set window icon
-        try {
-            java.io.InputStream iconStream = getClass().getResourceAsStream("/icon.png");
-            if (iconStream != null) {
-                getIcons().add(new javafx.scene.image.Image(iconStream));
-                logger.info("Settings dialog icon loaded successfully");
-            }
-        } catch (Exception e) {
-            logger.info("Could not load icon for settings dialog", e);
-        }
-
-        // Initialize path pairs list
         this.pathPairs = FXCollections.observableArrayList();
 
-        VBox root = createContent();
-        Scene scene = new Scene(root, 650, 520);
+        dialog = Modals.dialog("Settings", "Application settings",
+                "Ports to scan, extra stream paths, and how thoroughly to check each stream.");
+        dialog.getDialogPane().setContent(createContent());
+        dialog.getDialogPane().setPrefSize(660, 540);
 
-        Theme.current().applyTo(scene);
+        dialog.getDialogPane().getButtonTypes().addAll(resetType, cancelType, saveType);
+        Modals.primary(dialog, saveType);
+        Modals.secondary(dialog, cancelType);
+        Modals.danger(dialog, resetType);
 
-        setScene(scene);
+        // Save validates first, and Reset asks before it wipes anything, so both
+        // consume the event and close the dialog themselves only when done.
+        Button save = (Button) dialog.getDialogPane().lookupButton(saveType);
+        save.addEventFilter(ActionEvent.ACTION, e -> {
+            if (!saveSettings()) {
+                e.consume();
+            }
+        });
+        Button reset = (Button) dialog.getDialogPane().lookupButton(resetType);
+        reset.addEventFilter(ActionEvent.ACTION, e -> {
+            e.consume();
+            resetToDefaults();
+        });
+
         loadCurrentSettings();
     }
 
+    /** Show the dialog and wait for it to close. */
+    public void showAndWait() {
+        dialog.showAndWait();
+    }
+
     private VBox createContent() {
-        VBox vbox = new VBox(12);
-        vbox.setPadding(new Insets(15));
-
-        // Title
-        Label title = new Label("Application Settings");
-        title.setStyle("-fx-font-size: 16px; -fx-font-weight: bold;");
-
-        Label subtitle = new Label("Ports to scan, extra stream paths, and how thoroughly to check each stream");
-        subtitle.setStyle("-fx-text-fill: #666; -fx-font-size: 12px;");
-
-        // Tell the user where their choices are kept, so they can back them up
-        // or copy them to another machine.
-        Label location = new Label("Saved in " + config.getUserSettingsFile());
-        location.setStyle("-fx-text-fill: #888; -fx-font-size: 10px;");
-        location.setWrapText(true);
-
-        // TabPane for organized sections
         TabPane tabPane = new TabPane();
         tabPane.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
         VBox.setVgrow(tabPane, Priority.ALWAYS);
 
-        // Tab 1: Ports
         Tab portsTab = new Tab("Ports");
-        VBox portContent = createPortSection();
-        portContent.setPadding(new Insets(15));
-        portsTab.setContent(portContent);
+        portsTab.setContent(padded(createPortSection()));
 
-        // Tab 2: RTSP Paths
-        Tab pathsTab = new Tab("RTSP Paths");
-        VBox pathsContent = createRtspPathsSection();
-        pathsContent.setPadding(new Insets(15));
-        pathsTab.setContent(pathsContent);
+        Tab pathsTab = new Tab("Stream Paths");
+        pathsTab.setContent(padded(createRtspPathsSection()));
 
-        // Tab 3: RTSP Validation
-        Tab validationTab = new Tab("RTSP Validation");
-        VBox validationContent = createRtspValidationSection();
-        validationContent.setPadding(new Insets(15));
-        validationTab.setContent(validationContent);
+        Tab validationTab = new Tab("Verification");
+        validationTab.setContent(padded(createRtspValidationSection()));
 
         tabPane.getTabs().addAll(portsTab, pathsTab, validationTab);
 
-        // Buttons
-        HBox buttonBox = createButtonBox();
+        // Where the choices are kept, so they can be backed up or copied to
+        // another machine. The folder is the same whichever copy of the
+        // program is running, which is the point worth showing.
+        //
+        // The folder rather than the file: a path has no spaces to wrap at, so
+        // a long one is elided to "Saved in ..." and says nothing at all. The
+        // full path is on the tooltip.
+        Label location = new Label("Saved in " + config.getUserSettingsFile().getParent());
+        location.getStyleClass().add("dialog-note");
+        location.setTooltip(new Tooltip(config.getUserSettingsFile().toString()));
 
-        vbox.getChildren().addAll(
-                title,
-                subtitle,
-                location,
-                tabPane,
-                buttonBox);
+        return Modals.content(tabPane, location);
+    }
 
-        return vbox;
+    private static VBox padded(VBox section) {
+        section.setPadding(new Insets(14));
+        return section;
     }
 
     private VBox createPortSection() {
         VBox vbox = new VBox(8);
 
         Label lblTitle = new Label("Port Configuration");
-        lblTitle.setStyle("-fx-font-weight: bold; -fx-font-size: 13px;");
+        lblTitle.getStyleClass().add("dialog-section-title");
 
         Label lblHelp = new Label(
                 "Only change these if your camera uses non-standard ports. Enter a single port or multiple ports separated by commas.");
-        lblHelp.setStyle("-fx-text-fill: #666; -fx-font-size: 11px;");
+        lblHelp.getStyleClass().add("dialog-note");
         lblHelp.setWrapText(true);
 
         GridPane grid = new GridPane();
@@ -166,10 +158,10 @@ public class SettingsDialog extends Stage {
         VBox vbox = new VBox(8);
 
         Label lblTitle = new Label("Custom RTSP Path Pairs");
-        lblTitle.setStyle("-fx-font-weight: bold; -fx-font-size: 13px;");
+        lblTitle.getStyleClass().add("dialog-section-title");
 
         Label lblHelp = new Label("Add custom stream path pairs for cameras with non-standard configurations");
-        lblHelp.setStyle("-fx-text-fill: #666; -fx-font-size: 11px;");
+        lblHelp.getStyleClass().add("dialog-note");
         lblHelp.setWrapText(true);
 
         // Input fields for new path pair
@@ -203,7 +195,7 @@ public class SettingsDialog extends Stage {
 
         // List view for existing path pairs
         Label lblPairs = new Label("Configured Path Pairs:");
-        lblPairs.setStyle("-fx-font-weight: bold; -fx-font-size: 11px;");
+        lblPairs.getStyleClass().add("dialog-section-title");
 
         lvPathPairs = new ListView<>(pathPairs);
         lvPathPairs.setPrefHeight(100);
@@ -233,11 +225,11 @@ public class SettingsDialog extends Stage {
         VBox vbox = new VBox(8);
 
         Label lblTitle = new Label("RTSP Validation Method");
-        lblTitle.setStyle("-fx-font-weight: bold; -fx-font-size: 13px;");
+        lblTitle.getStyleClass().add("dialog-section-title");
 
         Label lblHelp = new Label(
                 "Choose how RTSP stream URLs are validated during discovery. Higher accuracy takes more time.");
-        lblHelp.setStyle("-fx-text-fill: #666; -fx-font-size: 11px;");
+        lblHelp.getStyleClass().add("dialog-note");
         lblHelp.setWrapText(true);
 
         // Radio buttons for validation method
@@ -245,15 +237,12 @@ public class SettingsDialog extends Stage {
 
         rbSdpOnly = new RadioButton("SDP Only - Fast (3s per URL), ~60% accurate");
         rbSdpOnly.setToggleGroup(validationGroup);
-        rbSdpOnly.setStyle("-fx-font-size: 11px;");
 
         rbRtpPacket = new RadioButton("RTP Packet - Medium (5s per URL), ~90% accurate");
         rbRtpPacket.setToggleGroup(validationGroup);
-        rbRtpPacket.setStyle("-fx-font-size: 11px;");
 
         rbFrameCapture = new RadioButton("Frame Capture - Slow (10s per URL), ~98% accurate (Recommended)");
         rbFrameCapture.setToggleGroup(validationGroup);
-        rbFrameCapture.setStyle("-fx-font-size: 11px;");
 
         VBox radioBox = new VBox(4);
         radioBox.getChildren().addAll(rbSdpOnly, rbRtpPacket, rbFrameCapture);
@@ -261,7 +250,7 @@ public class SettingsDialog extends Stage {
 
         // Custom timeout field (optional)
         Label lblTimeout = new Label("Custom Timeout (optional):");
-        lblTimeout.setStyle("-fx-font-size: 11px; -fx-font-weight: bold;");
+        lblTimeout.getStyleClass().add("dialog-section-title");
 
         HBox timeoutBox = new HBox(8);
         timeoutBox.setAlignment(Pos.CENTER_LEFT);
@@ -269,10 +258,9 @@ public class SettingsDialog extends Stage {
         tfCustomTimeout = new TextField();
         tfCustomTimeout.setPromptText("0 = use default for method");
         tfCustomTimeout.setPrefWidth(200);
-        tfCustomTimeout.setStyle("-fx-font-size: 11px;");
 
         Label lblMs = new Label("milliseconds");
-        lblMs.setStyle("-fx-font-size: 11px; -fx-text-fill: #666;");
+        lblMs.getStyleClass().add("dialog-note");
 
         timeoutBox.getChildren().addAll(tfCustomTimeout, lblMs);
 
@@ -343,32 +331,6 @@ public class SettingsDialog extends Stage {
         }
     }
 
-    private HBox createButtonBox() {
-        HBox hbox = new HBox(10);
-        hbox.setAlignment(Pos.CENTER_RIGHT);
-        hbox.setPadding(new Insets(10, 0, 0, 0));
-
-        // All buttons same size (150px)
-        Button btnSave = new Button("Save");
-        btnSave.getStyleClass().add("button-success");
-        btnSave.setPrefWidth(150);
-        btnSave.setOnAction(e -> saveSettings());
-
-        Button btnReset = new Button("Reset to Defaults");
-        btnReset.setPrefWidth(150);
-        btnReset.getStyleClass().add("button-danger");
-        btnReset.setOnAction(e -> resetToDefaults());
-
-        Button btnCancel = new Button("Cancel");
-        btnCancel.setPrefWidth(150);
-        btnCancel.setOnAction(e -> close());
-
-        // Order: Reset to Defaults, Cancel, Save
-        hbox.getChildren().addAll(btnReset, btnCancel, btnSave);
-
-        return hbox;
-    }
-
     private void loadCurrentSettings() {
         // Ports
         tfHttpPorts.setText(arrayToString(config.getHttpPorts()));
@@ -402,20 +364,21 @@ public class SettingsDialog extends Stage {
         tfCustomTimeout.setText(timeout > 0 ? String.valueOf(timeout) : "0");
     }
 
-    private void saveSettings() {
+    /** @return true when the settings were written and the dialog may close. */
+    private boolean saveSettings() {
         try {
             // Validate port inputs
             String httpPorts = tfHttpPorts.getText().trim();
             String rtspPorts = tfRtspPorts.getText().trim();
 
             if (!validatePortList(httpPorts)) {
-                showError("Invalid HTTP Ports", "Please enter valid port numbers separated by commas (e.g., 80,8080)");
-                return;
+                showError("Invalid HTTP Ports", "Enter port numbers separated by commas, for example 80,8080.");
+                return false;
             }
 
             if (!validatePortList(rtspPorts)) {
-                showError("Invalid RTSP Ports", "Please enter valid port numbers separated by commas (e.g., 554,8554)");
-                return;
+                showError("Invalid RTSP Ports", "Enter port numbers separated by commas, for example 554,8554.");
+                return false;
             }
 
             // Deduplicate ports
@@ -429,7 +392,7 @@ public class SettingsDialog extends Stage {
 
             // Show info message if duplicates were found
             if (httpHadDuplicates || rtspHadDuplicates) {
-                StringBuilder message = new StringBuilder("Duplicate ports were automatically removed:\n\n");
+                StringBuilder message = new StringBuilder("Duplicate ports were removed.\n\n");
                 if (httpHadDuplicates) {
                     message.append("HTTP Ports: ").append(httpPorts).append(" → ").append(deduplicatedHttpPorts)
                             .append("\n");
@@ -439,11 +402,7 @@ public class SettingsDialog extends Stage {
                             .append("\n");
                 }
 
-                Alert info = new Alert(Alert.AlertType.INFORMATION);
-                info.setTitle("Ports Deduplicated");
-                info.setHeaderText("Duplicate ports removed");
-                info.setContentText(message.toString());
-                info.showAndWait();
+                Modals.inform("Ports", "Duplicate ports removed", message.toString());
 
                 // Update text fields to show deduplicated values
                 tfHttpPorts.setText(deduplicatedHttpPorts);
@@ -493,13 +452,13 @@ public class SettingsDialog extends Stage {
                 try {
                     int timeout = Integer.parseInt(timeoutStr);
                     if (timeout < 0 || timeout > 300000) { // Max 5 minutes
-                        showError("Invalid Timeout", "Timeout must be between 0 and 300000 milliseconds (5 minutes)");
-                        return;
+                        showError("Invalid Timeout", "Enter between 0 and 300000 milliseconds, which is five minutes.");
+                        return false;
                     }
                     config.setRtspValidationTimeout(timeout);
                 } catch (NumberFormatException e) {
-                    showError("Invalid Timeout", "Timeout must be a valid number");
-                    return;
+                    showError("Invalid Timeout", "Enter the timeout as a number of milliseconds.");
+                    return false;
                 }
             } else {
                 config.setRtspValidationTimeout(0); // Use default
@@ -507,46 +466,36 @@ public class SettingsDialog extends Stage {
 
             logger.info("Saved RTSP validation: method={}, timeout={}", validationMethod, timeoutStr);
 
-            // Save to file
-            config.saveUserSettings();
+            if (!config.saveUserSettings()) {
+                showError("Save Error", "The settings could not be written to "
+                        + config.getUserSettingsFile() + ".");
+                return false;
+            }
 
-            Alert alert = new Alert(Alert.AlertType.INFORMATION);
-            alert.setTitle("Settings Saved");
-            alert.setHeaderText("Configuration Updated");
-            alert.setContentText("Settings saved successfully.\n\nRestart the application for changes to take effect.");
-            alert.showAndWait();
-
-            close();
+            Modals.inform("Settings", "Settings saved",
+                    "Saved to " + config.getUserSettingsFile()
+                            + ". Restart the application for the changes to take effect.");
+            return true;
 
         } catch (Exception e) {
             logger.error("Error saving settings", e);
-            showError("Save Error", "Failed to save settings: " + e.getMessage());
+            showError("Save Error", "The settings could not be saved: " + e.getMessage());
+            return false;
         }
     }
 
     private void resetToDefaults() {
-        Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
-        confirm.setTitle("Reset to Defaults");
-        confirm.setHeaderText("Reset All Settings?");
-        confirm.setContentText("This will reset all custom settings to defaults.\nAre you sure?");
-
-        confirm.showAndWait().ifPresent(response -> {
-            if (response == ButtonType.OK) {
-                config.resetAllToDefaults();
-
-                // Clear path pairs
-                pathPairs.clear();
-
-                // Reload settings
-                loadCurrentSettings();
-
-                Alert alert = new Alert(Alert.AlertType.INFORMATION);
-                alert.setTitle("Settings Reset");
-                alert.setHeaderText("Defaults Restored");
-                alert.setContentText("All settings have been reset to default values.");
-                alert.showAndWait();
-            }
-        });
+        boolean reset = Modals.confirm("Reset to Defaults", "Reset every setting?",
+                "Ports, stream paths and the verification method go back to how they shipped. "
+                        + "This cannot be undone.",
+                "Reset");
+        if (!reset) {
+            return;
+        }
+        config.resetAllToDefaults();
+        pathPairs.clear();
+        loadCurrentSettings();
+        Modals.inform("Reset to Defaults", "Defaults restored", "Every setting is back to how it shipped.");
     }
 
     private boolean validatePortList(String portList) {
@@ -569,11 +518,7 @@ public class SettingsDialog extends Stage {
     }
 
     private void showError(String title, String message) {
-        Alert alert = new Alert(Alert.AlertType.ERROR);
-        alert.setTitle(title);
-        alert.setHeaderText(null);
-        alert.setContentText(message);
-        alert.showAndWait();
+        Modals.error(title, title, message);
     }
 
     private String arrayToString(int[] array) {

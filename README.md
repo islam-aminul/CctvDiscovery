@@ -121,6 +121,29 @@ valid after the certificate expires.
 7.  **Export Data**:
     *   Click the **Export to Excel** button in the sidebar to save the current session's findings.
 
+### Where settings are kept
+
+Everything the application writes lives in one per-user folder:
+
+```
+%LOCALAPPDATA%\CctvDiscovery\
+    user-settings.properties    ports, stream paths, verification method, theme
+    rtsp-paths.properties       stream paths that worked, per camera vendor
+    logs\                       rolling log files
+```
+
+The folder comes from the environment, never from where the program is
+installed, so two copies of the executable — one in Program Files, one on a
+memory stick, one unpacked by the self-extracting archive — share one set of
+settings rather than quietly diverging. Settings survive an upgrade or a
+reinstall; deleting the folder resets the application. Settings from versions
+up to 2.0.0, which kept them in the roaming profile, are copied across on first
+run.
+
+Two overrides, for a portable install or an awkward profile:
+`-Dcctv.data.dir=<path>` moves all of it, `-Dcctv.log.dir=<path>` moves only the
+logs. The Settings dialog shows the folder currently in use.
+
 ## Troubleshooting
 
 *   **No Devices Found**:

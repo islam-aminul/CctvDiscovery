@@ -3,7 +3,6 @@ package com.cctv.discovery.config;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.file.Files;
@@ -20,15 +19,27 @@ import java.util.Set;
  * Application configuration: defaults from {@code application.properties},
  * overridden by the per-user {@code user-settings.properties}.
  * <p>
- * User settings and logs live in a per-user folder
- * ({@code %APPDATA%\CctvDiscovery} on Windows, {@code ~/.cctv-discovery}
- * elsewhere) so the application works when installed in a read-only location.
+ * Settings live in the one folder described by {@link AppPaths}, so they are
+ * the same whichever copy of the executable is started and wherever it was
+ * copied to.
  */
 public final class AppConfig {
     private static final Logger logger = LoggerFactory.getLogger(AppConfig.class);
 
     private static final String DEFAULT_PROPERTIES = "/application.properties";
     private static final String USER_SETTINGS_FILE = "user-settings.properties";
+    /** Files older versions left in the roaming profile. */
+    private static final String[] MOVED_FROM_ROAMING = {USER_SETTINGS_FILE, "rtsp-paths.properties"};
+
+    /*
+     * The move out of the roaming profile runs on class initialisation rather
+     * than in the constructor, because the path cache reads dataDirectory()
+     * without ever asking for an AppConfig instance. Touching this class at all
+     * is enough to be sure the old files have been brought across first.
+     */
+    static {
+        migrateFromPreviousLocation();
+    }
 
     private static volatile AppConfig instance;
 
@@ -39,7 +50,6 @@ public final class AppConfig {
     private AppConfig(Path userSettingsFile) {
         this.userSettingsFile = userSettingsFile;
         loadDefaultProperties();
-        migrateLegacySettings();
         loadUserSettings();
     }
 
@@ -66,41 +76,12 @@ public final class AppConfig {
 
     /** Per-user application data directory (created on demand). */
     public static Path dataDirectory() {
-        String override = System.getProperty("cctv.data.dir");
-        Path dir;
-        if (override != null && !override.isBlank()) {
-            dir = Path.of(override);
-        } else {
-            String appData = System.getenv("APPDATA");
-            dir = appData != null && !appData.isBlank()
-                    ? Path.of(appData, "CctvDiscovery")
-                    : Path.of(System.getProperty("user.home"), ".cctv-discovery");
-        }
-        try {
-            Files.createDirectories(dir);
-        } catch (Exception e) {
-            dir = Path.of(System.getProperty("java.io.tmpdir"), "CctvDiscovery");
-            try {
-                Files.createDirectories(dir);
-            } catch (Exception ignored) {
-                // fall through with the temp path
-            }
-        }
-        return dir;
+        return AppPaths.dataDirectory();
     }
 
     /** Directory for log files. */
     public static Path logDirectory() {
-        String localAppData = System.getenv("LOCALAPPDATA");
-        Path dir = localAppData != null && !localAppData.isBlank()
-                ? Path.of(localAppData, "CctvDiscovery", "logs")
-                : dataDirectory().resolve("logs");
-        try {
-            Files.createDirectories(dir);
-        } catch (Exception e) {
-            dir = dataDirectory();
-        }
-        return dir;
+        return AppPaths.logDirectory();
     }
 
     public Path getUserSettingsFile() {
@@ -119,21 +100,39 @@ public final class AppConfig {
         }
     }
 
-    /** Move a settings file left next to an older installation's JAR into the per-user folder. */
-    private void migrateLegacySettings() {
-        if (Files.exists(userSettingsFile)) {
+    /**
+     * Bring settings and the path cache across from the roaming folder that
+     * versions up to 2.0.0 used.
+     *
+     * <p>Copies rather than moves, so that an older build run afterwards still
+     * finds its own files, and never overwrites: whatever is already in the new
+     * location is what the current version has been using.
+     *
+     * <p>Older versions also looked for a settings file next to the jar. That
+     * is deliberately not read any more. It made the settings depend on where
+     * the program had been copied to, which is exactly what this folder exists
+     * to avoid.
+     */
+    private static void migrateFromPreviousLocation() {
+        migrate(AppPaths.previousDataDirectory(), AppPaths.dataDirectory());
+    }
+
+    /** Package-private so the copying rules can be tested against real files. */
+    static void migrate(Path previous, Path current) {
+        if (previous == null || current.equals(previous) || !Files.isDirectory(previous)) {
             return;
         }
-        try {
-            File jar = new File(AppConfig.class.getProtectionDomain().getCodeSource().getLocation().toURI());
-            Path legacy = (jar.isFile() ? jar.getParentFile().toPath() : Path.of(System.getProperty("user.dir")))
-                    .resolve(USER_SETTINGS_FILE);
-            if (Files.isRegularFile(legacy)) {
-                Files.copy(legacy, userSettingsFile, StandardCopyOption.COPY_ATTRIBUTES);
-                logger.info("Migrated legacy settings from {}", legacy);
+        for (String name : MOVED_FROM_ROAMING) {
+            Path from = previous.resolve(name);
+            Path to = current.resolve(name);
+            try {
+                if (Files.isRegularFile(from) && !Files.exists(to)) {
+                    Files.copy(from, to, StandardCopyOption.COPY_ATTRIBUTES);
+                    logger.info("Brought {} across from {}", name, previous);
+                }
+            } catch (Exception e) {
+                logger.warn("Could not bring {} across from {}: {}", name, previous, e.getMessage());
             }
-        } catch (Exception e) {
-            logger.debug("No legacy settings to migrate: {}", e.getMessage());
         }
     }
 

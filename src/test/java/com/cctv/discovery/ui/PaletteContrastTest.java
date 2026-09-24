@@ -241,6 +241,32 @@ class PaletteContrastTest {
      * its own assumptions and so still passed while a midnight button sat on a
      * midnight surface at 1.37:1.
      */
+    /**
+     * What a button variant actually renders as in the dark theme.
+     *
+     * <p>Not simply "the dark sheet's rule, or the light one if it has none".
+     * The dark sheet restates plain {@code .button}, and JavaFX breaks equal
+     * specificity by declaration order, so that rule beats every variant
+     * declared earlier in app.css. A variant the dark sheet does not restate is
+     * therefore painted as a plain button, whatever app.css says. Modelling
+     * that is the point: an earlier version of this check took the light value
+     * as the fallback and so passed while the Reset button rendered sage
+     * instead of red.
+     */
+    private static String darkValue(String dark, String light, String selector, String property,
+                                    Map<String, String> darkRoles, Map<String, String> lightRoles) {
+        String own = declaredValue(dark, selector, property);
+        if (own != null) {
+            return resolve(own, darkRoles);
+        }
+        String overriddenByPlainButton = selector.equals(".button")
+                ? null : declaredValue(dark, ".button", property);
+        if (overriddenByPlainButton != null) {
+            return resolve(overriddenByPlainButton, darkRoles);
+        }
+        return resolve(declaredValue(light, selector, property), darkRoles.isEmpty() ? lightRoles : darkRoles);
+    }
+
     @Test
     @DisplayName("Every button fill separates from the surface behind it")
     void controlsSeparateFromTheirSurface() throws Exception {
@@ -255,15 +281,25 @@ class PaletteContrastTest {
         String darkPanel = resolve(darkRoles.get("-app-surface-quiet"), darkRoles);
         assertTrue(lightPanel != null && darkPanel != null, "both themes must define -app-surface-quiet");
 
-        for (String selector : List.of(".button", ".button-success")) {
+        for (String selector : List.of(".button", ".button-success", ".button-danger")) {
             String lightFill = resolve(declaredValue(light, selector, "-fx-background-color"), lightRoles);
             assertTrue(lightFill != null, "light theme declares no fill for " + selector);
             assertComponent("light " + selector, lightFill, lightPanel);
 
-            String darkDeclared = declaredValue(dark, selector, "-fx-background-color");
-            String darkFill = darkDeclared == null ? lightFill : resolve(darkDeclared, darkRoles);
+            String darkFill = darkValue(dark, light, selector, "-fx-background-color", darkRoles, lightRoles);
             assertTrue(darkFill != null, "dark theme declares an unresolvable fill for " + selector);
             assertComponent("dark " + selector, darkFill, darkPanel);
+        }
+
+        // A variant that the dark sheet forgets to restate is not merely off
+        // palette, it is indistinguishable from an ordinary button.
+        String plainDark = resolve(declaredValue(dark, ".button", "-fx-background-color"), darkRoles);
+        for (String selector : List.of(".button-success", ".button-danger")) {
+            String darkFill = darkValue(dark, light, selector, "-fx-background-color", darkRoles, lightRoles);
+            assertFalse(darkFill.equals(plainDark), String.format(
+                    "dark %s renders as a plain button (%s): the dark sheet restates .button after "
+                            + "app.css declares this variant, so it must restate the variant too",
+                    selector, darkFill));
         }
 
         // The secondary button is outlined, so its border carries the boundary.
@@ -293,6 +329,68 @@ class PaletteContrastTest {
                 }
             }
         }
+    }
+
+    /**
+     * The modals are one family now, so the pieces {@code Modals} gives every
+     * dialog have to exist and have to be readable in both themes.
+     */
+    @Test
+    @DisplayName("Every dialog's header, body and chosen option are readable")
+    void dialogChromeIsReadable() throws Exception {
+        String light = read("/css/app.css");
+        String dark = read("/css/dark.css");
+
+        for (String selector : List.of(".app-dialog", ".dialog-header", ".dialog-headline",
+                ".dialog-subhead", ".dialog-content", ".choice-card", ".choice-card-selected", ".badge")) {
+            assertTrue(light.contains(selector + " ") || light.contains(selector + ",")
+                            || light.contains(selector + "\n"),
+                    selector + " is missing from app.css, so Modals would render it unstyled");
+        }
+
+        for (String[] theme : new String[][]{{"light", light}, {"dark", dark}}) {
+            Map<String, String> themeRoles = roles(theme[1]);
+            String header = resolve(declaredValue(theme[1], ".dialog-header", "-fx-background-color"), themeRoles);
+            if (header == null) {
+                continue; // the light sheet supplies it for both
+            }
+            String headline = resolve(declaredValue(theme[1], ".dialog-headline", "-fx-text-fill"), themeRoles);
+            String subhead = resolve(declaredValue(theme[1], ".dialog-subhead", "-fx-text-fill"), themeRoles);
+            assertText(theme[0] + " dialog headline", headline, header);
+            assertText(theme[0] + " dialog subhead", subhead, header);
+        }
+    }
+
+    @Test
+    @DisplayName("The chosen card is marked by something that meets 3:1, not by a wash")
+    void selectedCardIsDistinguishable() throws Exception {
+        String light = read("/css/app.css");
+        String dark = read("/css/dark.css");
+
+        for (String[] theme : new String[][]{{"light", light, light}, {"dark", dark, light}}) {
+            Map<String, String> themeRoles = roles(theme[1]);
+            if (!themeRoles.containsKey("-app-accent")) {
+                continue;
+            }
+            // The rules themselves live in the base sheet; only the roles change.
+            Map<String, String> merged = new LinkedHashMap<>(roles(theme[2]));
+            merged.putAll(themeRoles);
+
+            String card = resolve(declaredValue(light, ".choice-card", "-fx-background-color"), merged);
+            String border = resolve(declaredValue(light, ".choice-card-selected", "-fx-border-color"), merged);
+            String wash = resolve(declaredValue(light, ".choice-card-selected", "-fx-background-color"), merged);
+            String text = resolve(merged.get("-app-text"), merged);
+
+            assertComponent(theme[0] + " selected card border", border, card);
+            assertText(theme[0] + " text on the selected card", text, wash);
+        }
+    }
+
+    private static void assertText(String what, String foreground, String background) {
+        assertTrue(foreground != null && background != null, what + ": colours could not be resolved");
+        double ratio = contrast(foreground, background);
+        assertTrue(ratio >= AA, String.format(
+                "%s: %s on %s is %.2f:1, below AA", what, foreground, background, ratio));
     }
 
     private static void assertComponent(String what, String fill, String surface) {
