@@ -8,6 +8,7 @@ import javafx.scene.control.ButtonType;
 import javafx.scene.control.Dialog;
 import javafx.scene.control.DialogPane;
 import javafx.scene.control.Label;
+import javafx.scene.control.Tooltip;
 import javafx.scene.image.Image;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
@@ -42,7 +43,7 @@ public final class Modals {
      * and grow past it rather than truncating when the label names the action.
      */
     private static final double BUTTON_MIN_WIDTH = 96;
-    private static final double BUTTON_HEIGHT = 30;
+    private static final double BUTTON_MIN_HEIGHT = 30;
 
     private static Stage owner;
     private static Image icon;
@@ -99,6 +100,19 @@ public final class Modals {
         dialog.setOnShown(event -> applyIcon(pane));
     }
 
+    /**
+     * A tooltip that appears promptly, wraps, and stays long enough to read a
+     * full sentence. JavaFX defaults hide after a few seconds.
+     */
+    public static Tooltip tip(String text) {
+        Tooltip tooltip = new Tooltip(text);
+        tooltip.setShowDelay(javafx.util.Duration.millis(350));
+        tooltip.setShowDuration(javafx.util.Duration.seconds(30));
+        tooltip.setWrapText(true);
+        tooltip.setMaxWidth(340);
+        return tooltip;
+    }
+
     /** The content area, with the padding and spacing every dialog uses. */
     public static VBox content(Node... children) {
         VBox box = new VBox(10, children);
@@ -132,8 +146,9 @@ public final class Modals {
             button.getStyleClass().add(styleClass);
         }
         button.setMinWidth(BUTTON_MIN_WIDTH);
-        button.setMinHeight(BUTTON_HEIGHT);
-        button.setPrefHeight(BUTTON_HEIGHT);
+        // A floor, not a fixed height. Pinning the height clipped the descenders
+        // off a button whose padding and font need more than the floor.
+        button.setMinHeight(BUTTON_MIN_HEIGHT);
         return button;
     }
 
