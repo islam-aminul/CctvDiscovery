@@ -176,7 +176,7 @@ public class SettingsDialog extends Stage {
         GridPane inputGrid = new GridPane();
         inputGrid.setHgap(8);
         inputGrid.setVgap(6);
-        inputGrid.setStyle("-fx-background-color: #f5f5f5; -fx-padding: 8;");
+        inputGrid.getStyleClass().add("input-group");
 
         Label lblMain = new Label("Main Stream Path:");
         lblMain.setMinWidth(120);
@@ -191,7 +191,6 @@ public class SettingsDialog extends Stage {
         tfSubPath.setPrefWidth(350);
 
         Button btnAdd = new Button("Add Path Pair");
-        btnAdd.setStyle("-fx-background-color: #0078d4; -fx-text-fill: white; -fx-font-weight: bold;");
         btnAdd.setPrefWidth(350);
         btnAdd.setMaxWidth(350);
         btnAdd.setOnAction(e -> addPathPair());
@@ -213,7 +212,7 @@ public class SettingsDialog extends Stage {
         // Remove button - center aligned
         Button btnRemove = new Button("Remove Selected");
         btnRemove.setPrefWidth(150);
-        btnRemove.setStyle("-fx-background-color: #ffc107; -fx-text-fill: black; -fx-font-weight: bold;");
+        btnRemove.getStyleClass().add("button-secondary");
         btnRemove.setOnAction(e -> removeSelectedPair());
 
         HBox removeBox = new HBox(8);
@@ -222,7 +221,7 @@ public class SettingsDialog extends Stage {
 
         Label lblNote = new Label(
                 "💡 Tip: Main stream is usually high quality, Sub stream is lower quality for bandwidth saving");
-        lblNote.setStyle("-fx-text-fill: #0066cc; -fx-font-size: 10px; -fx-font-style: italic;");
+        lblNote.getStyleClass().add("hint-label");
         lblNote.setWrapText(true);
 
         vbox.getChildren().addAll(lblTitle, lblHelp, inputGrid, lblPairs, lvPathPairs, removeBox, lblNote);
@@ -279,7 +278,7 @@ public class SettingsDialog extends Stage {
 
         Label lblNote = new Label(
                 "💡 Tip: Frame Capture is recommended for accurate production audits. Use SDP Only for quick preliminary scans.");
-        lblNote.setStyle("-fx-text-fill: #0066cc; -fx-font-size: 10px; -fx-font-style: italic;");
+        lblNote.getStyleClass().add("hint-label");
         lblNote.setWrapText(true);
 
         vbox.getChildren().addAll(lblTitle, lblHelp, radioBox, lblTimeout, timeoutBox, lblNote);
@@ -357,7 +356,7 @@ public class SettingsDialog extends Stage {
 
         Button btnReset = new Button("Reset to Defaults");
         btnReset.setPrefWidth(150);
-        btnReset.setStyle("-fx-background-color: #dc3545; -fx-text-fill: white; -fx-font-weight: bold;");
+        btnReset.getStyleClass().add("button-danger");
         btnReset.setOnAction(e -> resetToDefaults());
 
         Button btnCancel = new Button("Cancel");

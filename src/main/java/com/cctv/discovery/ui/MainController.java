@@ -5,6 +5,7 @@ import com.cctv.discovery.discovery.NetworkScanner;
 import com.cctv.discovery.discovery.StreamAnalyzer;
 import com.cctv.discovery.export.ExcelExporter;
 import com.cctv.discovery.export.ReportWriter;
+import com.cctv.discovery.export.ScanReader;
 import com.cctv.discovery.model.Credential;
 import com.cctv.discovery.model.Device;
 import com.cctv.discovery.model.Finding;
@@ -397,7 +398,7 @@ public class MainController {
         lblIpCount.getStyleClass().add("label-info");
         lblIpCount.setAlignment(Pos.CENTER);
         lblIpCount.setMaxWidth(Double.MAX_VALUE);
-        lblIpCount.setStyle("-fx-font-weight: bold; -fx-text-fill: #0078d4;");
+        lblIpCount.getStyleClass().add("count-label");
 
         // Event handlers
         rbInterface.setOnAction(e -> updateNetworkMode());
@@ -468,12 +469,11 @@ public class MainController {
                 // Real-time validation
                 textField.textProperty().addListener((obs, oldVal, newVal) -> {
                     if (newVal == null || newVal.trim().isEmpty()) {
-                        textField.setStyle("");
+                        textField.getStyleClass().remove("field-invalid");
                     } else if (NetworkUtils.isValidIP(newVal.trim())) {
-                        textField.setStyle("");
+                        textField.getStyleClass().remove("field-invalid");
                     } else {
-                        textField.setStyle(
-                                "-fx-border-color: #dc3545; -fx-border-width: 2px; -fx-background-color: #fff5f5;");
+                        textField.getStyleClass().add("field-invalid");
                     }
                 });
 
@@ -564,12 +564,11 @@ public class MainController {
                 // Real-time validation
                 textField.textProperty().addListener((obs, oldVal, newVal) -> {
                     if (newVal == null || newVal.trim().isEmpty()) {
-                        textField.setStyle("");
+                        textField.getStyleClass().remove("field-invalid");
                     } else if (NetworkUtils.isValidIP(newVal.trim())) {
-                        textField.setStyle("");
+                        textField.getStyleClass().remove("field-invalid");
                     } else {
-                        textField.setStyle(
-                                "-fx-border-color: #dc3545; -fx-border-width: 2px; -fx-background-color: #fff5f5;");
+                        textField.getStyleClass().add("field-invalid");
                     }
                 });
 
@@ -655,13 +654,13 @@ public class MainController {
         Button btnAddRange = new Button("Add IP Range");
         btnAddRange.setPrefWidth(120);
         btnAddRange.setPrefHeight(30);
-        btnAddRange.setStyle("-fx-background-color: #28a745; -fx-text-fill: white; -fx-font-weight: bold;");
+        btnAddRange.getStyleClass().add("button-success");
         btnAddRange.setOnAction(e -> addIpRange());
 
         Button btnRemoveRange = new Button("Remove Selected");
         btnRemoveRange.setPrefWidth(120);
         btnRemoveRange.setPrefHeight(30);
-        btnRemoveRange.setStyle("-fx-background-color: #ffc107; -fx-text-fill: black; -fx-font-weight: bold;");
+        btnRemoveRange.getStyleClass().add("button-secondary");
         btnRemoveRange.setOnAction(e -> {
             IpRangeItem selected = tvIpRanges.getSelectionModel().getSelectedItem();
             if (selected != null) {
@@ -690,12 +689,11 @@ public class MainController {
                 // Real-time validation
                 textField.textProperty().addListener((obs, oldVal, newVal) -> {
                     if (newVal == null || newVal.trim().isEmpty()) {
-                        textField.setStyle("");
+                        textField.getStyleClass().remove("field-invalid");
                     } else if (isValidCidr(newVal.trim())) {
-                        textField.setStyle("");
+                        textField.getStyleClass().remove("field-invalid");
                     } else {
-                        textField.setStyle(
-                                "-fx-border-color: #dc3545; -fx-border-width: 2px; -fx-background-color: #fff5f5;");
+                        textField.getStyleClass().add("field-invalid");
                     }
                 });
 
@@ -763,13 +761,13 @@ public class MainController {
         Button btnAddCidr = new Button("Add CIDR");
         btnAddCidr.setPrefWidth(120);
         btnAddCidr.setPrefHeight(30);
-        btnAddCidr.setStyle("-fx-background-color: #28a745; -fx-text-fill: white; -fx-font-weight: bold;");
+        btnAddCidr.getStyleClass().add("button-success");
         btnAddCidr.setOnAction(e -> addCidr());
 
         Button btnRemoveCidr = new Button("Remove Selected");
         btnRemoveCidr.setPrefWidth(120);
         btnRemoveCidr.setPrefHeight(30);
-        btnRemoveCidr.setStyle("-fx-background-color: #ffc107; -fx-text-fill: black; -fx-font-weight: bold;");
+        btnRemoveCidr.getStyleClass().add("button-secondary");
         btnRemoveCidr.setOnAction(e -> {
             CidrItem selected = tvCidrs.getSelectionModel().getSelectedItem();
             if (selected != null) {
@@ -784,7 +782,7 @@ public class MainController {
         lblAdvancedIpCount.getStyleClass().add("label-info");
         lblAdvancedIpCount.setAlignment(Pos.CENTER);
         lblAdvancedIpCount.setMaxWidth(Double.MAX_VALUE);
-        lblAdvancedIpCount.setStyle("-fx-font-weight: bold; -fx-text-fill: #0078d4;");
+        lblAdvancedIpCount.getStyleClass().add("count-label");
 
         vbox.getChildren().addAll(
                 lblInterfaces, lvNetworkInterfaces,
@@ -865,7 +863,6 @@ public class MainController {
 
         lblVerificationSummary = new Label(getVerificationSummaryText(selectedValidationMethod));
         lblVerificationSummary.getStyleClass().add("label-info");
-        lblVerificationSummary.setStyle("-fx-font-style: italic; -fx-text-fill: #0078d4;");
         lblVerificationSummary.setWrapText(true);
 
         vbox.getChildren().addAll(lblTitle, btnVerificationMethod, lblVerificationSummary);
@@ -972,12 +969,12 @@ public class MainController {
             Button okBtn = (Button) dialog.getDialogPane().lookupButton(okButton);
             Button cancelBtn = (Button) dialog.getDialogPane().lookupButton(cancelButton);
             if (okBtn != null) {
-                okBtn.setStyle(
-                        "-fx-background-color: #28a745; -fx-text-fill: white; -fx-font-weight: bold; -fx-pref-width: 80px; -fx-pref-height: 30px;");
+                okBtn.getStyleClass().add("button-success");
+                okBtn.setPrefSize(80, 30);
             }
             if (cancelBtn != null) {
-                cancelBtn.setStyle(
-                        "-fx-background-color: #6c757d; -fx-text-fill: white; -fx-font-weight: bold; -fx-pref-width: 80px; -fx-pref-height: 30px;");
+                cancelBtn.getStyleClass().add("button-secondary");
+                cancelBtn.setPrefSize(80, 30);
             }
         });
 
@@ -1016,8 +1013,7 @@ public class MainController {
 
         if (recommended) {
             Label badge = new Label("Recommended");
-            badge.setStyle(
-                    "-fx-background-color: #28a745; -fx-text-fill: white; -fx-font-size: 9px; -fx-font-weight: bold; -fx-padding: 2 6; -fx-background-radius: 3;");
+            badge.getStyleClass().add("button-success");
             titleRow.getChildren().add(badge);
         }
 
@@ -1081,16 +1077,24 @@ public class MainController {
         Label lblTitle = new Label("5. Report");
         lblTitle.getStyleClass().add("section-title");
 
-        btnExport = new Button("Export to Excel...");
+        btnExport = new Button("Export report...");
         btnExport.setMaxWidth(Double.MAX_VALUE);
         btnExport.setPrefHeight(34);
         btnExport.setDisable(true);
         btnExport.setOnAction(e -> exportToExcel());
+
+        Button btnOpen = new Button("Open a saved scan...");
+        btnOpen.getStyleClass().add("button-secondary");
+        btnOpen.setMaxWidth(Double.MAX_VALUE);
+        btnOpen.setPrefHeight(30);
+        btnOpen.setOnAction(e -> openSavedScan());
+        btnOpen.setTooltip(tip("""
+                Load a scan previously exported as JSON, to review it or compare                 it with what is on site now."""));
         btnExport.setTooltip(tip("""
                 Write the findings to an Excel workbook. You choose whether to \
                 include camera passwords and whether to encrypt the file."""));
 
-        vbox.getChildren().addAll(lblTitle, btnExport);
+        vbox.getChildren().addAll(lblTitle, btnExport, btnOpen);
         return vbox;
     }
 
@@ -1490,13 +1494,13 @@ public class MainController {
         textField.textProperty().addListener((observable, oldValue, newValue) -> {
             if (newValue == null || newValue.trim().isEmpty()) {
                 // Empty field - remove styling
-                textField.setStyle("");
+                textField.getStyleClass().remove("field-invalid");
             } else if (NetworkUtils.isValidIP(newValue.trim())) {
                 // Valid IP - remove error styling
-                textField.setStyle("");
+                textField.getStyleClass().remove("field-invalid");
             } else {
                 // Invalid IP - show red styling
-                textField.setStyle("-fx-border-color: #dc3545; -fx-border-width: 2px; -fx-background-color: #fff5f5;");
+                textField.getStyleClass().add("field-invalid");
             }
         });
     }
@@ -1901,10 +1905,10 @@ public class MainController {
 
         if (anySuccess) {
             // Green if any devices have streams
-            btnExport.setStyle("-fx-background-color: #28a745; -fx-text-fill: white; -fx-font-weight: bold;");
+            btnExport.getStyleClass().add("button-success");
         } else {
             // Amber if all devices failed
-            btnExport.setStyle("-fx-background-color: #ffc107; -fx-text-fill: black; -fx-font-weight: bold;");
+            btnExport.getStyleClass().add("button-secondary");
         }
     }
 
@@ -2150,12 +2154,12 @@ public class MainController {
             Button cancelBtn = (Button) dialog.getDialogPane().lookupButton(cancelButton);
 
             if (retryBtn != null) {
-                retryBtn.setStyle(
-                        "-fx-background-color: #28a745; -fx-text-fill: white; -fx-font-weight: bold; -fx-pref-width: 80px; -fx-pref-height: 30px;");
+                retryBtn.getStyleClass().add("button-success");
+                retryBtn.setPrefSize(80, 30);
             }
             if (cancelBtn != null) {
-                cancelBtn.setStyle(
-                        "-fx-background-color: #6c757d; -fx-text-fill: white; -fx-font-weight: bold; -fx-pref-width: 80px; -fx-pref-height: 30px;");
+                cancelBtn.getStyleClass().add("button-secondary");
+                cancelBtn.setPrefSize(80, 30);
             }
         });
 
@@ -2301,6 +2305,65 @@ public class MainController {
         } catch (Exception e) {
             logger.error("Export failed", e);
             showAlert("Could not save the report", e.getMessage(), Alert.AlertType.ERROR);
+        }
+    }
+
+    /**
+     * Load a scan saved as JSON, replacing what is on screen.
+     *
+     * <p>Loaded devices are shown exactly as they were recorded; nothing is
+     * re-probed, so the view is a record of that survey rather than of the
+     * network now.
+     */
+    private void openSavedScan() {
+        if (discoveryInProgress) {
+            showAlert("Scan running", "Stop the scan before opening a saved one.", Alert.AlertType.WARNING);
+            return;
+        }
+        if (!devices.isEmpty()) {
+            Alert confirm = new Alert(Alert.AlertType.CONFIRMATION,
+                    "Opening a saved scan replaces the results on screen. Export them first if you need them.",
+                    ButtonType.OK, ButtonType.CANCEL);
+            confirm.setTitle("Replace these results?");
+            confirm.setHeaderText(null);
+            if (confirm.showAndWait().orElse(ButtonType.CANCEL) != ButtonType.OK) {
+                return;
+            }
+        }
+
+        FileChooser chooser = new FileChooser();
+        chooser.setTitle("Open a saved scan");
+        File initialDir = new File(config.getExportDefaultDirectory());
+        chooser.setInitialDirectory(initialDir.isDirectory()
+                ? initialDir : new File(System.getProperty("user.home")));
+        chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Saved scan", "*.json"));
+
+        File file = chooser.showOpenDialog(primaryStage);
+        if (file == null) {
+            return;
+        }
+
+        try {
+            ScanReader.Scan scan = ScanReader.read(file.toPath());
+            devices.setAll(scan.devices());
+            showDeviceDetails(null);
+            updateResultSummary();
+            discoveryCompleted = true;
+            btnExport.setDisable(devices.isEmpty());
+            updateExportButtonColor();
+            progressBar.setProgress(1.0);
+            lblProgress.setText(String.format("Opened %s (%s)",
+                    scan.site() == null ? file.getName() : scan.site(),
+                    scan.generated() == null ? "date unknown" : scan.generated()));
+            if (!scan.includedCredentials()) {
+                lblProgress.setText(lblProgress.getText() + " — saved without credentials");
+            }
+            logger.info("Opened a saved scan of {} device(s) from {}", scan.devices().size(), file);
+        } catch (ScanReader.NotAScanException e) {
+            showAlert("Not a saved scan", e.getMessage(), Alert.AlertType.WARNING);
+        } catch (Exception e) {
+            logger.error("Could not open {}", file, e);
+            showAlert("Could not open that file", String.valueOf(e.getMessage()), Alert.AlertType.ERROR);
         }
     }
 
@@ -2540,13 +2603,11 @@ public class MainController {
 
         // User Manual and Close buttons - horizontally aligned
         Button btnUserManual = new Button("Open User Manual");
-        btnUserManual.setStyle(
-                "-fx-background-color: #0078d4; -fx-text-fill: white; -fx-font-weight: bold; -fx-pref-height: 30px;");
         btnUserManual.setOnAction(e -> openUserManual());
 
         Button btnCloseHelp = new Button("Close");
-        btnCloseHelp.setStyle(
-                "-fx-background-color: #ffc107; -fx-text-fill: black; -fx-font-weight: bold; -fx-pref-width: 80px; -fx-pref-height: 30px;");
+        btnCloseHelp.getStyleClass().add("button-secondary");
+        btnCloseHelp.setPrefSize(80, 30);
         btnCloseHelp.setOnAction(e -> {
             dialog.setResult(null);
             dialog.close();
@@ -2751,12 +2812,12 @@ public class MainController {
             Button cancelBtn = (Button) dialog.getDialogPane().lookupButton(cancelButton);
 
             if (okBtn != null) {
-                okBtn.setStyle(
-                        "-fx-background-color: #28a745; -fx-text-fill: white; -fx-font-weight: bold; -fx-pref-width: 80px; -fx-pref-height: 30px;");
+                okBtn.getStyleClass().add("button-success");
+                okBtn.setPrefSize(80, 30);
             }
             if (cancelBtn != null) {
-                cancelBtn.setStyle(
-                        "-fx-background-color: #6c757d; -fx-text-fill: white; -fx-font-weight: bold; -fx-pref-width: 80px; -fx-pref-height: 30px;");
+                cancelBtn.getStyleClass().add("button-secondary");
+                cancelBtn.setPrefSize(80, 30);
             }
         });
 
@@ -2864,7 +2925,6 @@ public class MainController {
         btnAddCredential = new Button("Add Credential");
         btnAddCredential.setMaxWidth(Double.MAX_VALUE);
         btnAddCredential.setPrefHeight(30);
-        btnAddCredential.setStyle("-fx-background-color: #0078d4; -fx-text-fill: white; -fx-font-weight: bold;");
         btnAddCredential.setOnAction(e -> addCredential());
 
         // Credentials list
@@ -2891,8 +2951,7 @@ public class MainController {
         dialog.setOnShowing(dialogEvent -> {
             Button okBtn = (Button) dialog.getDialogPane().lookupButton(okButton);
             if (okBtn != null) {
-                okBtn.setStyle(
-                        "-fx-background-color: #0078d4; -fx-text-fill: white; -fx-font-weight: bold; -fx-pref-width: 80px; -fx-pref-height: 30px;");
+                okBtn.setPrefSize(80, 30);
             }
         });
 
@@ -2907,10 +2966,8 @@ public class MainController {
         int count = credentials.size();
         if (count == 0) {
             lblCredentialSummary.setText("No credentials added");
-            lblCredentialSummary.setStyle("-fx-font-style: italic; -fx-text-fill: #0078d4;");
         } else {
             lblCredentialSummary.setText(String.format("%d credential%s added", count, count > 1 ? "s" : ""));
-            lblCredentialSummary.setStyle("-fx-font-style: italic; -fx-text-fill: #0078d4;");
         }
     }
 

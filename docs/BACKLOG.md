@@ -24,9 +24,6 @@ way. This replaces the point-in-time `PROJECT_REVIEW.md` that lived on the
 
 ### Product
 
-- **A saved scan cannot be loaded back.** JSON export writes the whole scan,
-  but nothing reads it in again, so two surveys of a site cannot be compared.
-  The reader is the missing half.
 - **Credentials are per-session.** They are entered again for every run. Stored
   profiles per site would need encryption at rest; decide where the key lives
   before building it.
@@ -81,3 +78,6 @@ Kept here so the same ground is not re-reviewed.
 | Vendor SDK ports ignored | Identify the family, and raise a finding when nothing else answers |
 | Excel the only export | CSV and JSON as well |
 | No dark theme | Light, dark, or follow the system |
+| Ad-hoc colours scattered through the code | One tri-tone palette in tokens; no hex values left in Java |
+| Contrast claimed, never measured | `PaletteContrastTest` reads the tokens and asserts every pairing |
+| A saved scan could not be reopened | JSON loads back, with its streams and findings |

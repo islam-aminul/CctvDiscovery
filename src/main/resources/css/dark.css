@@ -1,56 +1,92 @@
 /*
- * Dark theme, layered on top of app.css: it overrides colours only, so layout
- * and spacing stay in one place.
+ * Dark theme. Layered over app.css, so it redefines the role tokens and the
+ * few places the base sheet names a paper colour directly; layout stays in
+ * one file.
  *
- * Contrast against the #1E1E1E background is kept at or above 4.5:1 for body
- * text, because a survey is often run in a plant room or a badly lit corridor.
+ * Midnight becomes the surface rather than the accent: surface-900 for the
+ * window, surface-800 for panels, midnight-700 for raised chrome. Teal and
+ * Sage move to their 300/400 stops, which is where they carry AA on those
+ * surfaces (teal-300 on surface-900 is 9.33:1, sage-300 11.02:1).
+ *
+ * Measured, not assumed; scripts/palette.py prints the table.
  */
 
 .root {
-    -fx-background-color: #1E1E1E;
-    -fx-text-fill: #E0E0E0;
+    -app-background: -surface-900;
+    -app-surface: -surface-800;
+    -app-surface-quiet: #171A3E;
+    -app-border: #2E3260;
+    -app-text: -paper-100;
+    -app-text-quiet: -sage-400;
+    -app-primary: -midnight-300;
+    -app-primary-hover: #343A80;
+    -app-danger: #C2564E;
+    -app-danger-hover: #D4675E;
+    -app-warning-text: #E0B252;
+
+    -fx-background-color: -app-background;
+    -fx-text-fill: -app-text;
 }
 
-.left-panel,
-.scroll-pane,
-.scroll-pane > .viewport {
-    -fx-background-color: #252526;
+/* Header: raised above the window rather than a band of a different hue. */
+.app-header {
+    -fx-background-color: -midnight-700;
+    -fx-border-color: #2E3260;
 }
 
-.split-pane {
-    -fx-background-color: #1E1E1E;
+.app-header .header-organisation {
+    -fx-text-fill: -sage-400;
 }
 
-.split-pane-divider {
-    -fx-background-color: #3A3A3C;
+.header-button {
+    -fx-background-color: -teal-700;
 }
 
-.label {
-    -fx-text-fill: #E0E0E0;
+.header-button:hover {
+    -fx-background-color: -teal-600;
 }
 
-.header-title {
-    -fx-text-fill: #6CB6FF;
+.header-button-secondary {
+    -fx-background-color: -sage-700;
 }
 
+.header-button-secondary:hover {
+    -fx-background-color: -sage-600;
+}
+
+/* Typography */
 .section-title {
-    -fx-text-fill: #C8C8C8;
-}
-
-.summary-label {
-    -fx-text-fill: #9AA7B0;
+    -fx-text-fill: -paper-200;
 }
 
 .label-info {
-    -fx-text-fill: #6CB6FF;
+    -fx-text-fill: -teal-300;
 }
 
-.label-warning {
-    -fx-text-fill: #FFB74D;
+/* Buttons: midnight is the surface now, so primary lifts to its 300 stop. */
+.button:pressed {
+    -fx-background-color: -midnight-600;
 }
 
-.label-error {
-    -fx-text-fill: #FF8A80;
+.button:disabled {
+    -fx-background-color: #23264D;
+    -fx-text-fill: #6E7796;
+}
+
+.button-success {
+    -fx-background-color: -teal-700;
+}
+
+.button-success:hover {
+    -fx-background-color: -teal-600;
+}
+
+.button-secondary {
+    -fx-background-color: -sage-700;
+}
+
+.button-secondary:hover {
+    -fx-background-color: -sage-600;
 }
 
 /* Inputs */
@@ -58,116 +94,104 @@
 .text-area,
 .text-area .content,
 .password-field,
-.combo-box,
-.combo-box .list-cell {
-    -fx-background-color: #2D2D30;
-    -fx-text-fill: #E0E0E0;
-    -fx-prompt-text-fill: #8A8A8A;
-    -fx-border-color: #4A4A4D;
+.combo-box {
+    -fx-background-color: #1B1E46;
+    -fx-prompt-text-fill: #7A82A6;
 }
 
 .text-field:focused,
 .text-area:focused,
 .password-field:focused,
 .combo-box:focused {
-    -fx-border-color: #6CB6FF;
+    -fx-border-color: -teal-400;
 }
 
 .combo-box-popup .list-view {
-    -fx-background-color: #2D2D30;
-    -fx-border-color: #4A4A4D;
-}
-
-.check-box,
-.radio-button {
-    -fx-text-fill: #E0E0E0;
+    -fx-background-color: #1B1E46;
+    -fx-border-color: -app-border;
 }
 
 .radio-button .radio,
 .check-box .box {
-    -fx-background-color: #2D2D30;
-    -fx-border-color: #6A6A6D;
+    -fx-background-color: #1B1E46;
+    -fx-border-color: -sage-600;
 }
 
 .radio-button:selected .radio,
 .check-box:selected .box {
-    -fx-background-color: #2F6FEB;
+    -fx-background-color: -teal-500;
+    -fx-border-color: -teal-500;
 }
 
-/* Buttons keep their meaning: blue for normal, green to go, red to stop. */
-.button {
-    -fx-background-color: #2F6FEB;
-    -fx-text-fill: white;
+/* Progress */
+.progress-bar {
+    -fx-accent: -teal-400;
 }
 
-.button:hover {
-    -fx-background-color: #4C86F0;
+.progress-bar > .track {
+    -fx-background-color: #1B1E46;
 }
 
-.button:disabled {
-    -fx-background-color: #3A3A3C;
-    -fx-text-fill: #7A7A7A;
-}
-
-.button-success {
-    -fx-background-color: #2EA043;
-}
-
-.button-success:hover {
-    -fx-background-color: #3FB950;
-}
-
-.button-danger {
-    -fx-background-color: #DA3633;
-}
-
-.button-danger:hover {
-    -fx-background-color: #F85149;
+.progress-bar > .bar {
+    -fx-background-color: -teal-400;
 }
 
 /* Tables */
 .table-view {
-    -fx-background-color: #1E1E1E;
-    -fx-border-color: #3A3A3C;
+    -fx-table-cell-border-color: #24284F;
 }
 
-.table-view .column-header,
 .table-view .column-header-background,
+.table-view .column-header,
 .table-view .filler {
-    -fx-background-color: #2D2D30;
+    -fx-background-color: -midnight-500;
 }
 
-.table-view .column-header .label {
-    -fx-text-fill: #D0D0D0;
+.table-view .column-header {
+    -fx-border-color: -midnight-400;
 }
 
 .table-row-cell {
-    -fx-background-color: #1E1E1E;
-    -fx-table-cell-border-color: #2A2A2C;
+    -fx-background-color: -surface-800;
 }
 
 .table-row-cell:odd {
-    -fx-background-color: #232325;
+    -fx-background-color: #171A3B;
 }
 
 .table-cell {
-    -fx-text-fill: #D8D8D8;
-}
-
-.table-view .placeholder .label {
-    -fx-text-fill: #8A8A8A;
+    -fx-text-fill: -paper-200;
 }
 
 /*
- * Result rows. The same five states as the light theme, darkened so the text
- * stays legible, and each keeps its distinct weight or style.
+ * The focused row takes a light background from the base control stylesheet.
+ * Left alone, the first row of a table rendered as a pale band with
+ * unreadable text on it.
  */
+.table-row-cell:filled:focused {
+    -fx-background-color: #1D2049;
+}
+
+.table-row-cell:filled:focused:odd {
+    -fx-background-color: #20244F;
+}
+
+.table-row-cell:filled:selected,
+.table-row-cell:filled:focused:selected {
+    -fx-background-color: -midnight-300;
+}
+
+.table-row-cell:filled:selected .table-cell {
+    -fx-text-fill: -paper-0;
+}
+
+/* Result rows: the same five states, on midnight rather than paper. */
 .table-row-cell.row-completed {
-    -fx-background-color: #14301C;
+    -fx-background-color: #10322C;
 }
 
 .table-row-cell.row-completed .table-cell {
-    -fx-text-fill: #7EE787;
+    -fx-text-fill: -teal-300;
 }
 
 .table-row-cell.row-working {
@@ -175,193 +199,118 @@
 }
 
 .table-row-cell.row-working .table-cell {
-    -fx-text-fill: #E3B341;
+    -fx-text-fill: -app-warning-text;
     -fx-font-style: italic;
 }
 
 .table-row-cell.row-auth-failed {
-    -fx-background-color: #3A1618;
+    -fx-background-color: #3A1A18;
 }
 
 .table-row-cell.row-auth-failed .table-cell {
-    -fx-text-fill: #FF8A80;
+    -fx-text-fill: #F0958C;
 }
 
 .table-row-cell.row-unknown {
-    -fx-background-color: #2A2A2C;
+    -fx-background-color: #232645;
 }
 
 .table-row-cell.row-unknown .table-cell {
-    -fx-text-fill: #A0A0A0;
+    -fx-text-fill: -sage-300;
 }
 
 .table-row-cell.row-pending {
-    -fx-background-color: #10263A;
+    -fx-background-color: #1C2154;
 }
 
 .table-row-cell.row-pending .table-cell {
-    -fx-text-fill: #79C0FF;
-}
-
-.table-row-cell:selected {
-    -fx-background-color: #2F4A6D;
-}
-
-.table-row-cell:selected .table-cell {
-    -fx-text-fill: #FFFFFF;
+    -fx-text-fill: #9BA4E0;
 }
 
 .cell-flagged {
-    -fx-text-fill: #FF7B72;
-    -fx-font-weight: bold;
+    -fx-text-fill: #F0958C;
 }
 
 /* Lists */
-.list-view {
-    -fx-background-color: #1E1E1E;
-    -fx-border-color: #3A3A3C;
-}
-
 .list-cell {
-    -fx-background-color: #1E1E1E;
-    -fx-text-fill: #D8D8D8;
+    -fx-background-color: -surface-800;
+    -fx-text-fill: -paper-200;
 }
 
 .list-cell:filled:selected {
-    -fx-background-color: #2F4A6D;
+    -fx-background-color: -midnight-300;
+    -fx-text-fill: -paper-0;
 }
 
 .list-cell:filled:hover {
-    -fx-background-color: #2A3A4A;
+    -fx-background-color: #1D2049;
 }
 
 /* Details pane */
 .titled-pane > .title {
-    -fx-background-color: #2D2D30;
-    -fx-text-fill: #D0D0D0;
+    -fx-background-color: -midnight-600;
 }
 
-.titled-pane > .content {
-    -fx-background-color: #1E1E1E;
-    -fx-border-color: #3A3A3C;
+.titled-pane > .title > .text {
+    -fx-fill: -paper-200;
 }
 
-/* Progress */
-.progress-bar > .track {
-    -fx-background-color: #2D2D30;
-}
-
-.progress-bar > .bar {
-    -fx-background-color: #2F6FEB;
-}
-
-/* Dialogs, menus and tooltips */
-.dialog-pane {
-    -fx-background-color: #252526;
-}
-
-.dialog-pane .label,
-.dialog-pane .header-panel .label {
-    -fx-text-fill: #E0E0E0;
-}
-
+/* Dialogs, menus, chrome */
 .dialog-pane .header-panel {
-    -fx-background-color: #2D2D30;
+    -fx-background-color: -midnight-600;
 }
 
-.tab-pane .tab-header-background {
-    -fx-background-color: #2D2D30;
+.dialog-pane .header-panel .label {
+    -fx-text-fill: -paper-100;
 }
 
+.tab-pane .tab-header-background,
 .tab {
-    -fx-background-color: #2D2D30;
+    -fx-background-color: -midnight-600;
 }
 
 .tab:selected {
-    -fx-background-color: #1E1E1E;
+    -fx-background-color: -surface-800;
 }
 
 .tab .tab-label {
-    -fx-text-fill: #D0D0D0;
+    -fx-text-fill: -paper-200;
 }
 
 .context-menu {
-    -fx-background-color: #2D2D30;
-    -fx-border-color: #4A4A4D;
-}
-
-.menu-item .label {
-    -fx-text-fill: #E0E0E0;
+    -fx-background-color: #1B1E46;
+    -fx-border-color: -app-border;
 }
 
 .menu-item:hover,
 .menu-item:focused {
-    -fx-background-color: #2F4A6D;
-}
-
-.separator .line {
-    -fx-border-color: #3A3A3C;
+    -fx-background-color: -midnight-300;
 }
 
 .tooltip {
-    -fx-background-color: #3A3A3C;
-    -fx-text-fill: #F0F0F0;
+    -fx-background-color: -midnight-300;
+    -fx-text-fill: -paper-0;
 }
 
 .scroll-bar .thumb {
-    -fx-background-color: #4A4A4D;
+    -fx-background-color: -midnight-300;
 }
 
 .scroll-bar .track {
-    -fx-background-color: #252526;
+    -fx-background-color: -surface-800;
 }
 
-/* Header */
-.app-header {
-    -fx-background-color: #2D2D30;
-    -fx-border-color: #3A3A3C;
+/* Small text roles */
+.count-label,
+.hint-label {
+    -fx-text-fill: -teal-300;
 }
 
-.header-organisation {
-    -fx-text-fill: #9AA7B0;
+.input-group {
+    -fx-background-color: #1B1E46;
 }
 
-.header-button {
-    -fx-background-color: #2F6FEB;
-}
-
-.header-button-secondary {
-    -fx-background-color: #1F7A8C;
-}
-
-/* Blank area below the last row */
-.table-row-cell:empty {
-    -fx-background-color: transparent;
-}
-
-/* Section titles inside the details pane */
-.titled-pane > .title > .text {
-    -fx-fill: #D0D0D0;
-}
-
-/*
- * The focused row gets its own background from the base stylesheet, which is
- * light. Left alone, the first row of a table rendered as a white band with
- * pale text on it.
- */
-.table-row-cell:filled:focused {
-    -fx-background-color: #2A2A2C;
-}
-
-.table-row-cell:filled:focused:odd {
-    -fx-background-color: #2E2E30;
-}
-
-.table-row-cell:filled:selected,
-.table-row-cell:filled:focused:selected {
-    -fx-background-color: #2F4A6D;
-}
-
-.table-row-cell:filled:selected .table-cell {
-    -fx-text-fill: #FFFFFF;
+.field-invalid {
+    -fx-border-color: -app-danger;
+    -fx-background-color: #3A1A18;
 }

@@ -1,393 +1,555 @@
-/* CCTV Discovery Application Styles - Professional Flat Design */
+/*
+ * CCTV Discovery — base stylesheet.
+ *
+ * A disciplined tri-tone palette:
+ *   Midnight  carries authority: headers, primary buttons, dark surfaces.
+ *   Teal      is the signal accent: high-intent moments, links, success.
+ *   Sage      is the supporting voice: secondary actions, quiet accents.
+ *
+ * Each ramp runs 700 (darkest) to 300 (lightest). The 600 stop is not an even
+ * step: it is the lightest shade of its hue that still carries AA body text on
+ * paper, which is what makes the rule below true rather than aspirational.
+ * Teal and sage sit at different luminances, so an even step left teal at
+ * 4.23:1, below AA.
+ *
+ * Contrast rules, all measured (scripts/palette.py prints the numbers):
+ *   - Body text on light surfaces uses 600 or 700 only.
+ *     teal-600 on white 4.88:1, sage-600 4.90:1, midnight-600 15.90:1.
+ *   - 500/400/300 are fills, borders and decoration. Teal-500 on white is
+ *     3.50:1 and must never carry body text.
+ *   - White on a filled 600 or 700 is AA; the lowest is teal-600 at 4.88:1.
+ *   - Body text sits on paper-0 or paper-50. paper-100 and darker are chrome.
+ *   - Blends between the accents are decorative, never behind text.
+ */
 
 .root {
-    -fx-background-color: #f5f5f5;
-    -fx-font-family: "Segoe UI", "Arial", sans-serif;
+    /* Midnight: authority */
+    -midnight-700: #16183A;
+    -midnight-600: #1B1E46;
+    -midnight-500: #202453;
+    -midnight-400: #25295F;
+    -midnight-300: #2A2F6B;
+
+    /* Teal: signal */
+    -teal-700: #0B7568;
+    -teal-600: #157F70;
+    -teal-500: #2E9982;
+    -teal-400: #45B193;
+    -teal-300: #5DCAA5;
+
+    /* Sage: support */
+    -sage-700: #3E5648;
+    -sage-600: #607668;
+    -sage-500: #7F9385;
+    -sage-400: #9CAFA0;
+    -sage-300: #BACBBC;
+
+    /* Paper neutrals */
+    -paper-0: #FFFFFF;
+    -paper-50: #F8F9F8;
+    -paper-100: #F0F2F0;
+    -paper-200: #E3E7E4;
+    -paper-300: #CCD3CD;
+    -paper-400: #A8B2AA;
+
+    /* Midnight surfaces, used by the dark theme */
+    -surface-900: #0E1026;
+    -surface-800: #131431;
+
+    /* Roles the rest of the sheet refers to */
+    -app-background: -paper-100;
+    -app-surface: -paper-0;
+    -app-surface-quiet: -paper-50;
+    -app-border: -paper-300;
+    -app-text: -midnight-700;
+    -app-text-quiet: -sage-700;
+    -app-primary: -midnight-600;
+    -app-primary-hover: -midnight-500;
+    -app-danger: #8C2F2A;
+    -app-danger-hover: #A4382F;
+    -app-warning-text: #7A5000;
+
+    -fx-background-color: -app-background;
+    -fx-font-family: "Segoe UI", "Inter", "Arial", sans-serif;
     -fx-font-size: 13px;
+    -fx-text-fill: -app-text;
 }
 
-/* Split Pane */
+/* ---------------------------------------------------------------- Structure */
+
 .split-pane {
-    -fx-background-color: #ffffff;
+    -fx-background-color: -app-background;
+    -fx-padding: 0;
 }
 
 .split-pane-divider {
-    -fx-background-color: #e0e0e0;
+    -fx-background-color: -app-border;
     -fx-padding: 0 1 0 1;
 }
 
-/* Left Panel - Controls */
 .left-panel {
-    -fx-background-color: #fafafa;
-    -fx-padding: 15px;
+    -fx-background-color: -app-surface-quiet;
 }
 
-.scroll-pane {
-    -fx-background-color: transparent;
-}
-
+.scroll-pane,
 .scroll-pane > .viewport {
     -fx-background-color: transparent;
 }
 
-/* Header */
-.header-title {
-    -fx-font-size: 24px;
-    -fx-font-weight: bold;
-    -fx-text-fill: #1976D2;
+/*
+ * Header. A midnight band, the one place the darkest tone appears in the light
+ * theme, so the window has a clear anchor at the top.
+ */
+.app-header {
+    -fx-background-color: -midnight-700;
+    -fx-border-color: -midnight-500;
+    -fx-border-width: 0 0 1 0;
 }
 
-/* Section Titles */
+/*
+ * Scoped to .app-header so these beat the generic .label rule further down.
+ * JavaFX resolves equal specificity by declaration order, so a bare
+ * .header-title left the title dark-on-midnight and invisible.
+ */
+.app-header .label {
+    -fx-text-fill: -paper-0;
+}
+
+.app-header .header-title {
+    -fx-font-size: 22px;
+    -fx-font-weight: bold;
+    -fx-text-fill: -paper-0;
+}
+
+.app-header .header-organisation {
+    -fx-font-size: 11px;
+    -fx-text-fill: -sage-300;
+}
+
+/* Teal is the signal tone, so the primary header action carries it. */
+.header-button {
+    -fx-background-color: -teal-600;
+    -fx-text-fill: -paper-0;
+    -fx-font-weight: bold;
+}
+
+.header-button:hover {
+    -fx-background-color: -teal-500;
+}
+
+.header-button-secondary {
+    -fx-background-color: -sage-600;
+}
+
+.header-button-secondary:hover {
+    -fx-background-color: -sage-500;
+}
+
+/* --------------------------------------------------------------- Typography */
+
+.label {
+    -fx-text-fill: -app-text;
+}
+
 .section-title {
-    -fx-font-size: 14px;
+    -fx-font-size: 13px;
     -fx-font-weight: bold;
-    -fx-text-fill: #424242;
-    -fx-padding: 10px 0 5px 0;
+    -fx-text-fill: -midnight-600;
+    -fx-padding: 8px 0 2px 0;
 }
 
-/* Buttons */
+.summary-label {
+    -fx-text-fill: -app-text-quiet;
+    -fx-font-size: 11px;
+}
+
+.label-info {
+    -fx-text-fill: -teal-700;
+    -fx-font-size: 12px;
+}
+
+.label-warning {
+    -fx-text-fill: -app-warning-text;
+    -fx-font-weight: bold;
+}
+
+.label-error {
+    -fx-text-fill: -app-danger;
+    -fx-font-weight: bold;
+}
+
+/* ------------------------------------------------------------------ Buttons */
+
 .button {
-    -fx-background-color: #1976D2;
-    -fx-text-fill: white;
-    -fx-background-radius: 3px;
+    -fx-background-color: -app-primary;
+    -fx-text-fill: -paper-0;
+    -fx-background-radius: 4px;
     -fx-cursor: hand;
     -fx-padding: 8px 16px;
     -fx-font-weight: bold;
 }
 
 .button:hover {
-    -fx-background-color: #1565C0;
+    -fx-background-color: -app-primary-hover;
 }
 
 .button:pressed {
-    -fx-background-color: #0D47A1;
+    -fx-background-color: -midnight-700;
 }
 
 .button:disabled {
-    -fx-background-color: #BDBDBD;
-    -fx-text-fill: #757575;
+    -fx-background-color: -paper-300;
+    -fx-text-fill: -sage-700;
     -fx-cursor: default;
-    -fx-opacity: 0.6;
+    -fx-opacity: 1;
 }
 
-.button-secondary {
-    -fx-background-color: #757575;
-}
-
-.button-secondary:hover {
-    -fx-background-color: #616161;
-}
-
+/* Starting a scan is the high-intent moment, so it carries the signal tone. */
 .button-success {
-    -fx-background-color: #388E3C;
+    -fx-background-color: -teal-700;
 }
 
 .button-success:hover {
-    -fx-background-color: #2E7D32;
+    -fx-background-color: -teal-600;
+}
+
+.button-secondary {
+    -fx-background-color: -sage-600;
+}
+
+.button-secondary:hover {
+    -fx-background-color: -sage-500;
 }
 
 .button-danger {
-    -fx-background-color: #D32F2F;
+    -fx-background-color: -app-danger;
 }
 
 .button-danger:hover {
-    -fx-background-color: #C62828;
+    -fx-background-color: -app-danger-hover;
 }
 
-/* Text Fields */
-.text-field, .text-area {
-    -fx-background-color: white;
-    -fx-border-color: #BDBDBD;
-    -fx-border-radius: 3px;
-    -fx-background-radius: 3px;
+/* ------------------------------------------------------------------- Inputs */
+
+.text-field,
+.text-area,
+.password-field {
+    -fx-background-color: -app-surface;
+    -fx-text-fill: -app-text;
+    -fx-prompt-text-fill: -sage-600;
+    -fx-border-color: -app-border;
+    -fx-border-radius: 4px;
+    -fx-background-radius: 4px;
     -fx-padding: 6px 10px;
 }
 
-.text-field:focused, .text-area:focused {
-    -fx-border-color: #1976D2;
+.text-area .content {
+    -fx-background-color: -app-surface;
+}
+
+.text-field:focused,
+.text-area:focused,
+.password-field:focused {
+    -fx-border-color: -teal-600;
     -fx-border-width: 2px;
 }
 
-/* ComboBox */
 .combo-box {
-    -fx-background-color: white;
-    -fx-border-color: #BDBDBD;
-    -fx-border-radius: 3px;
-    -fx-background-radius: 3px;
+    -fx-background-color: -app-surface;
+    -fx-border-color: -app-border;
+    -fx-border-radius: 4px;
+    -fx-background-radius: 4px;
 }
 
 .combo-box:focused {
-    -fx-border-color: #1976D2;
+    -fx-border-color: -teal-600;
     -fx-border-width: 2px;
 }
 
-/* Radio Buttons */
-.radio-button {
-    -fx-text-fill: #424242;
+.combo-box .list-cell {
+    -fx-text-fill: -app-text;
+}
+
+.radio-button,
+.check-box {
+    -fx-text-fill: -app-text;
+}
+
+.radio-button .radio,
+.check-box .box {
+    -fx-border-color: -sage-500;
+    -fx-background-color: -app-surface;
 }
 
 .radio-button .radio {
-    -fx-border-color: #757575;
     -fx-border-radius: 1em;
 }
 
-.radio-button:selected .radio {
-    -fx-background-color: #1976D2;
+.radio-button:selected .radio,
+.check-box:selected .box {
+    -fx-background-color: -teal-700;
+    -fx-border-color: -teal-700;
 }
 
-/* Progress Bar */
+/* ----------------------------------------------------------------- Progress */
+
 .progress-bar {
-    -fx-accent: #1976D2;
+    -fx-accent: -teal-600;
 }
 
 .progress-bar > .track {
-    -fx-background-color: #E0E0E0;
-    -fx-background-radius: 3px;
+    -fx-background-color: -paper-200;
+    -fx-background-radius: 4px;
 }
 
 .progress-bar > .bar {
-    -fx-background-color: #1976D2;
-    -fx-background-radius: 3px;
+    -fx-background-color: -teal-600;
+    -fx-background-radius: 4px;
     -fx-padding: 4px;
 }
 
-/* Table View */
+/* ------------------------------------------------------------------- Tables */
+
 .table-view {
-    -fx-background-color: white;
-    -fx-border-color: #E0E0E0;
+    -fx-background-color: -app-surface;
+    -fx-border-color: -app-border;
+    -fx-table-cell-border-color: -paper-200;
+}
+
+.table-view .column-header-background,
+.table-view .column-header,
+.table-view .filler {
+    -fx-background-color: -midnight-600;
 }
 
 .table-view .column-header {
-    -fx-background-color: #EEEEEE;
-    -fx-font-weight: bold;
-    -fx-border-color: #E0E0E0;
-    -fx-padding: 8px;
+    -fx-border-color: -midnight-500;
+    -fx-padding: 6px;
 }
 
-.table-view .column-header-background {
-    -fx-background-color: #FAFAFA;
+.table-view .column-header .label {
+    -fx-text-fill: -paper-0;
+    -fx-font-weight: bold;
 }
 
 .table-row-cell {
-    -fx-cell-size: 30px;
+    -fx-cell-size: 28px;
+    -fx-background-color: -app-surface;
 }
 
 .table-row-cell:odd {
-    -fx-background-color: #FAFAFA;
-}
-
-.table-row-cell:even {
-    -fx-background-color: white;
-}
-
-.table-row-cell:selected {
-    -fx-background-color: #BBDEFB;
+    -fx-background-color: -paper-50;
 }
 
 .table-cell {
-    -fx-padding: 5px;
+    -fx-padding: 4px 6px;
+    -fx-border-color: transparent;
+    -fx-text-fill: -app-text;
+}
+
+.table-view .placeholder .label {
+    -fx-text-fill: -app-text-quiet;
+}
+
+/* Rows past the end of the data are blank, not pale islands */
+.table-row-cell:empty,
+.table-row-cell:empty .table-cell {
+    -fx-background-color: transparent;
     -fx-border-color: transparent;
 }
 
-/* Status cells */
-.status-pending {
-    -fx-background-color: #FFF9C4;
-}
-
-.status-scanning {
-    -fx-background-color: #E1F5FE;
-}
-
-.status-completed {
-    -fx-background-color: #C8E6C9;
-}
-
-.status-error, .status-auth-failed {
-    -fx-background-color: #FFCDD2;
-}
-
-/* ListView for credentials */
-.list-view {
-    -fx-background-color: white;
-    -fx-border-color: #BDBDBD;
-    -fx-border-radius: 3px;
-}
-
-.list-cell {
-    -fx-background-color: white;
-    -fx-text-fill: #424242;
-    -fx-padding: 8px;
-}
-
-.list-cell:filled:selected {
-    -fx-background-color: #BBDEFB;
-}
-
-.list-cell:filled:hover {
-    -fx-background-color: #E3F2FD;
-}
-
-/* Labels */
-.label {
-    -fx-text-fill: #424242;
-}
-
-.label-info {
-    -fx-text-fill: #1976D2;
-    -fx-font-size: 12px;
-}
-
-.label-warning {
-    -fx-text-fill: #F57C00;
-    -fx-font-weight: bold;
-}
-
-.label-error {
-    -fx-text-fill: #D32F2F;
-    -fx-font-weight: bold;
-}
-
-/* Separator */
-.separator {
-    -fx-background-color: #E0E0E0;
-}
-
-/* Context Menu */
-.context-menu {
-    -fx-background-color: white;
-    -fx-border-color: #BDBDBD;
-    -fx-border-width: 1px;
-}
-
-.menu-item {
-    -fx-background-color: white;
-}
-
-.menu-item:hover, .menu-item:focused {
-    -fx-background-color: #E3F2FD;
-}
-
-/* Tooltip */
-.tooltip {
-    -fx-background-color: #424242;
-    -fx-text-fill: white;
-    -fx-font-size: 12px;
-    -fx-background-radius: 3px;
-    -fx-padding: 6px 10px;
-}
-
-/* ---------------------------------------------------------------------------
-   Result rows. Colour carries meaning, so each state also has a distinct
-   text weight: colour alone is hard to read for some users and disappears
-   in a printed screenshot.
-   --------------------------------------------------------------------------- */
+/*
+ * Result rows. Colour carries meaning, so each state also differs in weight or
+ * style: colour alone is hard to read for some people and vanishes in a
+ * printed screenshot. Tints are pulled towards paper so text stays AA.
+ */
 .table-row-cell.row-completed {
-    -fx-background-color: #E8F5E9;
+    -fx-background-color: #E4F4EE;
 }
 
 .table-row-cell.row-completed .table-cell {
-    -fx-text-fill: #1B5E20;
+    -fx-text-fill: -teal-700;
 }
 
 .table-row-cell.row-working {
-    -fx-background-color: #FFF8E1;
+    -fx-background-color: #FBF3DF;
 }
 
 .table-row-cell.row-working .table-cell {
-    -fx-text-fill: #8D6E00;
+    -fx-text-fill: -app-warning-text;
     -fx-font-style: italic;
 }
 
 .table-row-cell.row-auth-failed {
-    -fx-background-color: #FFEBEE;
+    -fx-background-color: #F7E4E2;
 }
 
 .table-row-cell.row-auth-failed .table-cell {
-    -fx-text-fill: #B71C1C;
+    -fx-text-fill: -app-danger;
 }
 
 .table-row-cell.row-unknown {
-    -fx-background-color: #F5F5F5;
+    -fx-background-color: -paper-100;
 }
 
 .table-row-cell.row-unknown .table-cell {
-    -fx-text-fill: #616161;
+    -fx-text-fill: -sage-700;
 }
 
 .table-row-cell.row-pending {
-    -fx-background-color: #E3F2FD;
+    -fx-background-color: #E6E7F0;
 }
 
 .table-row-cell.row-pending .table-cell {
-    -fx-text-fill: #0D47A1;
+    -fx-text-fill: -midnight-600;
 }
 
-.table-row-cell:selected .table-cell {
-    -fx-text-fill: #0D2B45;
+.table-row-cell:filled:selected {
+    -fx-background-color: #D5D8E8;
+}
+
+.table-row-cell:filled:selected .table-cell {
+    -fx-text-fill: -midnight-700;
 }
 
 /* A measured value outside the agreed limits */
 .cell-flagged {
-    -fx-text-fill: #B71C1C;
+    -fx-text-fill: -app-danger;
     -fx-font-weight: bold;
 }
 
-/* The one-line explanation under each control */
-.summary-label {
-    -fx-text-fill: #546E7A;
-    -fx-font-size: 11px;
+/* -------------------------------------------------------------------- Lists */
+
+.list-view {
+    -fx-background-color: -app-surface;
+    -fx-border-color: -app-border;
+    -fx-border-radius: 4px;
 }
 
-/* Details pane */
+.list-cell {
+    -fx-background-color: -app-surface;
+    -fx-text-fill: -app-text;
+    -fx-padding: 6px 8px;
+}
+
+.list-cell:filled:selected {
+    -fx-background-color: #D5D8E8;
+    -fx-text-fill: -midnight-700;
+}
+
+.list-cell:filled:hover {
+    -fx-background-color: -paper-100;
+}
+
+/* ------------------------------------------------------------ Details pane */
+
 .titled-pane > .title {
-    -fx-background-color: #ECEFF1;
+    -fx-background-color: -paper-200;
     -fx-font-weight: bold;
     -fx-font-size: 11px;
     -fx-padding: 4px 8px;
 }
 
-.titled-pane > .content {
-    -fx-background-color: white;
-    -fx-border-color: #CFD8DC;
+.titled-pane > .title > .text {
+    -fx-fill: -midnight-600;
 }
 
-/* Tooltips wrap rather than running off the screen */
+.titled-pane > .content {
+    -fx-background-color: -app-surface;
+    -fx-border-color: -app-border;
+}
+
+/* --------------------------------------------------- Dialogs, menus, chrome */
+
+.dialog-pane {
+    -fx-background-color: -app-surface-quiet;
+}
+
+.dialog-pane .header-panel {
+    -fx-background-color: -paper-100;
+}
+
+.dialog-pane .header-panel .label {
+    -fx-text-fill: -midnight-700;
+    -fx-font-weight: bold;
+}
+
+.tab-pane .tab-header-background {
+    -fx-background-color: -paper-100;
+}
+
+.tab {
+    -fx-background-color: -paper-200;
+}
+
+.tab:selected {
+    -fx-background-color: -app-surface;
+}
+
+.tab .tab-label {
+    -fx-text-fill: -app-text;
+}
+
+.separator .line {
+    -fx-border-color: -app-border;
+}
+
+.context-menu {
+    -fx-background-color: -app-surface;
+    -fx-border-color: -app-border;
+}
+
+.menu-item:hover,
+.menu-item:focused {
+    -fx-background-color: #E4F4EE;
+}
+
+.menu-item .label {
+    -fx-text-fill: -app-text;
+}
+
 .tooltip {
+    -fx-background-color: -midnight-700;
+    -fx-text-fill: -paper-0;
+    -fx-font-size: 12px;
+    -fx-background-radius: 4px;
+    -fx-padding: 6px 10px;
     -fx-max-width: 340px;
     -fx-wrap-text: true;
 }
 
+.scroll-bar .thumb {
+    -fx-background-color: -paper-300;
+}
+
+.scroll-bar .track {
+    -fx-background-color: -paper-100;
+}
+
 /* ---------------------------------------------------------------------------
-   Header. These were inline styles, which always beat a stylesheet and so
-   could never follow a theme.
+   Small text roles. These were inline styles, which always beat a stylesheet
+   and so could never follow a theme.
    --------------------------------------------------------------------------- */
-.app-header {
-    -fx-background-color: #F0F0F0;
-    -fx-border-color: #CCCCCC;
-    -fx-border-width: 0 0 1 0;
-}
-
-.header-organisation {
-    -fx-font-size: 11px;
-    -fx-text-fill: #555555;
-}
-
-.header-button {
-    -fx-background-color: #0078D4;
-    -fx-text-fill: white;
+.count-label {
     -fx-font-weight: bold;
+    -fx-text-fill: -teal-700;
 }
 
-.header-button-secondary {
-    -fx-background-color: #17A2B8;
+.hint-label {
+    -fx-text-fill: -teal-700;
+    -fx-font-size: 10px;
+    -fx-font-style: italic;
 }
 
-/* Rows past the end of the data are blank, not white islands in a dark table */
-.table-row-cell:empty {
-    -fx-background-color: transparent;
-    -fx-border-color: transparent;
+.input-group {
+    -fx-background-color: -paper-100;
+    -fx-background-radius: 4px;
+    -fx-padding: 8px;
 }
 
-.table-row-cell:empty .table-cell {
-    -fx-border-color: transparent;
+/* A field whose contents will not parse */
+.field-invalid {
+    -fx-border-color: -app-danger;
+    -fx-border-width: 2px;
+    -fx-background-color: #FBEDEC;
 }
