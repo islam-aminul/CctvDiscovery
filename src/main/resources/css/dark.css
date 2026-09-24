@@ -38,20 +38,20 @@
     -fx-text-fill: -sage-400;
 }
 
-.header-button {
+.app-header .header-button {
     -fx-background-color: -teal-700;
 }
 
-.header-button:hover {
+.app-header .header-button:hover {
     -fx-background-color: -teal-600;
 }
 
 /* sage-700 sat at 2.15:1 on the midnight band, under the 3:1 a control needs */
-.header-button-secondary {
+.app-header .header-button-secondary {
     -fx-background-color: -sage-600;
 }
 
-.header-button-secondary:hover {
+.app-header .header-button-secondary:hover {
     -fx-background-color: -sage-500;
     -fx-text-fill: -midnight-700;
 }

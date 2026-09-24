@@ -127,21 +127,21 @@
 }
 
 /* Teal is the signal tone, so the primary header action carries it. */
-.header-button {
+.app-header .header-button {
     -fx-background-color: -teal-600;
     -fx-text-fill: -paper-0;
     -fx-font-weight: bold;
 }
 
-.header-button:hover {
+.app-header .header-button:hover {
     -fx-background-color: -teal-500;
 }
 
-.header-button-secondary {
+.app-header .header-button-secondary {
     -fx-background-color: -sage-600;
 }
 
-.header-button-secondary:hover {
+.app-header .header-button-secondary:hover {
     -fx-background-color: -sage-500;
 }
 
@@ -561,4 +561,30 @@
     -fx-border-color: -app-danger;
     -fx-border-width: 2px;
     -fx-background-color: #FBEDEC;
+}
+
+/* ---------------------------------------------------------------------------
+   Icon-only buttons in the header. No fill of their own, so they read as
+   glyphs on the midnight band rather than as a third filled button.
+   --------------------------------------------------------------------------- */
+.app-header .icon-button {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+    -fx-padding: 4px;
+    -fx-cursor: hand;
+}
+
+.app-header .icon-button:hover {
+    -fx-background-color: -midnight-500;
+    -fx-background-radius: 4px;
+}
+
+.app-header .icon-button:focused {
+    -fx-border-color: -teal-400;
+    -fx-border-width: 1px;
+    -fx-border-radius: 4px;
+}
+
+.theme-icon {
+    -fx-fill: -paper-0;
 }

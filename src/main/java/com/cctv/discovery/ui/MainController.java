@@ -25,6 +25,7 @@ import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.Scene;
+import javafx.scene.shape.SVGPath;
 import javafx.scene.control.*;
 import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.layout.*;
@@ -239,24 +240,10 @@ public class MainController {
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
-        ComboBox<Theme> cbTheme = new ComboBox<>();
-        cbTheme.getItems().setAll(Theme.values());
-        cbTheme.getSelectionModel().select(Theme.current());
-        cbTheme.setTooltip(tip("""
-                Light, dark, or whatever this computer is set to. A survey is \
-                often run in a plant room, where a dark window is easier on the \
-                eyes."""));
-        cbTheme.setOnAction(e -> {
-            Theme chosen = cbTheme.getSelectionModel().getSelectedItem();
-            Theme.save(chosen);
-            if (scene != null) {
-                chosen.applyTo(scene);
-            }
-            logger.info("Theme set to {}", chosen);
-        });
+        Button btnTheme = createThemeToggle();
 
         // Right side button container
-        HBox buttonBox = new HBox(10, cbTheme, btnSettings, btnHelp);
+        HBox buttonBox = new HBox(10, btnTheme, btnSettings, btnHelp);
         buttonBox.setAlignment(Pos.CENTER_RIGHT);
 
         // Main header container
@@ -267,6 +254,77 @@ public class MainController {
         header.getChildren().addAll(titleBlock, spacer, buttonBox);
 
         return header;
+    }
+
+    /**
+     * The appearance control: one icon that cycles light, dark, and following
+     * the system.
+     *
+     * <p>A cycling button rather than a switch because there are three states,
+     * not two, and dropping "match the system" to fit a switch would lose the
+     * setting most people want. The icon shows the mode now in force and the
+     * tooltip names both that and what a click will do, since an icon alone
+     * cannot say "currently automatic".
+     */
+    private Button createThemeToggle() {
+        Button button = new Button();
+        button.getStyleClass().add("icon-button");
+        button.setMinSize(34, 30);
+        button.setPrefSize(34, 30);
+
+        applyThemeToggleState(button, Theme.current());
+        button.setOnAction(e -> {
+            Theme[] order = Theme.values();
+            Theme next = order[(Theme.current().ordinal() + 1) % order.length];
+            Theme.save(next);
+            if (scene != null) {
+                next.applyTo(scene);
+            }
+            applyThemeToggleState(button, next);
+            logger.info("Appearance set to {}", next);
+        });
+        return button;
+    }
+
+    /** Point the toggle at a mode: icon, tooltip and the name read aloud. */
+    private void applyThemeToggleState(Button button, Theme theme) {
+        SVGPath icon = new SVGPath();
+        icon.setContent(themeIconPath(theme));
+        icon.getStyleClass().add("theme-icon");
+        // The glyphs are drawn on a 24-unit grid; scale to fit the button.
+        icon.setScaleX(0.72);
+        icon.setScaleY(0.72);
+        button.setGraphic(icon);
+
+        Theme next = Theme.values()[(theme.ordinal() + 1) % Theme.values().length];
+        String state = switch (theme) {
+            case LIGHT -> "Light";
+            case DARK -> "Dark";
+            case SYSTEM -> "Matching the system, currently "
+                    + (Theme.SYSTEM.isDark() ? "dark" : "light");
+        };
+        button.setTooltip(tip(state + ". Click for " + next.toString().toLowerCase(java.util.Locale.ROOT) + "."));
+        // Icon-only controls need a name for anyone using a screen reader.
+        button.setAccessibleText("Appearance: " + state);
+    }
+
+    /**
+     * Glyphs on a 24-unit grid: a sun, a crescent, and a display for the
+     * setting that follows the computer.
+     */
+    private static String themeIconPath(Theme theme) {
+        return switch (theme) {
+            case LIGHT -> "M12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10z"
+                    + "M11 1h2v3.2h-2z M11 19.8h2V23h-2z"
+                    + "M1 11h3.2v2H1z M19.8 11H23v2h-3.2z"
+                    + "M3.9 5.3l1.4-1.4 2.3 2.3-1.4 1.4z"
+                    + "M16.4 17.8l1.4-1.4 2.3 2.3-1.4 1.4z"
+                    + "M18.7 3.9l1.4 1.4-2.3 2.3-1.4-1.4z"
+                    + "M6.2 16.4l1.4 1.4-2.3 2.3-1.4-1.4z";
+            case DARK -> "M12.5 3a9 9 0 1 0 8.5 11.9A7.2 7.2 0 0 1 12.5 3z";
+            case SYSTEM -> "M20 3H4a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h5l-1 2v1h8v-1l-1-2h5"
+                    + "a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2zm0 13H4V5h16v11z";
+        };
     }
 
     private VBox createLeftPanel() {
