@@ -52,8 +52,8 @@ public class Launcher extends Application {
 
             logger.info("Setting up stage...");
             primaryStage.setScene(scene);
-            primaryStage.setMinWidth(1200);
-            primaryStage.setMinHeight(700);
+            primaryStage.setMinWidth(config.getWindowMinWidth());
+            primaryStage.setMinHeight(config.getWindowMinHeight());
 
             // Handle window close
             primaryStage.setOnCloseRequest(event -> {

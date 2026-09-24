@@ -82,8 +82,14 @@ public class SettingsDialog extends Stage {
         Label title = new Label("Application Settings");
         title.setStyle("-fx-font-size: 16px; -fx-font-weight: bold;");
 
-        Label subtitle = new Label("Configure ports, RTSP paths, and validation method for cameras");
+        Label subtitle = new Label("Ports to scan, extra stream paths, and how thoroughly to check each stream");
         subtitle.setStyle("-fx-text-fill: #666; -fx-font-size: 12px;");
+
+        // Tell the user where their choices are kept, so they can back them up
+        // or copy them to another machine.
+        Label location = new Label("Saved in " + config.getUserSettingsFile());
+        location.setStyle("-fx-text-fill: #888; -fx-font-size: 10px;");
+        location.setWrapText(true);
 
         // TabPane for organized sections
         TabPane tabPane = new TabPane();
@@ -116,6 +122,7 @@ public class SettingsDialog extends Stage {
         vbox.getChildren().addAll(
                 title,
                 subtitle,
+                location,
                 tabPane,
                 buttonBox);
 

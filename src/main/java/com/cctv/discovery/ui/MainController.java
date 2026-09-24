@@ -1535,8 +1535,10 @@ public class MainController {
     }
 
     private void addCredential() {
-        if (credentials.size() >= 4) {
-            showAlert("Maximum Credentials", "You can only add up to 4 credential sets.", Alert.AlertType.WARNING);
+        int limit = config.getMaxCredentials();
+        if (credentials.size() >= limit) {
+            showAlert("Enough credentials",
+                    "Up to " + limit + " credentials can be tried on each device.", Alert.AlertType.WARNING);
             return;
         }
 
@@ -1544,7 +1546,7 @@ public class MainController {
         String password = tfPassword.getText();
 
         if (username.isEmpty()) {
-            showAlert("Invalid Input", "Username cannot be empty.", Alert.AlertType.WARNING);
+            showAlert("Invalid Input", "Enter a username. A blank password is allowed.", Alert.AlertType.WARNING);
             return;
         }
 
@@ -1560,7 +1562,7 @@ public class MainController {
         credentials.add(cred);
         tfPassword.clear();
 
-        if (credentials.size() >= 4) {
+        if (credentials.size() >= limit) {
             btnAddCredential.setDisable(true);
             tfUsername.setDisable(true);
             tfPassword.setDisable(true);
@@ -2102,9 +2104,13 @@ public class MainController {
 
         TextField tfRetryUsername = new TextField("admin");
         tfRetryUsername.setPromptText("Username");
+        tfRetryUsername.setTooltip(tip("The account name configured on this device."));
 
-        TextField tfRetryPassword = new TextField();
+        // Masked, like the main credential dialog: a survey is often run with
+        // someone watching over the operator's shoulder.
+        PasswordField tfRetryPassword = new PasswordField();
         tfRetryPassword.setPromptText("Password");
+        tfRetryPassword.setTooltip(tip("Tried against this device only, and added to the list for later devices."));
 
         grid.add(new Label("Username:"), 0, 0);
         grid.add(tfRetryUsername, 1, 0);
@@ -2136,9 +2142,10 @@ public class MainController {
 
         if (result.isPresent() && result.get() == retryButton) {
             String username = tfRetryUsername.getText().trim();
-            String password = tfRetryPassword.getText().trim();
+            // Not trimmed: a leading or trailing space is a valid part of a password.
+            String password = tfRetryPassword.getText();
 
-            if (!username.isEmpty() && !password.isEmpty()) {
+            if (!username.isEmpty()) {
                 // Check if this credential was already used in discovery
                 boolean alreadyUsed = credentials.stream()
                         .anyMatch(c -> c.getUsername().equals(username) && c.getPassword().equals(password));
@@ -2181,7 +2188,7 @@ public class MainController {
                         "Retrying authentication for " + device.getIpAddress() + " with new credential.",
                         Alert.AlertType.INFORMATION);
             } else {
-                showAlert("Invalid Input", "Please enter both username and password.", Alert.AlertType.WARNING);
+                showAlert("Invalid Input", "Enter a username. A blank password is allowed.", Alert.AlertType.WARNING);
             }
         }
     }
