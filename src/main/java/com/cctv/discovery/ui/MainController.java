@@ -4,6 +4,7 @@ import com.cctv.discovery.config.AppConfig;
 import com.cctv.discovery.discovery.NetworkScanner;
 import com.cctv.discovery.discovery.StreamAnalyzer;
 import com.cctv.discovery.export.ExcelExporter;
+import com.cctv.discovery.export.ReportWriter;
 import com.cctv.discovery.model.Credential;
 import com.cctv.discovery.model.Device;
 import com.cctv.discovery.model.Finding;
@@ -203,19 +204,7 @@ public class MainController {
 
         scene = new Scene(mainLayout, 1024, 768);
 
-        // Load CSS with null check to prevent startup crashes
-        try {
-            java.net.URL cssResource = getClass().getResource("/css/app.css");
-            if (cssResource != null) {
-                scene.getStylesheets().add(cssResource.toExternalForm());
-                logger.info("CSS loaded successfully");
-            } else {
-                logger.warn("CSS file not found: /css/app.css - using default styling");
-            }
-        } catch (Exception e) {
-            logger.error("Failed to load CSS", e);
-        }
-
+        Theme.current().applyTo(scene);
         return scene;
     }
 
@@ -225,7 +214,7 @@ public class MainController {
 
         // Organization name in regular font above the tool name
         Label orgLabel = new Label(config.getAppOrganization());
-        orgLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #555555;");
+        orgLabel.getStyleClass().add("header-organisation");
 
         // Tool name in bold title style
         Label title = new Label(config.getAppName());
@@ -238,26 +227,42 @@ public class MainController {
         Button btnSettings = new Button("Settings");
         btnSettings.setOnAction(e -> showSettings());
         btnSettings.setTooltip(tip("Ports to scan, extra stream paths and check timings."));
-        btnSettings.setStyle("-fx-background-color: #0078d4; -fx-text-fill: white; -fx-font-weight: bold;");
+        btnSettings.getStyleClass().add("header-button");
 
         Button btnHelp = new Button("Help");
         btnHelp.setOnAction(e -> showHelpManual());
         btnHelp.setTooltip(tip("A short guide to running a survey."));
-        btnHelp.setStyle("-fx-background-color: #17a2b8; -fx-text-fill: white; -fx-font-weight: bold;");
+        btnHelp.getStyleClass().addAll("header-button", "header-button-secondary");
 
         // Spacer to push buttons to the right
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
+        ComboBox<Theme> cbTheme = new ComboBox<>();
+        cbTheme.getItems().setAll(Theme.values());
+        cbTheme.getSelectionModel().select(Theme.current());
+        cbTheme.setTooltip(tip("""
+                Light, dark, or whatever this computer is set to. A survey is \
+                often run in a plant room, where a dark window is easier on the \
+                eyes."""));
+        cbTheme.setOnAction(e -> {
+            Theme chosen = cbTheme.getSelectionModel().getSelectedItem();
+            Theme.save(chosen);
+            if (scene != null) {
+                chosen.applyTo(scene);
+            }
+            logger.info("Theme set to {}", chosen);
+        });
+
         // Right side button container
-        HBox buttonBox = new HBox(10, btnSettings, btnHelp);
+        HBox buttonBox = new HBox(10, cbTheme, btnSettings, btnHelp);
         buttonBox.setAlignment(Pos.CENTER_RIGHT);
 
         // Main header container
         HBox header = new HBox(10);
         header.setAlignment(Pos.CENTER_LEFT);
         header.setPadding(new Insets(10, 15, 10, 15));
-        header.setStyle("-fx-background-color: #f0f0f0; -fx-border-color: #cccccc; -fx-border-width: 0 0 1 0;");
+        header.getStyleClass().add("app-header");
         header.getChildren().addAll(titleBlock, spacer, buttonBox);
 
         return header;
@@ -2074,6 +2079,20 @@ public class MainController {
                     "Credentials were accepted but no known RTSP path returned video.",
                     "Add this model's stream path under Settings, RTSP paths."));
         }
+
+        // A device reachable only over its maker's own protocol is worth
+        // calling out, because no amount of RTSP probing will reach it.
+        for (int port : device.getOpenSpecialPorts()) {
+            String vendor = NetworkScanner.vendorForSdkPort(port);
+            if (vendor != null) {
+                device.addFinding(new Finding(Finding.Severity.INFO, "Access",
+                        "Reachable only over the manufacturer's own protocol",
+                        vendor + " management port " + port + " is open, but no ONVIF or RTSP service answered.",
+                        "Enable ONVIF and RTSP on the device, or record it from " + vendor
+                                + "'s own software; this tool speaks ONVIF and RTSP only."));
+                break;
+            }
+        }
     }
 
     /**
@@ -2239,33 +2258,46 @@ public class MainController {
         fileChooser.setTitle("Save report");
         String timestamp = java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd-HHmm")
                 .format(java.time.LocalDateTime.now());
-        fileChooser.setInitialFileName("cctv-report-" + safeFileName(request.siteId()) + "-" + timestamp + ".xlsx");
+        fileChooser.setInitialFileName("cctv-report-" + safeFileName(request.siteId()) + "-" + timestamp
+                + "." + request.format().extension());
 
         File initialDir = new File(config.getExportDefaultDirectory());
         fileChooser.setInitialDirectory(initialDir.isDirectory()
                 ? initialDir : new File(System.getProperty("user.home")));
-        fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Excel workbook", "*.xlsx"));
+        fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter(
+                request.format().toString(), "*." + request.format().extension()));
 
         File file = fileChooser.showSaveDialog(primaryStage);
         if (file == null) {
             return;
         }
 
-        ExcelExporter.ReportOptions options = new ExcelExporter.ReportOptions(
-                request.siteId(), request.premise(), request.surveyor(),
-                request.includeCredentials(), request.password());
+        List<Device> snapshot = new ArrayList<>(devices);
         try {
-            excelExporter.export(new ArrayList<>(devices), hostAuditData, options, file);
-            String protection = options.encrypted()
-                    ? "The workbook is encrypted. It cannot be opened without the password you set."
-                    : "The workbook is not encrypted. Anyone with the file can read it.";
+            boolean encrypted = false;
+            switch (request.format()) {
+                case EXCEL -> {
+                    ExcelExporter.ReportOptions options = new ExcelExporter.ReportOptions(
+                            request.siteId(), request.premise(), request.surveyor(),
+                            request.includeCredentials(), request.password());
+                    excelExporter.export(snapshot, hostAuditData, options, file);
+                    encrypted = options.encrypted();
+                }
+                case CSV -> ReportWriter.writeCsv(snapshot, request.includeCredentials(), file.toPath());
+                case JSON -> ReportWriter.writeJson(snapshot, request.siteId(),
+                        request.includeCredentials(), file.toPath());
+            }
+
+            String protection = encrypted
+                    ? "The file is encrypted. It cannot be opened without the password you set."
+                    : "The file is not encrypted. Anyone with it can read it.";
             String credentials = request.includeCredentials()
                     ? "\n\nIt contains camera usernames and passwords."
                     : "";
             showAlert("Report saved", file.getAbsolutePath() + "\n\n" + protection + credentials,
                     Alert.AlertType.INFORMATION);
-            logger.info("Report written for site {} ({})", request.siteId(),
-                    options.encrypted() ? "encrypted" : "unencrypted");
+            logger.info("Report written for site {} as {} ({})", request.siteId(), request.format(),
+                    encrypted ? "encrypted" : "unencrypted");
         } catch (Exception e) {
             logger.error("Export failed", e);
             showAlert("Could not save the report", e.getMessage(), Alert.AlertType.ERROR);
@@ -2278,9 +2310,38 @@ public class MainController {
         return cleaned.isEmpty() ? "site" : cleaned;
     }
 
+    /** The file formats a report can be written in. */
+    private enum ExportFormat {
+        EXCEL("Excel workbook (.xlsx)", "xlsx"),
+        CSV("Comma-separated values (.csv)", "csv"),
+        JSON("JSON (.json)", "json");
+
+        private final String label;
+        private final String extension;
+
+        ExportFormat(String label, String extension) {
+            this.label = label;
+            this.extension = extension;
+        }
+
+        @Override
+        public String toString() {
+            return label;
+        }
+
+        String extension() {
+            return extension;
+        }
+
+        /** Only the workbook can be encrypted; the text formats cannot. */
+        boolean supportsEncryption() {
+            return this == EXCEL;
+        }
+    }
+
     /** What the user chose in the export dialog. */
     private record ExportRequest(String siteId, String premise, String surveyor,
-                                 boolean includeCredentials, String password) {
+                                 boolean includeCredentials, String password, ExportFormat format) {
     }
 
     /**
@@ -2313,6 +2374,14 @@ public class MainController {
                 URLs that include them, which is what an installer needs. Unticked, \
                 both are left out so the file can be shared more widely."""));
 
+        ComboBox<ExportFormat> cbFormat = new ComboBox<>();
+        cbFormat.getItems().setAll(ExportFormat.values());
+        cbFormat.getSelectionModel().select(ExportFormat.EXCEL);
+        cbFormat.setMaxWidth(Double.MAX_VALUE);
+        cbFormat.setTooltip(tip("""
+                Excel is the formatted report. CSV suits a spreadsheet or \
+                analysis tool. JSON suits feeding another system."""));
+
         CheckBox cbEncrypt = new CheckBox("Encrypt the workbook with a password");
         cbEncrypt.setSelected(config.isExportEncryptionDefault());
         cbEncrypt.setTooltip(tip("Excel will ask for this password before opening the file."));
@@ -2338,6 +2407,8 @@ public class MainController {
         grid.add(tfPremise, 1, row++);
         grid.add(new Label("Surveyed by:"), 0, row);
         grid.add(tfSurveyor, 1, row++);
+        grid.add(new Label("Format:"), 0, row);
+        grid.add(cbFormat, 1, row++);
         grid.add(new Separator(), 0, row++, 2, 1);
         grid.add(cbCredentials, 0, row++, 2, 1);
         grid.add(cbEncrypt, 0, row++, 2, 1);
@@ -2353,7 +2424,10 @@ public class MainController {
         Node saveButton = dialog.getDialogPane().lookupButton(saveType);
 
         Runnable validate = () -> {
-            boolean encrypt = cbEncrypt.isSelected();
+            ExportFormat format = cbFormat.getSelectionModel().getSelectedItem();
+            boolean canEncrypt = format != null && format.supportsEncryption();
+            cbEncrypt.setDisable(!canEncrypt);
+            boolean encrypt = canEncrypt && cbEncrypt.isSelected();
             pfPassword.setDisable(!encrypt);
             pfConfirm.setDisable(!encrypt);
 
@@ -2378,15 +2452,24 @@ public class MainController {
         pfConfirm.textProperty().addListener((o, a, b) -> validate.run());
         cbEncrypt.selectedProperty().addListener((o, a, b) -> validate.run());
         cbCredentials.selectedProperty().addListener((o, a, b) -> validate.run());
+        cbFormat.valueProperty().addListener((o, a, b) -> validate.run());
         validate.run();
         Platform.runLater(tfSite::requestFocus);
 
-        dialog.setResultConverter(button -> button != saveType ? null : new ExportRequest(
-                tfSite.getText().trim(),
-                tfPremise.getText().trim(),
-                tfSurveyor.getText().trim(),
-                cbCredentials.isSelected(),
-                cbEncrypt.isSelected() ? pfPassword.getText() : null));
+        dialog.setResultConverter(button -> {
+            if (button != saveType) {
+                return null;
+            }
+            ExportFormat format = cbFormat.getSelectionModel().getSelectedItem();
+            boolean encrypt = format.supportsEncryption() && cbEncrypt.isSelected();
+            return new ExportRequest(
+                    tfSite.getText().trim(),
+                    tfPremise.getText().trim(),
+                    tfSurveyor.getText().trim(),
+                    cbCredentials.isSelected(),
+                    encrypt ? pfPassword.getText() : null,
+                    format);
+        });
 
         return dialog.showAndWait().orElse(null);
     }

@@ -356,3 +356,38 @@
     -fx-max-width: 340px;
     -fx-wrap-text: true;
 }
+
+/* ---------------------------------------------------------------------------
+   Header. These were inline styles, which always beat a stylesheet and so
+   could never follow a theme.
+   --------------------------------------------------------------------------- */
+.app-header {
+    -fx-background-color: #F0F0F0;
+    -fx-border-color: #CCCCCC;
+    -fx-border-width: 0 0 1 0;
+}
+
+.header-organisation {
+    -fx-font-size: 11px;
+    -fx-text-fill: #555555;
+}
+
+.header-button {
+    -fx-background-color: #0078D4;
+    -fx-text-fill: white;
+    -fx-font-weight: bold;
+}
+
+.header-button-secondary {
+    -fx-background-color: #17A2B8;
+}
+
+/* Rows past the end of the data are blank, not white islands in a dark table */
+.table-row-cell:empty {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+}
+
+.table-row-cell:empty .table-cell {
+    -fx-border-color: transparent;
+}

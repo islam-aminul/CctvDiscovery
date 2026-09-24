@@ -521,38 +521,109 @@ public final class OnvifService {
         return Optional.empty();
     }
 
+    /** Where a device's media services live, and which generation they are. */
+    public record MediaEndpoints(String media1, String media2) {
+
+        public boolean hasMedia2() {
+            return media2 != null && !media2.isBlank();
+        }
+
+        /** The address to send Media1 requests to; falls back to the device service. */
+        public String preferred(String deviceServiceUrl) {
+            if (media1 != null && !media1.isBlank()) {
+                return media1;
+            }
+            return media2 != null && !media2.isBlank() ? media2 : deviceServiceUrl;
+        }
+    }
+
     /**
-     * Resolve the media service address via GetCapabilities.
+     * Find the media service addresses.
      *
-     * <p>Media requests must go to this address: the test camera answers
-     * {@code ActionNotSupported} when GetProfiles is sent to the device service.
+     * <p>{@code GetServices} is asked first because it is the only way to learn
+     * the Media2 address: Media2 post-dates the ver10 capability list, so a
+     * device that offers only Media2 reports no media capability at all and
+     * would otherwise be treated as having no streams. Devices too old for
+     * GetServices fall back to GetCapabilities.
+     */
+    public MediaEndpoints resolveMediaEndpoints(Device device) {
+        String serviceUrl = device.getOnvifServiceUrl();
+        String media1 = null;
+        String media2 = null;
+
+        SoapResult services = post(serviceUrl,
+                "<tds:GetServices><tds:IncludeCapability>false</tds:IncludeCapability></tds:GetServices>",
+                device.getUsername(), device.getPassword());
+        if (services.ok()) {
+            MediaEndpoints fromServices = parseServices(services.body(), device.getIpAddress());
+            media1 = fromServices.media1();
+            media2 = fromServices.media2();
+        }
+
+        if (media1 == null) {
+            SoapResult capabilities = post(serviceUrl,
+                    "<tds:GetCapabilities><tds:Category>Media</tds:Category></tds:GetCapabilities>",
+                    device.getUsername(), device.getPassword());
+            if (capabilities.ok()) {
+                try {
+                    Document doc = XmlUtils.parse(capabilities.body());
+                    for (Element media : XmlUtils.elementList(doc, "Media")) {
+                        String xAddr = XmlUtils.text(media, "XAddr");
+                        if (xAddr != null && !xAddr.isBlank()) {
+                            media1 = rehost(xAddr.trim(), device.getIpAddress());
+                            break;
+                        }
+                    }
+                } catch (Exception e) {
+                    logger.debug("Cannot parse GetCapabilities from {}: {}", serviceUrl, e.getMessage());
+                }
+            }
+        }
+
+        MediaEndpoints endpoints = new MediaEndpoints(media1, media2);
+        logger.debug("Media services for {}: media1={} media2={}",
+                device.getIpAddress(), media1, media2);
+        return endpoints;
+    }
+
+    /**
+     * Pick the media service addresses out of a GetServices reply, rewriting
+     * each host to the address the device actually answered on.
+     */
+    static MediaEndpoints parseServices(String xml, String reachableIp) {
+        String media1 = null;
+        String media2 = null;
+        try {
+            Document doc = XmlUtils.parse(xml);
+            for (Element service : XmlUtils.elementList(doc, "Service")) {
+                String namespace = XmlUtils.text(service, "Namespace");
+                String xAddr = XmlUtils.text(service, "XAddr");
+                if (namespace == null || xAddr == null || xAddr.isBlank()) {
+                    continue;
+                }
+                if (NS_MEDIA2.equals(namespace.trim())) {
+                    media2 = rehost(xAddr.trim(), reachableIp);
+                } else if (NS_MEDIA.equals(namespace.trim())) {
+                    media1 = rehost(xAddr.trim(), reachableIp);
+                }
+            }
+        } catch (Exception e) {
+            logger.debug("Cannot parse GetServices: {}", e.getMessage());
+        }
+        return new MediaEndpoints(media1, media2);
+    }
+
+    /**
+     * The address media requests go to. Kept for callers that only need the
+     * Media1 endpoint.
      */
     public String resolveMediaUrl(Device device) {
         if (device.getOnvifMediaUrl() != null) {
             return device.getOnvifMediaUrl();
         }
-        String serviceUrl = device.getOnvifServiceUrl();
-        SoapResult result = post(serviceUrl,
-                "<tds:GetCapabilities><tds:Category>Media</tds:Category></tds:GetCapabilities>",
-                device.getUsername(), device.getPassword());
-        if (result.ok()) {
-            try {
-                Document doc = XmlUtils.parse(result.body());
-                for (Element media : XmlUtils.elementList(doc, "Media")) {
-                    String xAddr = XmlUtils.text(media, "XAddr");
-                    if (xAddr != null && !xAddr.isBlank()) {
-                        String resolved = rehost(xAddr.trim(), device.getIpAddress());
-                        device.setOnvifMediaUrl(resolved);
-                        logger.debug("ONVIF media service for {}: {}", device.getIpAddress(), resolved);
-                        return resolved;
-                    }
-                }
-            } catch (Exception e) {
-                logger.debug("Cannot parse GetCapabilities from {}: {}", serviceUrl, e.getMessage());
-            }
-        }
-        device.setOnvifMediaUrl(serviceUrl);
-        return serviceUrl;
+        String resolved = resolveMediaEndpoints(device).preferred(device.getOnvifServiceUrl());
+        device.setOnvifMediaUrl(resolved);
+        return resolved;
     }
 
     /**
@@ -619,14 +690,44 @@ public final class OnvifService {
     }
 
     /**
-     * Authoritative stream URLs via GetProfiles then GetStreamUri, sent to the
-     * media service. When these succeed the caller must not guess RTSP paths.
+     * Authoritative stream URLs from the device's media service.
+     *
+     * <p>Media1 is tried first because almost every device supports it. Media2
+     * is used when Media1 returns nothing, which is the case on firmware that
+     * has dropped the older service. When either succeeds the caller must not
+     * guess RTSP paths.
      */
     public List<RTSPStream> getStreamUris(Device device) {
-        String mediaUrl = resolveMediaUrl(device);
-        SoapResult profilesResult = post(mediaUrl, "<trt:GetProfiles/>", device.getUsername(), device.getPassword());
+        MediaEndpoints endpoints = resolveMediaEndpoints(device);
+        String media1 = endpoints.media1();
+        if (media1 == null || media1.isBlank()) {
+            media1 = device.getOnvifServiceUrl();
+        }
+        device.setOnvifMediaUrl(endpoints.preferred(device.getOnvifServiceUrl()));
+
+        List<RTSPStream> streams = fetchStreams(device, media1, false);
+        if (streams.isEmpty() && endpoints.hasMedia2()) {
+            logger.debug("Media1 returned no streams for {}; trying Media2", device.getIpAddress());
+            streams = fetchStreams(device, endpoints.media2(), true);
+        }
+        assignRoles(streams);
+        return streams;
+    }
+
+    /**
+     * Ask one media service for its profiles and their stream addresses.
+     *
+     * @param media2 use the ver20 message shapes, which drop StreamSetup and
+     *               name the protocol directly
+     */
+    private List<RTSPStream> fetchStreams(Device device, String mediaUrl, boolean media2) {
+        String profilesRequest = media2
+                ? "<tr2:GetProfiles><tr2:Type>All</tr2:Type></tr2:GetProfiles>"
+                : "<trt:GetProfiles/>";
+        SoapResult profilesResult = post(mediaUrl, profilesRequest, device.getUsername(), device.getPassword());
         if (!profilesResult.ok()) {
-            logger.debug("GetProfiles failed for {} (status {})", device.getIpAddress(), profilesResult.status());
+            logger.debug("GetProfiles failed for {} on {} (status {})",
+                    device.getIpAddress(), mediaUrl, profilesResult.status());
             return List.of();
         }
 
@@ -638,11 +739,15 @@ public final class OnvifService {
         List<RTSPStream> streams = new ArrayList<>();
         Set<String> seen = new LinkedHashSet<>();
         for (Profile profile : profiles) {
-            String body = "<trt:GetStreamUri>"
-                    + "<trt:StreamSetup><tt:Stream>RTP-Unicast</tt:Stream>"
-                    + "<tt:Transport><tt:Protocol>RTSP</tt:Protocol></tt:Transport></trt:StreamSetup>"
-                    + "<trt:ProfileToken>" + XmlUtils.escape(profile.token()) + "</trt:ProfileToken>"
-                    + "</trt:GetStreamUri>";
+            String token = XmlUtils.escape(profile.token());
+            String body = media2
+                    ? "<tr2:GetStreamUri><tr2:Protocol>RTSP</tr2:Protocol>"
+                      + "<tr2:ProfileToken>" + token + "</tr2:ProfileToken></tr2:GetStreamUri>"
+                    : "<trt:GetStreamUri>"
+                      + "<trt:StreamSetup><tt:Stream>RTP-Unicast</tt:Stream>"
+                      + "<tt:Transport><tt:Protocol>RTSP</tt:Protocol></tt:Transport></trt:StreamSetup>"
+                      + "<trt:ProfileToken>" + token + "</trt:ProfileToken></trt:GetStreamUri>";
+
             SoapResult uriResult = post(mediaUrl, body, device.getUsername(), device.getPassword());
             if (!uriResult.ok()) {
                 continue;
@@ -659,14 +764,13 @@ public final class OnvifService {
                 }
                 String name = profile.name() == null || profile.name().isBlank() ? profile.token() : profile.name();
                 RTSPStream stream = new RTSPStream(name, normalized);
-                stream.setSource("ONVIF");
+                stream.setSource(media2 ? "ONVIF Media2" : "ONVIF");
                 streams.add(stream);
                 logger.info("ONVIF profile '{}' on {} -> {}", name, device.getIpAddress(), normalized);
             } catch (Exception e) {
                 logger.debug("Cannot parse GetStreamUri for {}: {}", profile.token(), e.getMessage());
             }
         }
-        assignRoles(streams);
         return streams;
     }
 

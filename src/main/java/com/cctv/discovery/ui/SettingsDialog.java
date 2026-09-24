@@ -61,14 +61,7 @@ public class SettingsDialog extends Stage {
         VBox root = createContent();
         Scene scene = new Scene(root, 650, 520);
 
-        try {
-            java.net.URL cssResource = getClass().getResource("/css/app.css");
-            if (cssResource != null) {
-                scene.getStylesheets().add(cssResource.toExternalForm());
-            }
-        } catch (Exception e) {
-            logger.warn("Could not load CSS for settings dialog", e);
-        }
+        Theme.current().applyTo(scene);
 
         setScene(scene);
         loadCurrentSettings();

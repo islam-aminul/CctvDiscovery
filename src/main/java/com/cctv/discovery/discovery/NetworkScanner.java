@@ -228,7 +228,10 @@ public final class NetworkScanner implements AutoCloseable {
                         device.getOpenSpecialPorts().add(port);
                     }
                 }
-                default -> device.getOpenSpecialPorts().add(port);
+                default -> {
+                    device.getOpenSpecialPorts().add(port);
+                    applyVendorHint(device, port);
+                }
             }
         }
 
@@ -236,6 +239,36 @@ public final class NetworkScanner implements AutoCloseable {
             if (device.getType() == Device.DeviceType.UNKNOWN) {
                 device.setType(Device.DeviceType.CAMERA);
             }
+        }
+    }
+
+    /**
+     * A vendor's management port is a strong hint about who made a device.
+     *
+     * <p>These protocols are proprietary and are not spoken here, but the port
+     * being open still tells us the family, which selects the right RTSP path
+     * templates when ARP and ONVIF have given us nothing.
+     */
+    public static String vendorForSdkPort(int port) {
+        return switch (port) {
+            case 37777, 37778 -> "Dahua";
+            case 34567 -> "Xiongmai (XMeye)";
+            case 8091, 8899 -> null; // too widely used to mean anything
+            default -> null;
+        };
+    }
+
+    private void applyVendorHint(Device device, int port) {
+        String hint = vendorForSdkPort(port);
+        if (hint == null) {
+            return;
+        }
+        if (device.getManufacturer() == null || MacLookupService.UNKNOWN.equals(device.getManufacturer())) {
+            device.setManufacturer(hint);
+            logger.debug("{} has port {} open, so treating it as {}", device.getIpAddress(), port, hint);
+        }
+        if (device.getType() == Device.DeviceType.UNKNOWN) {
+            device.setType(Device.DeviceType.CAMERA);
         }
     }
 

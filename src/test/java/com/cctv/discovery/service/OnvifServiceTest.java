@@ -115,4 +115,82 @@ class OnvifServiceTest {
         assertEquals(Device.DeviceType.UNKNOWN, service.classifyType(device, 0));
         assertFalse(device.isNvrDvr());
     }
+
+    @Test
+    @DisplayName("Media services are read from GetServices, the only source for a Media2 address")
+    void readsBothMediaGenerations() {
+        // A device offering only Media2 reports no media capability in the
+        // ver10 list, so GetCapabilities alone would find nothing on it.
+        String reply = """
+                <?xml version="1.0"?>
+                <s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope"
+                            xmlns:tds="http://www.onvif.org/ver10/device/wsdl">
+                  <s:Body><tds:GetServicesResponse>
+                    <tds:Service>
+                      <tds:Namespace>http://www.onvif.org/ver10/device/wsdl</tds:Namespace>
+                      <tds:XAddr>http://10.0.0.9/onvif/device_service</tds:XAddr>
+                    </tds:Service>
+                    <tds:Service>
+                      <tds:Namespace>http://www.onvif.org/ver10/media/wsdl</tds:Namespace>
+                      <tds:XAddr>http://10.0.0.9/onvif/media_service</tds:XAddr>
+                    </tds:Service>
+                    <tds:Service>
+                      <tds:Namespace>http://www.onvif.org/ver20/media/wsdl</tds:Namespace>
+                      <tds:XAddr>http://10.0.0.9/onvif/media2_service</tds:XAddr>
+                    </tds:Service>
+                  </tds:GetServicesResponse></s:Body>
+                </s:Envelope>""";
+
+        OnvifService.MediaEndpoints endpoints = OnvifService.parseServices(reply, "10.0.0.9");
+        assertEquals("http://10.0.0.9/onvif/media_service", endpoints.media1());
+        assertEquals("http://10.0.0.9/onvif/media2_service", endpoints.media2());
+        assertTrue(endpoints.hasMedia2());
+    }
+
+    @Test
+    @DisplayName("A device advertising an unreachable host is rewritten to the address that answered")
+    void rewritesAdvertisedHost() {
+        // Cameras behind NAT, or holding a stale static address, advertise a
+        // host that cannot be reached from here.
+        String reply = """
+                <?xml version="1.0"?>
+                <s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope"
+                            xmlns:tds="http://www.onvif.org/ver10/device/wsdl">
+                  <s:Body><tds:GetServicesResponse><tds:Service>
+                    <tds:Namespace>http://www.onvif.org/ver20/media/wsdl</tds:Namespace>
+                    <tds:XAddr>http://192.168.99.1:8080/onvif/media2</tds:XAddr>
+                  </tds:Service></tds:GetServicesResponse></s:Body>
+                </s:Envelope>""";
+
+        OnvifService.MediaEndpoints endpoints = OnvifService.parseServices(reply, "10.0.0.9");
+        assertEquals("http://10.0.0.9:8080/onvif/media2", endpoints.media2(),
+                "the port and path are kept, only the host is corrected");
+    }
+
+    @Test
+    @DisplayName("Only Media2: requests go there rather than to the device service")
+    void usesMedia2WhenMedia1Absent() {
+        OnvifService.MediaEndpoints onlyMedia2 =
+                new OnvifService.MediaEndpoints(null, "http://10.0.0.9/onvif/media2");
+        assertEquals("http://10.0.0.9/onvif/media2",
+                onlyMedia2.preferred("http://10.0.0.9/onvif/device_service"));
+    }
+
+    @Test
+    @DisplayName("Media1 is preferred when a device offers both")
+    void prefersMedia1WhenBothExist() {
+        OnvifService.MediaEndpoints both = new OnvifService.MediaEndpoints(
+                "http://10.0.0.9/onvif/media", "http://10.0.0.9/onvif/media2");
+        assertEquals("http://10.0.0.9/onvif/media", both.preferred("http://10.0.0.9/onvif/device_service"));
+        assertTrue(both.hasMedia2(), "Media2 stays available as a fallback");
+    }
+
+    @Test
+    @DisplayName("A device with neither media service falls back to its device service")
+    void fallsBackToDeviceService() {
+        OnvifService.MediaEndpoints none = new OnvifService.MediaEndpoints(null, null);
+        assertFalse(none.hasMedia2());
+        assertEquals("http://10.0.0.9/onvif/device_service",
+                none.preferred("http://10.0.0.9/onvif/device_service"));
+    }
 }

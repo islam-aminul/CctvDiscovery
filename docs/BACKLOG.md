@@ -13,25 +13,23 @@ way. This replaces the point-in-time `PROJECT_REVIEW.md` that lived on the
   its unit tests exist, but no NVR or DVR has been on the test network. Put one
   on the LAN and confirm the channel patterns, the stop-after-consecutive-misses
   rule and the per-channel roles.
-- **ONVIF Media2 (`ver20/media`) is not used.** Only the Media1 service is
-  called. Newer firmware may expose profiles only through Media2.
 - **No IPv6.** `NetworkUtils` and `TargetParser` are IPv4 only. Cameras on
   IPv6-only segments cannot be scanned.
-- **Vendor SDK ports are recorded but not spoken.** 37777 (Dahua) and 34567
-  (Xiongmai) are noted as open and nothing more, so devices that expose streams
-  only over those protocols are reported without streams.
+- **Vendor SDK protocols are still not spoken.** 37777 (Dahua) and 34567
+  (Xiongmai) now identify the family and raise a finding, but the protocols
+  themselves are proprietary and are not implemented, so a device that offers
+  video only over its maker's protocol is still reported without streams.
+  Implementing either means reverse-engineering a binary protocol; weigh that
+  against telling the operator to turn ONVIF on.
 
 ### Product
 
-- **No scan history.** Results live only in the running application. Saving a
-  scan, reloading it and comparing two scans of the same site over time would
-  make change detection possible.
+- **A saved scan cannot be loaded back.** JSON export writes the whole scan,
+  but nothing reads it in again, so two surveys of a site cannot be compared.
+  The reader is the missing half.
 - **Credentials are per-session.** They are entered again for every run. Stored
   profiles per site would need encryption at rest; decide where the key lives
   before building it.
-- **Excel is the only export.** CSV for analysis and JSON for feeding another
-  system have both been asked for.
-- **No dark theme.** `app.css` is light only.
 - **A scan cannot be resumed.** Closing the window mid-scan loses progress.
   Everything found so far is kept if Stop is used instead.
 
@@ -79,3 +77,7 @@ Kept here so the same ground is not re-reviewed.
 | Path cache lost between runs | Remembered per vendor in the user data directory |
 | Three build platforms | Five: adds macOS x64 and Linux ARM64 |
 | Ingenic/Happytime OEM path not probed | `/live/channel0` added, verified on the bench camera |
+| ONVIF Media2 never called | Found via GetServices, used when Media1 returns nothing |
+| Vendor SDK ports ignored | Identify the family, and raise a finding when nothing else answers |
+| Excel the only export | CSV and JSON as well |
+| No dark theme | Light, dark, or follow the system |
