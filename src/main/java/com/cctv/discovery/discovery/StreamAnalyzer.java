@@ -97,45 +97,8 @@ public final class StreamAnalyzer implements AutoCloseable {
 
             grabber = FFmpegSupport.grabber(stream.getRtspUrl(), device.getUsername(), device.getPassword(), timeout);
             grabber.start();
+            populate(stream, grabber);
 
-            if (grabber.getImageWidth() > 0 && grabber.getImageHeight() > 0) {
-                stream.setDimensions(grabber.getImageWidth(), grabber.getImageHeight());
-            }
-            String codec = FFmpegSupport.videoCodecName(grabber);
-            if (codec != null) {
-                stream.setCodec(codec);
-            }
-            String profile = FFmpegSupport.videoProfile(grabber);
-            if (profile != null) {
-                stream.setProfile(profile);
-            }
-            String audio = FFmpegSupport.audioCodecName(grabber);
-            if (audio != null) {
-                stream.setAudioCodec(audio);
-            }
-
-            Measurement measurement = measure(grabber, config.getStreamAnalysisDuration());
-            if (measurement.videoPackets > 0) {
-                stream.setBitrateKbps((int) Math.round(measurement.kbps));
-                if (measurement.fps > 0) {
-                    stream.setFps(round(measurement.fps, 2));
-                }
-                if (measurement.keyframeIntervalSeconds > 0) {
-                    stream.setKeyframeIntervalSeconds(round(measurement.keyframeIntervalSeconds, 2));
-                }
-            }
-            if (stream.getFps() == null && grabber.getFrameRate() > 0) {
-                stream.setFps(round(grabber.getFrameRate(), 2));
-            }
-            if (stream.getWidth() == null && measurement.videoPackets == 0) {
-                // No packets and no dimensions: try one decoded image as a fallback.
-                Frame image = grabber.grabImage();
-                if (image != null && image.imageWidth > 0) {
-                    stream.setDimensions(image.imageWidth, image.imageHeight);
-                }
-            }
-
-            stream.setAnalyzed(true);
             logger.info("Analysed {}: {} {} {} {}kbps {}fps",
                     RtspClient.stripCredentials(stream.getRtspUrl()), stream.getResolution(), stream.getCodec(),
                     stream.getProfile() == null ? "" : stream.getProfile(),
@@ -156,8 +119,60 @@ public final class StreamAnalyzer implements AutoCloseable {
         }
     }
 
+    /**
+     * Read everything measurable from a grabber that has already started.
+     *
+     * <p>Separate from {@link #analyzeStream} so the measurement can be
+     * exercised against a recorded file: the rate calculation has been wrong in
+     * both directions before, and only a manual comparison against ffprobe
+     * caught it.
+     */
+    void populate(RTSPStream stream, FFmpegFrameGrabber grabber) {
+        if (grabber.getImageWidth() > 0 && grabber.getImageHeight() > 0) {
+            stream.setDimensions(grabber.getImageWidth(), grabber.getImageHeight());
+        }
+        String codec = FFmpegSupport.videoCodecName(grabber);
+        if (codec != null) {
+            stream.setCodec(codec);
+        }
+        String profile = FFmpegSupport.videoProfile(grabber);
+        if (profile != null) {
+            stream.setProfile(profile);
+        }
+        String audio = FFmpegSupport.audioCodecName(grabber);
+        if (audio != null) {
+            stream.setAudioCodec(audio);
+        }
+
+        Measurement measurement = measure(grabber, config.getStreamAnalysisDuration());
+        if (measurement.videoPackets() > 0) {
+            stream.setBitrateKbps((int) Math.round(measurement.kbps()));
+            if (measurement.fps() > 0) {
+                stream.setFps(round(measurement.fps(), 2));
+            }
+            if (measurement.keyframeIntervalSeconds() > 0) {
+                stream.setKeyframeIntervalSeconds(round(measurement.keyframeIntervalSeconds(), 2));
+            }
+        }
+        if (stream.getFps() == null && grabber.getFrameRate() > 0) {
+            stream.setFps(round(grabber.getFrameRate(), 2));
+        }
+        if (stream.getWidth() == null && measurement.videoPackets() == 0) {
+            // No packets and no dimensions: fall back to one decoded image.
+            try {
+                Frame image = grabber.grabImage();
+                if (image != null && image.imageWidth > 0) {
+                    stream.setDimensions(image.imageWidth, image.imageHeight);
+                }
+            } catch (Exception e) {
+                logger.debug("Fallback image grab failed: {}", e.getMessage());
+            }
+        }
+        stream.setAnalyzed(true);
+    }
+
     /** Values measured over a sampling window. */
-    private record Measurement(long videoPackets, long videoBytes, double kbps, double fps,
+    record Measurement(long videoPackets, long videoBytes, double kbps, double fps,
                                double keyframeIntervalSeconds) {
     }
 
@@ -170,7 +185,7 @@ public final class StreamAnalyzer implements AutoCloseable {
      * time, or stalls on a busy link, otherwise yields a frame rate and bitrate
      * that describe the network rather than the encoder.
      */
-    private Measurement measure(FFmpegFrameGrabber grabber, int seconds) {
+    Measurement measure(FFmpegFrameGrabber grabber, int seconds) {
         long bytes = 0;
         long packets = 0;
         long keyframes = 0;

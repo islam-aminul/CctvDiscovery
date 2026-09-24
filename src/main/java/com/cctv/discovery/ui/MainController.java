@@ -1873,6 +1873,8 @@ public class MainController {
 
     /** Return the window to its idle state. */
     private void finishDiscovery() {
+        // Keep what this run learned about stream paths for the next survey.
+        rtspService.saveLearnedPaths();
         progressBar.setProgress(cancelRequested ? 0 : 1.0);
         btnStop.setVisible(false);
         btnStop.setManaged(false);

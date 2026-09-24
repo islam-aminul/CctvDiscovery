@@ -40,15 +40,10 @@ way. This replaces the point-in-time `PROJECT_REVIEW.md` that lived on the
 - **`MainController` is about 2,400 lines.** It builds the window, runs the
   scan and drives the export. Splitting the scan orchestration into its own
   class would make both testable without JavaFX.
-- **The RTSP path cache is per-run.** `RtspService.SMART_CACHE` is rebuilt every
-  time, so a second scan of the same site repeats the same path probing.
-- **Build profiles cover three platforms.** Windows x64, Linux x64 and macOS
-  ARM64. macOS x64 and Linux ARM64 have no profile; FFmpeg publishes natives for
-  both.
-- **Stream analysis timing is not covered by tests.** The bitrate and frame rate
-  measurement was wrong twice, in opposite directions, and was caught only by
-  comparing against `ffprobe` by hand. A recorded RTSP fixture would let it be
-  asserted in CI.
+- **Protocol behaviour still needs hardware to verify.** The measurement maths
+  is now pinned by a fixture, but DESCRIBE, SETUP and interleaved RTP are still
+  only exercised against the one camera on the bench. A recorded RTSP server
+  would let those be asserted in CI too.
 
 ## Closed by the overhaul
 
@@ -80,3 +75,7 @@ Kept here so the same ground is not re-reviewed.
 | Interface mode assumed /24 | Uses the adapter's real prefix |
 | Keystore password printed in the build log | Signing only with a supplied keystore |
 | Java 8 with a build that failed on JDK 8 | Java 25 with a jlink runtime |
+| Stream timing never tested | A committed clip pins bitrate, frame rate and GOP; the old bug now fails 4 tests |
+| Path cache lost between runs | Remembered per vendor in the user data directory |
+| Three build platforms | Five: adds macOS x64 and Linux ARM64 |
+| Ingenic/Happytime OEM path not probed | `/live/channel0` added, verified on the bench camera |

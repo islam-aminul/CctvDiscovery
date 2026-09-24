@@ -4,6 +4,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 class RtspServiceTest {
@@ -44,6 +45,21 @@ class RtspServiceTest {
                 "/media/video{channel}", "/media/video{channel+100}");
         assertEquals("/media/video2", uniview.getMainPath(2));
         assertEquals("/media/video102", uniview.getSubPath(2));
+    }
+
+    @Test
+    @DisplayName("Deriving a sub path from a sub path gives nonsense, so only main paths are remembered")
+    void substreamDerivationIsNotReversible() {
+        // Caching a sub path meant it was offered first on the next run and
+        // treated as the main stream; the pair derived from it did not exist,
+        // so a repeat scan found one stream where the first had found two.
+        String main = "/live/channel0";
+        String sub = RtspService.substreamPath(main);
+        assertEquals("/live/channel1", sub);
+
+        String derivedFromSub = RtspService.substreamPath(sub);
+        assertNotEquals(main, derivedFromSub, "deriving from a sub path must not round-trip to the main");
+        assertEquals("/live/channel2", derivedFromSub, "it yields an address that does not exist");
     }
 
     @Test

@@ -182,6 +182,20 @@
             </properties>
         </profile>
         <profile>
+            <id>linux-arm64</id>
+            <activation>
+                <os>
+                    <family>unix</family>
+                    <name>Linux</name>
+                    <arch>aarch64</arch>
+                </os>
+            </activation>
+            <properties>
+                <javacpp.platform>linux-arm64</javacpp.platform>
+                <javafx.platform>linux-aarch64</javafx.platform>
+            </properties>
+        </profile>
+        <profile>
             <id>mac-arm64</id>
             <activation>
                 <os>
@@ -192,6 +206,19 @@
             <properties>
                 <javacpp.platform>macosx-arm64</javacpp.platform>
                 <javafx.platform>mac-aarch64</javafx.platform>
+            </properties>
+        </profile>
+        <profile>
+            <id>mac-x64</id>
+            <activation>
+                <os>
+                    <family>mac</family>
+                    <arch>x86_64</arch>
+                </os>
+            </activation>
+            <properties>
+                <javacpp.platform>macosx-x86_64</javacpp.platform>
+                <javafx.platform>mac</javafx.platform>
             </properties>
         </profile>
         <!-- Enables signing when a keystore is supplied -->

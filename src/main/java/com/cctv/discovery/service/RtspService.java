@@ -113,8 +113,8 @@ public final class RtspService {
     private static final Map<String, String[]> MANUFACTURER_PATHS = new LinkedHashMap<>();
     private static final Map<String, NvrChannelPattern> NVR_PATTERNS = new HashMap<>();
 
-    /** Paths that worked for a MAC prefix, tried first on similar devices. */
-    private static final Map<String, List<String>> SMART_CACHE = new ConcurrentHashMap<>();
+    /** Paths that worked before, kept between runs and tried first. */
+    private final RtspPathCache pathCache;
 
     static {
         FFmpegSupport.init();
@@ -137,11 +137,16 @@ public final class RtspService {
     }
 
     public RtspService() {
-        this.discoveryConfig = sharedConfig;
+        this(sharedConfig, RtspPathCache.shared());
     }
 
     public RtspService(RtspDiscoveryConfig config) {
+        this(config, RtspPathCache.shared());
+    }
+
+    public RtspService(RtspDiscoveryConfig config, RtspPathCache pathCache) {
         this.discoveryConfig = config == null ? new RtspDiscoveryConfig() : config;
+        this.pathCache = pathCache;
     }
 
     public void reset() {
@@ -534,7 +539,9 @@ public final class RtspService {
                         sub.setStreamName("Sub");
                         sub.setRole(RTSPStream.Role.SUB);
                         found.add(sub);
-                        cachePath(device, subPath);
+                        // The sub path is not remembered: it is derived from the
+                        // main path, and remembering it would see it offered
+                        // first on the next run and treated as the main stream.
                     }
                 }
                 return found;
@@ -546,10 +553,9 @@ public final class RtspService {
     private List<String> candidatePaths(Device device) {
         Set<String> paths = new LinkedHashSet<>();
 
-        String macPrefix = macPrefix(device.getMacAddress());
-        if (macPrefix != null) {
-            paths.addAll(SMART_CACHE.getOrDefault(macPrefix, List.of()));
-        }
+        // What worked last time for this vendor, so a repeat survey of the
+        // same site finds the stream on the first attempt.
+        paths.addAll(pathCache.pathsFor(device.getMacAddress()));
 
         String manufacturer = device.getManufacturer();
         if (manufacturer != null && !manufacturer.isBlank()
@@ -578,14 +584,12 @@ public final class RtspService {
     }
 
     private void cachePath(Device device, String path) {
-        String prefix = macPrefix(device.getMacAddress());
-        if (prefix != null) {
-            SMART_CACHE.computeIfAbsent(prefix, k -> new java.util.concurrent.CopyOnWriteArrayList<>()).add(path);
-        }
+        pathCache.remember(device.getMacAddress(), path);
     }
 
-    private static String macPrefix(String mac) {
-        return mac != null && mac.length() >= 8 ? mac.substring(0, 8) : null;
+    /** Persist anything learned during this run. */
+    public void saveLearnedPaths() {
+        pathCache.save();
     }
 
     /** Derive the sub-stream path that pairs with a main-stream path. */
