@@ -9,16 +9,12 @@ way. This replaces the point-in-time `PROJECT_REVIEW.md` that lived on the
 
 ### Protocol coverage
 
-- **Verify the recorder fixes end to end on the Hikvision site.** Recorders
-  with ONVIF off are now recognised by asking for channel 2 (confirmed live on
-  2026-10-09: the NVR at 192.168.1.200 was detected; its cameras answer channel
-  2 with 400). The channel walk now decides a channel exists from its RTSP
-  description rather than from a decoded picture, and a path that describes
-  video which will not decode is kept and reported instead of dropped. Those
-  two changes, and the second port-scan pass, were written after the Wi-Fi
-  link to that site dropped and have only been tested against the fake server.
-  Expected on a re-run: .200 typed as a recorder with six channels, each
-  flagged "Stream does not decode as advertised".
+- **Recorder support verified on one site only.** On 2026-10-09 the full scan
+  of a Hikvision NVR and six cameras (192.168.1.200 to .206) completed in
+  214 s: the NVR was recognised with ONVIF off, all six channels were walked,
+  its undecodable main streams were reported rather than dropped, and the
+  cameras were not mistaken for recorders. Dahua, Uniview and the other
+  recorder patterns have still only run against the fake server.
 - **That recorder's relayed video does not decode, in this tool or ffprobe.**
   Every channel describes itself as H.264 (fmtp says Main level 2.0, the SPS
   says level 4.2) and decodes at 44x32 with errors, while the cameras' own
