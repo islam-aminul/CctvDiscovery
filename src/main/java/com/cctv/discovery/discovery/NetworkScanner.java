@@ -136,11 +136,61 @@ public final class NetworkScanner implements AutoCloseable {
             Thread.currentThread().interrupt();
         }
 
+        retryUnanswered(targets, total, found, httpPorts, rtspPorts, otherPorts);
+
         List<Device> devices = new ArrayList<>(found.values());
         devices.sort((a, b) -> Long.compare(
                 NetworkUtils.ipToLong(a.getIpAddress()), NetworkUtils.ipToLong(b.getIpAddress())));
         logger.info("Port scan finished: {} host(s) responded", devices.size());
         return devices;
+    }
+
+    /** Above this many addresses a second pass costs more than it is likely to find. */
+    private static final long RETRY_LIMIT = 4096;
+
+    /**
+     * Try once more every address where nothing answered.
+     *
+     * <p>Each port is connected to once, so a moment's loss drops a camera from
+     * the survey without trace. On 2026-10-09 a Hikvision camera on Wi-Fi went
+     * unanswered on all three of its open ports in one scan and answered
+     * normally seconds later. The second pass runs after the first has finished,
+     * which gives a brief drop time to clear. It costs a second sweep of the
+     * dead addresses, so it is skipped for very large ranges.
+     */
+    private void retryUnanswered(TargetParser.Targets targets, long total, Map<String, Device> found,
+                                 int[] httpPorts, int[] rtspPorts, int[] otherPorts) {
+        if (stopped() || total > RETRY_LIMIT) {
+            return;
+        }
+        List<String> unanswered = new ArrayList<>();
+        for (String ip : targets) {
+            if (!found.containsKey(ip)) {
+                unanswered.add(ip);
+            }
+        }
+        if (unanswered.isEmpty()) {
+            return;
+        }
+        try (var scope = StructuredTaskScope.open(StructuredTaskScope.Joiner.<Void>awaitAll(),
+                cfg -> cfg.withName("port-scan-retry"))) {
+            for (String ip : unanswered) {
+                if (stopped()) {
+                    break;
+                }
+                scope.fork(() -> {
+                    Device device = scanHost(ip, httpPorts, rtspPorts, otherPorts);
+                    if (device != null) {
+                        found.put(ip, device);
+                        logger.info("Host {} answered only on the second pass", ip);
+                    }
+                    return null;
+                });
+            }
+            scope.join();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     /** Scan one host; null when nothing answers. */

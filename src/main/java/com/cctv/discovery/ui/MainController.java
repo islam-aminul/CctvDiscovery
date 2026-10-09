@@ -618,7 +618,8 @@ public class MainController {
         table.setPlaceholder(new Label("Choose a network and start a scan."));
 
         table.getColumns().add(textColumn("Address", 130, Device::getIpAddress));
-        table.getColumns().add(textColumn("Status", 105, Device::statusLabel));
+        // Wide enough for "Sign-in needed" in the heavier red-row style.
+        table.getColumns().add(textColumn("Status", 150, Device::statusLabel));
         table.getColumns().add(textColumn("Type", 110, Device::getDeviceType));
         table.getColumns().add(textColumn("Name", 150, Device::getDeviceName));
         table.getColumns().add(textColumn("Make", 110, Device::getManufacturer));

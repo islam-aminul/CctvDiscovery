@@ -139,6 +139,19 @@ class ScanCoordinatorTest {
     }
 
     @Test
+    @DisplayName("Stream servers' boilerplate session names are not taken as device names")
+    void ignoresGenericSessionNames() {
+        // Both seen on a live Hikvision site, for the cameras and the recorder.
+        assertFalse(ScanCoordinator.isDeviceName("Media Presentation"));
+        assertFalse(ScanCoordinator.isDeviceName("HIK Media Server V3.4.106"));
+        assertFalse(ScanCoordinator.isDeviceName("Session streamed by \"preview\""));
+        assertFalse(ScanCoordinator.isDeviceName("  "));
+        assertFalse(ScanCoordinator.isDeviceName(null));
+        assertTrue(ScanCoordinator.isDeviceName("Gate 2 North"));
+        assertTrue(ScanCoordinator.isDeviceName("Loading bay"));
+    }
+
+    @Test
     @DisplayName("A vendor port is not mentioned once the video was found anyway")
     void vendorPortIsSilentWhenStreamsWork() {
         Device device = withStream("192.168.0.16");

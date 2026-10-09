@@ -154,4 +154,57 @@ class StreamAnalyzerTest {
         assertTrue(broken.getComplianceIssues().contains("Timed out"));
         analyzer.close();
     }
+
+    /**
+     * Measured on a Hikvision recorder: its main stream described itself as
+     * H.264 and decoded at 44x32, in this tool and in ffprobe. Ranked by size,
+     * that made the real main stream the sub-stream and the 640x360 sub-stream
+     * the main one.
+     */
+    @Test
+    @DisplayName("A stream that decodes at an impossible size does not decide which stream is main")
+    void ignoresImplausibleSizesWhenRanking() {
+        RTSPStream main = stream("Main", 44, 32, "H.264", "Main", 1572);
+        main.setRole(RTSPStream.Role.MAIN);
+        RTSPStream sub = stream("Sub", 640, 360, "H.264", "Main", 106);
+        sub.setRole(RTSPStream.Role.SUB);
+
+        StreamAnalyzer.refineRoles(List.of(main, sub));
+
+        assertEquals(RTSPStream.Role.MAIN, main.getRole(), "the path said main; 44x32 is no evidence otherwise");
+        assertEquals(RTSPStream.Role.SUB, sub.getRole());
+    }
+
+    @Test
+    @DisplayName("A stream that decodes at an impossible size is reported once per device")
+    void reportsUndecodableStreamsOnce() {
+        StreamAnalyzer analyzer = new StreamAnalyzer();
+        Device device = new Device("192.168.1.200");
+        RTSPStream first = stream("CH1 Main", 44, 32, "H.264", "Main", 1572);
+        RTSPStream second = stream("CH2 Main", 44, 32, "H.264", "Main", 1440);
+        RTSPStream fine = stream("CH1 Sub", 640, 360, "H.264", "Main", 106);
+        fine.setRole(RTSPStream.Role.SUB);
+
+        analyzer.checkCompliance(device, first);
+        analyzer.checkCompliance(device, second);
+        analyzer.checkCompliance(device, fine);
+
+        assertFalse(first.isCompliant());
+        assertTrue(first.getComplianceIssues().contains("44x32"), first.getComplianceIssues());
+        assertTrue(fine.isCompliant(), fine.getComplianceIssues());
+        long raised = device.getFindings().stream()
+                .filter(f -> f.title().equals("Stream does not decode as advertised")).count();
+        assertEquals(1, raised, "one finding for the device, however many of its streams are affected");
+        assertEquals(Finding.Severity.MEDIUM, device.getFindings().getFirst().severity());
+        analyzer.close();
+    }
+
+    @Test
+    @DisplayName("The smallest real camera resolutions are not mistaken for decoding failures")
+    void acceptsSmallRealResolutions() {
+        assertFalse(StreamAnalyzer.implausibleSize(stream("QCIF", 176, 144, "H.264", "Main", 64)));
+        assertFalse(StreamAnalyzer.implausibleSize(stream("QQVGA", 160, 120, "H.264", "Main", 64)));
+        assertTrue(StreamAnalyzer.implausibleSize(stream("Garbage", 44, 32, "H.264", "Main", 64)));
+        assertFalse(StreamAnalyzer.implausibleSize(new RTSPStream("Unmeasured", "rtsp://10.0.0.1/x")));
+    }
 }

@@ -191,6 +191,21 @@ public class RTSPStream {
         this.analysisError = analysisError;
     }
 
+    /**
+     * Why the stream was accepted without the check that was asked for, or
+     * null when it passed. Set when a path described video that did not
+     * decode, so the report can say so rather than drop the stream.
+     */
+    private volatile String validationNote;
+
+    public String getValidationNote() {
+        return validationNote;
+    }
+
+    public void setValidationNote(String validationNote) {
+        this.validationNote = validationNote;
+    }
+
     public boolean isCompliant() {
         return compliant;
     }

@@ -261,6 +261,19 @@ public final class ScanCoordinator {
             rtsp = discoverStreamsByPath(device, credentials);
         }
 
+        // Without ONVIF a recorder looks like a camera that happens to answer on
+        // channel 1. Ask it for channel 2: a recorder serves one, a camera
+        // refuses. Only once the password is known, so the walk below can run
+        // with it, and only for devices not already typed.
+        if (!device.isNvrDvr() && device.getUsername() != null && !device.getRtspStreams().isEmpty()
+                && rtspService.servesSecondChannel(device, device.getUsername(), device.getPassword())) {
+            logger.info("{} serves a second channel; treating it as a recorder", device.getIpAddress());
+            device.setType(Device.DeviceType.RECORDER);
+            // The walk finds channel 1 again, labelled by channel, so the
+            // streams path probing found are dropped rather than doubled.
+            device.getRtspStreams().clear();
+        }
+
         if (device.isNvrDvr() && device.getUsername() != null) {
             for (RTSPStream stream : rtspService.iterateNvrChannels(
                     device, device.getUsername(), device.getPassword(), config.getNvrMaxChannels())) {
@@ -354,7 +367,7 @@ public final class ScanCoordinator {
                 }
                 for (RTSPStream stream : streams) {
                     device.addStream(stream);
-                    if (device.getDeviceName() == null && stream.getSdpSessionName() != null) {
+                    if (device.getDeviceName() == null && isDeviceName(stream.getSdpSessionName())) {
                         device.setDeviceName(stream.getSdpSessionName());
                     }
                 }
@@ -367,6 +380,21 @@ public final class ScanCoordinator {
             challenged = rtspService.requiresAuthentication(device);
         }
         return new PathAccess(challenged, accepted);
+    }
+
+    /**
+     * Stream servers fill the SDP session name with their own boilerplate, so
+     * it names a device only when someone has set it. A Hikvision site gave
+     * "Media Presentation" for all six cameras and "HIK Media Server V3.4.106"
+     * for the recorder, and both went into the report as device names.
+     */
+    private static final java.util.regex.Pattern GENERIC_SESSION_NAME = java.util.regex.Pattern.compile(
+            "(?i)\\s*(media presentation|hik media server.*|session streamed by.*|live555.*|streamed by.*"
+                    + "|rtsp (session|server).*|unnamed|no ?name|stream|session|-)\\s*");
+
+    static boolean isDeviceName(String sessionName) {
+        return sessionName != null && !sessionName.isBlank()
+                && !GENERIC_SESSION_NAME.matcher(sessionName).matches();
     }
 
     /** Record whether the video is readable with no credentials at all. */

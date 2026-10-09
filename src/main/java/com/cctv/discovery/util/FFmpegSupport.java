@@ -10,6 +10,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Locale;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Shared FFmpeg setup for stream probing and analysis.
@@ -23,6 +30,82 @@ import java.util.Locale;
 public final class FFmpegSupport {
 
     private static final Logger logger = LoggerFactory.getLogger(FFmpegSupport.class);
+
+    private static final AtomicInteger THREAD_IDS = new AtomicInteger();
+
+    /**
+     * FFmpeg work runs on these threads, never on the caller's.
+     *
+     * <p>Measured on 2026-10-09 against a Hikvision recorder whose streams
+     * described themselves as H.264 and then trickled data that would not
+     * decode: {@code avformat_find_stream_info} did not return for an hour.
+     * Data kept arriving, so FFmpeg's socket timeout never fired, and the
+     * trickle was too slow to reach its byte or duration limits. Java cannot
+     * interrupt a thread inside native code, so nothing the caller did could
+     * stop it. Running the work here lets the caller give up at a deadline and
+     * carry on; the thread releases the grabber whenever FFmpeg returns.
+     *
+     * <p>Platform threads, not virtual ones: a virtual thread blocked in native
+     * code pins its carrier, and a few stuck streams would starve every virtual
+     * thread in the program.
+     */
+    private static final ExecutorService NATIVE = Executors.newCachedThreadPool(runnable -> {
+        Thread thread = new Thread(runnable, "ffmpeg-" + THREAD_IDS.incrementAndGet());
+        thread.setDaemon(true);
+        return thread;
+    });
+
+    /** Work done against a grabber that has been opened. */
+    @FunctionalInterface
+    public interface Session<T> {
+        T run(FFmpegFrameGrabber grabber) throws Exception;
+    }
+
+    /**
+     * Open the grabber and run work against it, giving up after
+     * {@code limitMs} whatever FFmpeg is doing. The grabber is released by the
+     * thread that used it, so callers must not release it themselves.
+     *
+     * @throws TimeoutException when the limit passes; the work is abandoned,
+     *                          and anything it produces afterwards is discarded
+     */
+    public static <T> T withDeadline(FFmpegFrameGrabber grabber, long limitMs, Session<T> work) throws Exception {
+        Future<T> result = NATIVE.submit(() -> {
+            try {
+                // startUnsafe rather than start: start() holds a lock on the
+                // grabber class for the whole open, so one stuck stream held
+                // up every other stream in the program. FFmpeg 8 opens
+                // separate inputs safely in parallel.
+                grabber.startUnsafe();
+                return work.run(grabber);
+            } finally {
+                closeQuietly(grabber);
+            }
+        });
+        try {
+            return result.get(limitMs, TimeUnit.MILLISECONDS);
+        } catch (ExecutionException e) {
+            Throwable cause = e.getCause();
+            if (cause instanceof Exception exception) {
+                throw exception;
+            }
+            if (cause instanceof Error error) {
+                throw error;
+            }
+            throw e;
+        }
+    }
+
+    /**
+     * Release a grabber without waiting. Closing waits on the grabber's own
+     * lock, which a stuck open holds, so the Stop button, which closes the
+     * grabbers in flight, would otherwise freeze the window.
+     */
+    public static void closeLater(FFmpegFrameGrabber grabber) {
+        if (grabber != null) {
+            NATIVE.execute(() -> closeQuietly(grabber));
+        }
+    }
 
     static {
         // Route native FFmpeg output through SLF4J; logback keeps it out of the console.

@@ -114,6 +114,14 @@ public final class AppConfig {
      * to avoid.
      */
     private static void migrateFromPreviousLocation() {
+        // An overridden data folder means "use this one". Filling it from the
+        // roaming profile put this user's real settings, custom ports and all,
+        // into a test run's scratch folder, and would do the same to a portable
+        // install on a stick.
+        String override = System.getProperty(AppPaths.DATA_DIR_PROPERTY);
+        if (override != null && !override.isBlank()) {
+            return;
+        }
         migrate(AppPaths.previousDataDirectory(), AppPaths.dataDirectory());
     }
 

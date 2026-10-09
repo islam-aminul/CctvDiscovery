@@ -9,21 +9,22 @@ way. This replaces the point-in-time `PROJECT_REVIEW.md` that lived on the
 
 ### Protocol coverage
 
-- **A recorder with ONVIF switched off is never recognised as a recorder.**
-  Found on 2026-10-09 against a Hikvision NVR and six cameras (192.168.1.200 to
-  .206), none of which answered ONVIF. The scan types a device as a recorder
-  only from ONVIF: its video-source count or its model name. Without ONVIF the
-  NVR is typed as a camera, so `iterateNvrChannels` never runs and only its
-  first channel would be reported, even with the right password. Two signals
-  are available without ONVIF and were seen on that NVR: it answers RTSP "/"
-  with 404 while the cameras challenge it, and it listens on 9010 and 9020,
-  which the cameras do not. The most dependable test is probably behavioural:
-  once signed in, try channel 2's path, and treat the device as a recorder if
-  it serves video. Needs the site's password to verify.
-- **Recorder channel walking is untested against real hardware.** The code and
-  its unit tests exist, but has not yet run against a recorder, for the reason
-  above. Confirm the channel patterns, the stop-after-consecutive-misses rule
-  and the per-channel roles once the item above is done.
+- **Verify the recorder fixes end to end on the Hikvision site.** Recorders
+  with ONVIF off are now recognised by asking for channel 2 (confirmed live on
+  2026-10-09: the NVR at 192.168.1.200 was detected; its cameras answer channel
+  2 with 400). The channel walk now decides a channel exists from its RTSP
+  description rather than from a decoded picture, and a path that describes
+  video which will not decode is kept and reported instead of dropped. Those
+  two changes, and the second port-scan pass, were written after the Wi-Fi
+  link to that site dropped and have only been tested against the fake server.
+  Expected on a re-run: .200 typed as a recorder with six channels, each
+  flagged "Stream does not decode as advertised".
+- **That recorder's relayed video does not decode, in this tool or ffprobe.**
+  Every channel describes itself as H.264 (fmtp says Main level 2.0, the SPS
+  says level 4.2) and decodes at 44x32 with errors, while the cameras' own
+  streams decode cleanly. Probably a device setting (H.265 or a "smart" codec
+  relayed under an H.264 label); worth raising with the site, since most
+  viewing software will not play it.
 - **ONVIF attempts still count towards an account lockout.** RTSP path probing
   now stops at the first refusal, one failed login per password per device.
   ONVIF is still tried once per password per service address before RTSP, so

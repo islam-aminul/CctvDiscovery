@@ -52,6 +52,9 @@ class ScanAccessTest {
 
     @BeforeEach
     void setUp() {
+        // The channel walk reads its limits from settings; keep them the
+        // defaults rather than whatever this machine's user has set.
+        AppConfig.forTesting(tmp.resolve("user-settings.properties"));
         // Describing the stream is enough here; decoding a frame from a fake
         // server would test FFmpeg, not the decisions this class is about.
         RtspService.RtspDiscoveryConfig sdpOnly = new RtspService.RtspDiscoveryConfig();
@@ -170,6 +173,38 @@ class ScanAccessTest {
                 f -> f.detail().startsWith("The device answers on RTSP")));
         assertFalse(device.getFindings().stream().anyMatch(
                 f -> f.detail().contains("password was accepted")));
+    }
+
+    // ------------------------------------------------------------ recorders --
+
+    private static final Set<String> THREE_CHANNELS = Set.of(
+            "/Streaming/Channels/101", "/Streaming/Channels/102",
+            "/Streaming/Channels/201", "/Streaming/Channels/202",
+            "/Streaming/Channels/301", "/Streaming/Channels/302");
+
+    @Test
+    @DisplayName("A recorder with ONVIF off is recognised by its second channel, and every channel is walked")
+    void recognisesRecorderWithoutOnvif() throws Exception {
+        Device device = identify(FakeRtspServer.Style.RECORDER, THREE_CHANNELS, new Credential("admin", "right"));
+
+        assertEquals(Device.DeviceType.RECORDER, device.getType());
+        assertEquals(6, device.getRtspStreams().size(),
+                "three channels, main and sub each, and channel 1 not counted twice: "
+                        + device.getRtspStreams().stream().map(s -> s.getStreamName()).toList());
+        assertEquals(Set.of("Channel 1", "Channel 2", "Channel 3"), device.getRtspStreams().stream()
+                .map(s -> s.getChannelName()).collect(java.util.stream.Collectors.toSet()));
+        assertEquals(Device.DeviceStatus.COMPLETED, device.getStatus());
+        assertEquals(0, server.rejectedLogins());
+    }
+
+    @Test
+    @DisplayName("A camera, which refuses channel 2, stays a camera")
+    void cameraIsNotMistakenForRecorder() throws Exception {
+        Device device = identify(FakeRtspServer.Style.CAMERA,
+                Set.of("/Streaming/Channels/101", "/Streaming/Channels/102"), new Credential("admin", "right"));
+
+        assertFalse(device.isNvrDvr());
+        assertEquals(2, device.getRtspStreams().size());
     }
 
     @Test

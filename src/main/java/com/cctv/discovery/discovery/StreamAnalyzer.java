@@ -89,20 +89,35 @@ public final class StreamAnalyzer implements AutoCloseable {
             return;
         }
         int timeout = config.getStreamAnalysisTimeout();
-        FFmpegFrameGrabber grabber = null;
+        long limit = analysisLimitMillis();
         boolean permitHeld = false;
         try {
             analysisPermits.acquire();
             permitHeld = true;
 
-            grabber = FFmpegSupport.grabber(stream.getRtspUrl(), device.getUsername(), device.getPassword(), timeout);
-            grabber.start();
-            populate(stream, grabber);
+            FFmpegFrameGrabber grabber =
+                    FFmpegSupport.grabber(stream.getRtspUrl(), device.getUsername(), device.getPassword(), timeout);
+            // Measured into a copy and applied only if it arrives in time: an
+            // abandoned measurement that finishes later must not rewrite a
+            // stream already reported as timed out.
+            RTSPStream measured = FFmpegSupport.withDeadline(grabber, limit, g -> {
+                RTSPStream scratch = new RTSPStream(stream.getStreamName(), stream.getRtspUrl());
+                if (stream.getWidth() != null && stream.getHeight() != null) {
+                    scratch.setDimensions(stream.getWidth(), stream.getHeight());
+                }
+                populate(scratch, g);
+                return scratch;
+            });
+            copyMeasurements(measured, stream);
 
             logger.info("Analysed {}: {} {} {} {}kbps {}fps",
                     RtspClient.stripCredentials(stream.getRtspUrl()), stream.getResolution(), stream.getCodec(),
                     stream.getProfile() == null ? "" : stream.getProfile(),
                     stream.getBitrateKbps(), stream.getFps());
+        } catch (java.util.concurrent.TimeoutException e) {
+            stream.setAnalysisError("Gave up after " + limit / 1000 + " s without a decodable picture");
+            logger.info("Gave up analysing {} after {} s", RtspClient.stripCredentials(stream.getRtspUrl()),
+                    limit / 1000);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             stream.setAnalysisError("Cancelled");
@@ -112,11 +127,48 @@ public final class StreamAnalyzer implements AutoCloseable {
             logger.debug("Analysis failed for {}: {}",
                     RtspClient.stripCredentials(stream.getRtspUrl()), message);
         } finally {
-            FFmpegSupport.closeQuietly(grabber);
+            // The grabber is released by the thread that used it.
             if (permitHeld) {
                 analysisPermits.release();
             }
         }
+    }
+
+    /**
+     * How long one stream may take: the sampling window's wall-clock cap, plus
+     * time to open the stream. Never less than the configured analysis timeout.
+     */
+    long analysisLimitMillis() {
+        long sampling = TimeUnit.SECONDS.toMillis((long) Math.max(1, config.getStreamAnalysisDuration()) * 3);
+        return Math.max(config.getStreamAnalysisTimeout(), sampling + OPEN_ALLOWANCE_MS);
+    }
+
+    private static final long OPEN_ALLOWANCE_MS = 10_000;
+
+    /** Copy what {@link #populate} measured onto the stream being reported. */
+    static void copyMeasurements(RTSPStream from, RTSPStream to) {
+        if (from.getWidth() != null && from.getHeight() != null) {
+            to.setDimensions(from.getWidth(), from.getHeight());
+        }
+        if (from.getCodec() != null) {
+            to.setCodec(from.getCodec());
+        }
+        if (from.getProfile() != null) {
+            to.setProfile(from.getProfile());
+        }
+        if (from.getAudioCodec() != null) {
+            to.setAudioCodec(from.getAudioCodec());
+        }
+        if (from.getBitrateKbps() != null) {
+            to.setBitrateKbps(from.getBitrateKbps());
+        }
+        if (from.getFps() != null) {
+            to.setFps(from.getFps());
+        }
+        if (from.getKeyframeIntervalSeconds() != null) {
+            to.setKeyframeIntervalSeconds(from.getKeyframeIntervalSeconds());
+        }
+        to.setAnalyzed(from.isAnalyzed());
     }
 
     /**
@@ -313,7 +365,12 @@ public final class StreamAnalyzer implements AutoCloseable {
             // Recorder channels already carry explicit roles.
             return;
         }
-        List<RTSPStream> measured = byChannel.stream().filter(s -> s.pixels() > 0).toList();
+        // A size no camera produces is a decoding failure, not a small stream,
+        // so it does not get a vote. Counting it once relabelled a recorder's
+        // main stream as its sub-stream because it decoded at 44x32.
+        List<RTSPStream> measured = byChannel.stream()
+                .filter(s -> s.pixels() > 0 && !implausibleSize(s))
+                .toList();
         if (measured.size() < 2) {
             return;
         }
@@ -328,8 +385,57 @@ public final class StreamAnalyzer implements AutoCloseable {
      * because browsers cannot play it over HLS without transcoding; resolution
      * and bitrate limits apply to sub-streams.
      */
+    /**
+     * Smaller than any resolution a camera is set to. QCIF, 176x144, is the
+     * smallest in use; anything well below it is what a decoder reports when
+     * the stream is not the codec its description claims.
+     */
+    static boolean implausibleSize(RTSPStream stream) {
+        Integer width = stream.getWidth();
+        Integer height = stream.getHeight();
+        return width != null && height != null && width > 0 && height > 0
+                && (width < MIN_PLAUSIBLE_WIDTH || height < MIN_PLAUSIBLE_HEIGHT);
+    }
+
+    private static final int MIN_PLAUSIBLE_WIDTH = 160;
+    private static final int MIN_PLAUSIBLE_HEIGHT = 100;
+    private static final String UNDECODABLE = "Stream does not decode as advertised";
+
     void checkCompliance(Device device, RTSPStream stream) {
         List<String> issues = new ArrayList<>();
+
+        // Seen on a Hikvision recorder: every relayed channel described itself
+        // as H.264 and decoded at 44x32 with errors throughout, in this tool and
+        // in ffprobe alike, while the cameras' own streams decoded cleanly.
+        boolean implausible = implausibleSize(stream);
+        // A stream kept without a decoded picture, or one measurement gave up
+        // on, is undecodable only if measurement did not then succeed: a camera
+        // that was merely slow while paths were being probed is not flagged.
+        boolean measuredCleanly = stream.isAnalyzed() && stream.getWidth() != null && !implausible;
+        boolean neverDecoded = !measuredCleanly
+                && (stream.getValidationNote() != null
+                    || (stream.getAnalysisError() != null && stream.getAnalysisError().startsWith("Gave up")));
+
+        if (implausible) {
+            issues.add("Decodes at " + stream.getResolution()
+                    + ", which no camera produces; probably not the " + stream.getCodec() + " it advertises");
+        } else if (neverDecoded && stream.getValidationNote() != null) {
+            issues.add(stream.getValidationNote());
+        }
+        if (implausible || neverDecoded) {
+            boolean alreadyRaised = device.getFindings().stream().anyMatch(f -> UNDECODABLE.equals(f.title()));
+            if (!alreadyRaised) {
+                String detail = implausible
+                        ? stream.getStreamName() + " describes itself as " + stream.getCodec()
+                                + " but decodes at " + stream.getResolution() + " with errors."
+                        : stream.getStreamName() + " describes a video track, but no picture could be decoded "
+                                + "from it in the time allowed.";
+                device.addFinding(new Finding(Finding.Severity.MEDIUM, "Compatibility", UNDECODABLE, detail,
+                        "Check the encoding the device uses for this stream. A recorder set to H.265 or a "
+                                + "vendor 'smart' codec while advertising H.264 will not play in most viewing "
+                                + "software; set the stream to H.264, or take video from the cameras directly."));
+            }
+        }
 
         if (config.isHighProfileFlagged() && isHighProfile(stream.getProfile())) {
             issues.add("High profile (needs transcoding for browser playback)");

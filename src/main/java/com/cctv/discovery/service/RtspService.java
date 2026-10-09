@@ -355,6 +355,18 @@ public final class RtspService {
         return confirmStream(rtspUrl, probe(rtspUrl, username, password), username, password);
     }
 
+    /** A stream for a URL that describes a video track, without decoding any of it. */
+    private RTSPStream describedStream(String rtspUrl, String username, String password) {
+        ProbeResult probe = probe(rtspUrl, username, password);
+        if (!probe.valid()) {
+            return null;
+        }
+        RTSPStream stream = new RTSPStream("Stream", RtspClient.stripCredentials(rtspUrl));
+        stream.setSource("Path probe");
+        applySdp(stream, probe.sdp());
+        return stream;
+    }
+
     /** Turn a probe that described video into a stream, if the video is real. */
     private RTSPStream confirmStream(String rtspUrl, ProbeResult probe, String username, String password) {
         if (!probe.valid()) {
@@ -483,40 +495,58 @@ public final class RtspService {
      * {@code grabFrame}, because on a camera with audio the first frames
      * returned are audio samples and a check for an image in them always failed.
      */
+    /** What one decoded picture said about a stream. */
+    private record Capture(int width, int height, String codec, String profile, String audio) {
+    }
+
+    /** Extra time allowed beyond the method's timeout for opening the stream. */
+    private static final long CAPTURE_GRACE_MS = 5_000;
+
     private boolean capturesFrame(String rtspUrl, String username, String password, RTSPStream stream) {
         int timeout = discoveryConfig.getTimeout();
-        FFmpegFrameGrabber grabber = null;
+        long limit = timeout + CAPTURE_GRACE_MS;
         long start = System.currentTimeMillis();
+        FFmpegFrameGrabber grabber = FFmpegSupport.grabber(rtspUrl, username, password, timeout);
+        activeGrabbers.add(grabber);
         try {
-            grabber = FFmpegSupport.grabber(rtspUrl, username, password, timeout);
-            activeGrabbers.add(grabber);
-            grabber.start();
-
-            Frame image = grabber.grabImage();
+            // Everything is read into a value and applied here, on the
+            // caller's side of the deadline: an abandoned capture that finishes
+            // late must not rewrite a stream that has already been given up on.
+            Capture capture = FFmpegSupport.withDeadline(grabber, limit, g -> {
+                Frame image = g.grabImage();
+                if (image == null || image.image == null) {
+                    return null;
+                }
+                return new Capture(image.imageWidth, image.imageHeight, FFmpegSupport.videoCodecName(g),
+                        FFmpegSupport.videoProfile(g), FFmpegSupport.audioCodecName(g));
+            });
             long elapsed = System.currentTimeMillis() - start;
-            if (image == null || image.image == null) {
+            if (capture == null) {
                 logger.debug("No image from {} after {} ms", RtspClient.stripCredentials(rtspUrl), elapsed);
                 return false;
             }
-
-            if (image.imageWidth > 0 && image.imageHeight > 0) {
-                stream.setDimensions(image.imageWidth, image.imageHeight);
+            if (capture.width() > 0 && capture.height() > 0) {
+                stream.setDimensions(capture.width(), capture.height());
             }
-            String codec = FFmpegSupport.videoCodecName(grabber);
-            if (codec != null) {
-                stream.setCodec(codec);
+            if (capture.codec() != null) {
+                stream.setCodec(capture.codec());
             }
-            String profile = FFmpegSupport.videoProfile(grabber);
-            if (profile != null) {
-                stream.setProfile(profile);
+            if (capture.profile() != null) {
+                stream.setProfile(capture.profile());
             }
-            String audio = FFmpegSupport.audioCodecName(grabber);
-            if (audio != null) {
-                stream.setAudioCodec(audio);
+            if (capture.audio() != null) {
+                stream.setAudioCodec(capture.audio());
             }
-            logger.debug("Captured {}x{} from {} in {} ms", image.imageWidth, image.imageHeight,
+            logger.debug("Captured {}x{} from {} in {} ms", capture.width(), capture.height(),
                     RtspClient.stripCredentials(rtspUrl), elapsed);
             return true;
+        } catch (java.util.concurrent.TimeoutException e) {
+            logger.info("No picture from {} within {} s; giving up on it",
+                    RtspClient.stripCredentials(rtspUrl), limit / 1000);
+            return false;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return false;
         } catch (Exception e) {
             String message = e.getMessage();
             if (FFmpegSupport.isUnauthorized(message)) {
@@ -526,10 +556,8 @@ public final class RtspService {
             }
             return false;
         } finally {
-            if (grabber != null) {
-                activeGrabbers.remove(grabber);
-                FFmpegSupport.closeQuietly(grabber);
-            }
+            // Released by the thread that used it; see FFmpegSupport.withDeadline.
+            activeGrabbers.remove(grabber);
         }
     }
 
@@ -567,6 +595,12 @@ public final class RtspService {
         List<RTSPStream> found = new ArrayList<>();
         boolean authRequired = false;
         boolean accepted = false;
+        // The first path that described video without delivering a picture,
+        // kept in case no path does better. See the end of this method.
+        String describedUrl = null;
+        int describedPort = -1;
+        String describedPath = null;
+        ProbeResult describedProbe = null;
 
         for (int port : ports) {
             for (String path : candidates) {
@@ -585,6 +619,12 @@ public final class RtspService {
 
                 RTSPStream main = confirmStream(url, probe, username, password);
                 if (main == null) {
+                    if (probe.valid() && describedProbe == null) {
+                        describedUrl = url;
+                        describedPort = port;
+                        describedPath = path;
+                        describedProbe = probe;
+                    }
                     continue;
                 }
                 main.setStreamName("Main");
@@ -611,8 +651,41 @@ public final class RtspService {
                 return new PathDiscovery(found, authRequired, accepted, false);
             }
         }
+
+        // A path described a video track but no picture decoded from it, and
+        // nothing better turned up. Reporting no stream at all would say the
+        // address is unknown, when the address is known and the problem is the
+        // video. Seen on a Hikvision recorder whose relayed streams claim H.264
+        // and do not decode: dropping them hid that it was a recorder with six
+        // channels, and the report blamed the stream path. Keep the stream, say
+        // what is wrong with it, and let measurement confirm or refute it.
+        if (describedProbe != null) {
+            RTSPStream main = new RTSPStream("Main", RtspClient.stripCredentials(describedUrl));
+            main.setSource("Path probe");
+            main.setRole(RTSPStream.Role.MAIN);
+            applySdp(main, describedProbe.sdp());
+            main.setValidationNote(UNDECODED);
+            found.add(main);
+            logger.info("RTSP path on {} describes video but delivered no picture: {}",
+                    device.getIpAddress(), describedPath);
+
+            String subPath = substreamPath(describedPath);
+            if (subPath != null && !subPath.equals(describedPath)) {
+                RTSPStream sub = describedStream(
+                        RtspClient.url(device.getIpAddress(), describedPort, subPath), username, password);
+                if (sub != null) {
+                    sub.setStreamName("Sub");
+                    sub.setRole(RTSPStream.Role.SUB);
+                    sub.setValidationNote(UNDECODED);
+                    found.add(sub);
+                }
+            }
+        }
         return new PathDiscovery(found, authRequired, accepted, false);
     }
+
+    /** Why a stream was kept although no picture was decoded from it. */
+    public static final String UNDECODED = "Described a video track, but no picture decoded from it";
 
     /**
      * Whether the device asks for a password before it will describe a stream,
@@ -735,7 +808,12 @@ public final class RtspService {
 
         for (int channel = 1; channel <= maxChannels && !cancelled(); channel++) {
             String mainUrl = RtspClient.url(device.getIpAddress(), port, pattern.getMainPath(channel));
-            RTSPStream main = validateRtspStream(mainUrl, username, password);
+            // Whether a channel exists is a protocol question: does it describe
+            // a video track? Whether its video decodes is a separate one, which
+            // measuring the stream answers and the report states. Requiring a
+            // decoded picture here made a recorder whose relayed video would not
+            // decode look as if it had one channel instead of six.
+            RTSPStream main = describedStream(mainUrl, username, password);
             if (main == null) {
                 if (++consecutiveFailures >= maxFailures) {
                     logger.debug("Stopping channel walk at {} after {} misses", channel, consecutiveFailures);
@@ -751,7 +829,7 @@ public final class RtspService {
             streams.add(main);
 
             String subUrl = RtspClient.url(device.getIpAddress(), port, pattern.getSubPath(channel));
-            RTSPStream sub = validateRtspStream(subUrl, username, password);
+            RTSPStream sub = describedStream(subUrl, username, password);
             if (sub != null) {
                 sub.setStreamName("CH" + channel + " Sub");
                 sub.setChannelName("Channel " + channel);
@@ -763,12 +841,35 @@ public final class RtspService {
         return streams;
     }
 
+    /**
+     * Whether the device serves a second recorder channel, which is the one
+     * thing a recorder does that a camera does not.
+     *
+     * <p>Typing a device as a recorder used to rely on ONVIF alone. With ONVIF
+     * switched off, as on a Hikvision site measured on 2026-10-09, the recorder
+     * was typed as a camera, its channels were never walked, and five of its six
+     * were missing from the report. Asked for channel 2, that recorder described
+     * a video stream and each of its cameras answered 400. One DESCRIBE, with
+     * the credentials that already worked, is all this costs.
+     */
+    public boolean servesSecondChannel(Device device, String username, String password) {
+        NvrChannelPattern pattern = findNvrPattern(device.getManufacturer());
+        List<Integer> ports = device.getOpenRtspPorts();
+        if (pattern == null || ports.isEmpty() || cancelled()) {
+            return false;
+        }
+        String url = RtspClient.url(device.getIpAddress(), ports.getFirst(), pattern.getMainPath(2));
+        return probe(url, username, password).valid();
+    }
+
     /** Cancel in-flight work and release native resources. */
     public void shutdown() {
         shutdownRequested = true;
         FFmpegFrameGrabber grabber;
         while ((grabber = activeGrabbers.poll()) != null) {
-            FFmpegSupport.closeQuietly(grabber);
+            // Not closeQuietly: this runs when Stop is pressed, on the window's
+            // thread, and closing a grabber stuck in FFmpeg waits on its lock.
+            FFmpegSupport.closeLater(grabber);
         }
     }
 }
