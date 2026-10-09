@@ -94,6 +94,23 @@ public final class RtspClient implements Closeable {
     private AuthUtils.Authenticator authenticator;
     private boolean authenticationRequired;
     private boolean authenticationAccepted;
+    private CredentialOutcome credentialOutcome = CredentialOutcome.NOT_TRIED;
+
+    /**
+     * What the server made of the credentials, which is not the same question
+     * as whether the request succeeded. A right password on a path that does not
+     * exist comes back 404: the request failed, but the password was good.
+     * Telling those apart is what lets a scan stop trying a password the device
+     * has already refused, and say truthfully whether a password worked.
+     */
+    public enum CredentialOutcome {
+        /** No credentials were sent, because none were held or none were asked for. */
+        NOT_TRIED,
+        /** Credentials were sent and the server answered anything but 401. */
+        ACCEPTED,
+        /** Credentials were sent and the server answered 401 again. */
+        REJECTED
+    }
 
     public RtspClient(String host, int port, int connectTimeoutMs, int readTimeoutMs) {
         this.host = host;
@@ -117,6 +134,11 @@ public final class RtspClient implements Closeable {
     /** True when a request succeeded after credentials were supplied. */
     public boolean authenticationAccepted() {
         return authenticationAccepted;
+    }
+
+    /** What the server made of the credentials on the last challenge. */
+    public CredentialOutcome credentialOutcome() {
+        return credentialOutcome;
     }
 
     /** Session identifier from the last SETUP, or null. */
@@ -172,6 +194,7 @@ public final class RtspClient implements Closeable {
         } else if (retry.unauthorized()) {
             authenticator = null;
         }
+        credentialOutcome = retry.unauthorized() ? CredentialOutcome.REJECTED : CredentialOutcome.ACCEPTED;
         return retry;
     }
 

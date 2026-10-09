@@ -85,9 +85,18 @@ public final class ScanReader {
 
         device.setStatus(enumOf(string(map, "status"), Device.DeviceStatus.class, Device.DeviceStatus.COMPLETED));
         device.setType(enumOf(string(map, "type"), Device.DeviceType.class, Device.DeviceType.UNKNOWN));
-        device.setAuthFailed(device.getStatus() == Device.DeviceStatus.AUTH_FAILED
-                && device.getRtspStreams().isEmpty()
-                && "No credential was accepted".equals(device.getErrorMessage()));
+        // Files from 2.0.0 onward carry the flag. Earlier ones did not, and the
+        // only trace left in them is the wording of the note, so that is used
+        // as a fallback and nowhere else: inferring it from wording broke as
+        // soon as the wording changed.
+        Object signInFailed = map.get("signInFailed");
+        if (signInFailed instanceof Boolean flag) {
+            device.setAuthFailed(flag);
+        } else {
+            device.setAuthFailed(device.getStatus() == Device.DeviceStatus.AUTH_FAILED
+                    && device.getRtspStreams().isEmpty()
+                    && "No credential was accepted".equals(device.getErrorMessage()));
+        }
 
         Double drift = number(map, "clockDriftSeconds");
         if (drift != null) {

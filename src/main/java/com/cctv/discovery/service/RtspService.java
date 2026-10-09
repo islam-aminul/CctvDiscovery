@@ -76,14 +76,45 @@ public final class RtspService {
         }
     }
 
-    /** What a DESCRIBE revealed about a candidate URL. */
+    /**
+     * What a DESCRIBE revealed about a candidate URL.
+     *
+     * @param credentials what the server made of the credentials, separately
+     *                    from whether the URL served video: a good password on a
+     *                    path that does not exist is ACCEPTED, not a failure
+     */
     public record ProbeResult(boolean valid, boolean authRequired, boolean authAccepted, boolean anonymous,
-                              SdpParser.Sdp sdp, String reason) {
+                              SdpParser.Sdp sdp, String reason, RtspClient.CredentialOutcome credentials) {
 
         static ProbeResult failure(String reason) {
-            return new ProbeResult(false, false, false, false, null, reason);
+            return new ProbeResult(false, false, false, false, null, reason,
+                    RtspClient.CredentialOutcome.NOT_TRIED);
+        }
+
+        public boolean credentialRejected() {
+            return credentials == RtspClient.CredentialOutcome.REJECTED;
+        }
+
+        public boolean credentialAccepted() {
+            return credentials == RtspClient.CredentialOutcome.ACCEPTED;
         }
     }
+
+    /**
+     * What trying the candidate paths on a device learned, beyond the streams.
+     *
+     * @param authRequired       some path asked for a password
+     * @param credentialAccepted the device took the password on some path, even
+     *                           if no path then served video
+     * @param credentialRejected the device refused the password; the remaining
+     *                           paths were not tried with it
+     */
+    public record PathDiscovery(List<RTSPStream> streams, boolean authRequired,
+                                boolean credentialAccepted, boolean credentialRejected) {
+    }
+
+    /** Vendor paths tried, after "/", when checking whether a device needs a password. */
+    private static final int AUTH_PROBE_PATHS = 2;
 
     /** Main and sub path template for one recorder family. */
     public record NvrChannelPattern(String mainPattern, String subPattern) {
@@ -286,27 +317,28 @@ public final class RtspService {
             RtspClient.Response response = client.request("DESCRIBE", rtspUrl,
                     Map.of("Accept", "application/sdp"));
 
+            RtspClient.CredentialOutcome credentials = client.credentialOutcome();
             if (response.status() == 401) {
-                return new ProbeResult(false, true, false, false, null, "Authentication rejected");
+                return new ProbeResult(false, true, false, false, null, "Authentication rejected", credentials);
             }
             if (!response.ok()) {
                 return new ProbeResult(false, client.authenticationRequired(), false, false, null,
-                        "RTSP " + response.statusLine());
+                        "RTSP " + response.statusLine(), credentials);
             }
 
             SdpParser.Sdp sdp = SdpParser.parse(response.body());
             if (sdp == null) {
                 return new ProbeResult(false, client.authenticationRequired(), false, false, null,
-                        "Response was not SDP");
+                        "Response was not SDP", credentials);
             }
             if (sdp.firstVideo() == null) {
                 return new ProbeResult(false, client.authenticationRequired(), false, false, sdp,
-                        "No video track in SDP");
+                        "No video track in SDP", credentials);
             }
 
             boolean anonymous = !client.authenticationRequired();
             return new ProbeResult(true, client.authenticationRequired(), client.authenticationAccepted(),
-                    anonymous, sdp, null);
+                    anonymous, sdp, null, credentials);
         } catch (Exception e) {
             return ProbeResult.failure(e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage());
         }
@@ -320,7 +352,11 @@ public final class RtspService {
         if (cancelled()) {
             return null;
         }
-        ProbeResult probe = probe(rtspUrl, username, password);
+        return confirmStream(rtspUrl, probe(rtspUrl, username, password), username, password);
+    }
+
+    /** Turn a probe that described video into a stream, if the video is real. */
+    private RTSPStream confirmStream(String rtspUrl, ProbeResult probe, String username, String password) {
         if (!probe.valid()) {
             logger.debug("RTSP {} rejected: {}", RtspClient.stripCredentials(rtspUrl), probe.reason());
             return null;
@@ -505,22 +541,49 @@ public final class RtspService {
      * A working main path is paired with its matching sub path.
      */
     public List<RTSPStream> discoverStreams(Device device, String username, String password) {
+        return discoverPaths(device, username, password).streams();
+    }
+
+    /**
+     * Try the candidate paths, and report what the attempts revealed about the
+     * password as well as which streams they found.
+     *
+     * <p>A password the device refuses is refused on every path: the account is
+     * the device's, not the path's. So the first refusal ends the search for
+     * that password. Before this, a wrong password was tried against every
+     * candidate path in turn, twenty of them for a Hikvision device, and
+     * Hikvision and Dahua lock the account after about five failed logins. One
+     * mistyped password could lock every camera on site, and with several
+     * passwords listed, lock it before the right one was ever tried.
+     */
+    public PathDiscovery discoverPaths(Device device, String username, String password) {
         List<Integer> ports = device.getOpenRtspPorts();
         if (ports.isEmpty()) {
             logger.debug("No RTSP port on {}; skipping path discovery", device.getIpAddress());
-            return List.of();
+            return new PathDiscovery(List.of(), false, false, false);
         }
 
         List<String> candidates = candidatePaths(device);
         List<RTSPStream> found = new ArrayList<>();
+        boolean authRequired = false;
+        boolean accepted = false;
 
         for (int port : ports) {
             for (String path : candidates) {
                 if (cancelled()) {
-                    return found;
+                    return new PathDiscovery(found, authRequired, accepted, false);
                 }
                 String url = RtspClient.url(device.getIpAddress(), port, path);
-                RTSPStream main = validateRtspStream(url, username, password);
+                ProbeResult probe = probe(url, username, password);
+                authRequired |= probe.authRequired();
+                if (probe.credentialRejected()) {
+                    logger.info("{} refused the password for {}; not trying it on the remaining paths",
+                            device.getIpAddress(), username);
+                    return new PathDiscovery(found, true, false, true);
+                }
+                accepted |= probe.credentialAccepted();
+
+                RTSPStream main = confirmStream(url, probe, username, password);
                 if (main == null) {
                     continue;
                 }
@@ -543,10 +606,40 @@ public final class RtspService {
                         // first on the next run and treated as the main stream.
                     }
                 }
-                return found;
+                // "accepted" already includes this path's answer. A stream that
+                // played without a challenge took no password, so none is claimed.
+                return new PathDiscovery(found, authRequired, accepted, false);
             }
         }
-        return found;
+        return new PathDiscovery(found, authRequired, accepted, false);
+    }
+
+    /**
+     * Whether the device asks for a password before it will describe a stream,
+     * found without sending one.
+     *
+     * <p>Probing only "/" is not enough. A Hikvision recorder answers "/" with
+     * 404 and challenges only on its real stream paths, so a check of "/" alone
+     * concluded the recorder needed no password, and the scan then reported that
+     * the password had been accepted when none had been sent. The vendor's own
+     * first paths are tried after "/". Nothing here carries a credential, so
+     * none of it counts towards an account lockout.
+     */
+    public boolean requiresAuthentication(Device device) {
+        List<String> paths = new ArrayList<>();
+        paths.add("/");
+        candidatePaths(device).stream().limit(AUTH_PROBE_PATHS).forEach(paths::add);
+        for (int port : device.getOpenRtspPorts()) {
+            for (String path : paths) {
+                if (cancelled()) {
+                    return false;
+                }
+                if (probe(RtspClient.url(device.getIpAddress(), port, path), null, null).authRequired()) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     private List<String> candidatePaths(Device device) {

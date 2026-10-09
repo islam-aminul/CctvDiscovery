@@ -21,6 +21,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class ScanCoordinatorTest {
 
+    /** What was observed, for a scan that had credentials to offer. */
+    private static ScanCoordinator.Access access(boolean onvifAuthenticated, boolean challenged,
+                                                 boolean credentialAccepted) {
+        return new ScanCoordinator.Access(true, onvifAuthenticated, challenged, credentialAccepted);
+    }
+
     private static Device device(String ip) {
         Device device = new Device(ip);
         device.setStatus(Device.DeviceStatus.AUTHENTICATING);
@@ -45,7 +51,7 @@ class ScanCoordinatorTest {
         device.setAuthFailed(true);
         device.setErrorMessage("something earlier");
 
-        ScanCoordinator.finalizeStatus(device, false, false);
+        ScanCoordinator.finalizeStatus(device, access(false, false, false));
 
         assertEquals(Device.DeviceStatus.COMPLETED, device.getStatus());
         assertFalse(device.isAuthFailed());
@@ -59,7 +65,7 @@ class ScanCoordinatorTest {
         Device device = device("192.168.0.11");
         device.setType(Device.DeviceType.CAMERA);
 
-        ScanCoordinator.finalizeStatus(device, false, false);
+        ScanCoordinator.finalizeStatus(device, access(false, false, false));
 
         assertEquals(Device.DeviceStatus.AUTH_FAILED, device.getStatus());
         assertEquals(Device.DeviceType.UNKNOWN, device.getType());
@@ -75,7 +81,7 @@ class ScanCoordinatorTest {
         Device device = device("192.168.0.12");
         device.getOpenRtspPorts().add(554);
 
-        ScanCoordinator.finalizeStatus(device, false, true);
+        ScanCoordinator.finalizeStatus(device, access(false, true, false));
 
         assertTrue(device.isAuthFailed());
         assertEquals("No credential was accepted", device.getErrorMessage());
@@ -88,7 +94,7 @@ class ScanCoordinatorTest {
         Device device = device("192.168.0.13");
         device.getOpenOnvifPorts().add(80);
 
-        ScanCoordinator.finalizeStatus(device, false, false);
+        ScanCoordinator.finalizeStatus(device, access(false, false, false));
 
         assertTrue(device.isAuthFailed());
         assertEquals("No credential was accepted", device.getErrorMessage());
@@ -101,7 +107,7 @@ class ScanCoordinatorTest {
         Device device = device("192.168.0.14");
         device.getOpenRtspPorts().add(554);
 
-        ScanCoordinator.finalizeStatus(device, true, false);
+        ScanCoordinator.finalizeStatus(device, access(true, false, false));
 
         // The password worked, so telling the operator to fix it would send
         // them the wrong way.
@@ -118,7 +124,7 @@ class ScanCoordinatorTest {
         device.getOpenSpecialPorts().add(37777);
         device.getOpenSpecialPorts().add(34567);
 
-        ScanCoordinator.finalizeStatus(device, false, false);
+        ScanCoordinator.finalizeStatus(device, access(false, false, false));
 
         long explanations = device.getFindings().stream()
                 .filter(f -> f.title().contains("manufacturer's own protocol"))
@@ -138,7 +144,7 @@ class ScanCoordinatorTest {
         Device device = withStream("192.168.0.16");
         device.getOpenSpecialPorts().add(37777);
 
-        ScanCoordinator.finalizeStatus(device, true, false);
+        ScanCoordinator.finalizeStatus(device, access(true, false, false));
 
         assertEquals(Device.DeviceStatus.COMPLETED, device.getStatus());
         assertTrue(device.getFindings().isEmpty());

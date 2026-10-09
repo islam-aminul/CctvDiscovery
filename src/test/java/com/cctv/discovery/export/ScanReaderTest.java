@@ -175,6 +175,55 @@ class ScanReaderTest {
         assertThrows(java.io.IOException.class, () -> ScanReader.read(rubbish));
     }
 
+    /**
+     * The reader used to work out "sign-in failed" by matching the wording of
+     * the note, so rewording the note quietly turned every such device into a
+     * grey "No video" row on reload. Found by exporting a live scan and reading
+     * it back; the flag is written to the file now.
+     */
+    @Test
+    @DisplayName("A sign-in failure survives the round trip whatever its note says")
+    void keepsSignInFailureRegardlessOfWording() throws Exception {
+        Device locked = new Device("192.168.1.200");
+        locked.setType(Device.DeviceType.CAMERA);
+        locked.setStatus(Device.DeviceStatus.AUTH_FAILED);
+        locked.setAuthFailed(true);
+        locked.setErrorMessage("Needs a password; none was entered");
+
+        Device router = new Device("192.168.1.1");
+        router.setStatus(Device.DeviceStatus.AUTH_FAILED);
+        router.setErrorMessage("Not a camera or recorder");
+
+        Path file = dir.resolve("signin.json");
+        ReportWriter.writeJson(List.of(locked, router), "SITE-2", false, file);
+        List<Device> loaded = ScanReader.read(file).devices();
+
+        assertTrue(loaded.get(0).isAuthFailed());
+        assertEquals("Sign-in needed", loaded.get(0).statusLabel());
+        assertFalse(loaded.get(1).isAuthFailed());
+        assertEquals("Not a camera", loaded.get(1).statusLabel());
+    }
+
+    @Test
+    @DisplayName("A scan saved before the flag existed still reads its sign-in failures")
+    void readsOlderFilesWithoutTheFlag() throws Exception {
+        Path file = dir.resolve("older.json");
+        Files.writeString(file, """
+                {
+                  "format": "cctv-discovery/1",
+                  "site": "SITE-OLD",
+                  "includesCredentials": false,
+                  "devices": [
+                    {"ip": "10.0.0.5", "status": "AUTH_FAILED", "type": "CAMERA",
+                     "note": "No credential was accepted", "streams": [], "findings": []}
+                  ]
+                }""", StandardCharsets.UTF_8);
+
+        Device device = ScanReader.read(file).devices().getFirst();
+        assertTrue(device.isAuthFailed());
+        assertEquals("Sign-in needed", device.statusLabel());
+    }
+
     @Test
     @DisplayName("An unknown status or role falls back rather than failing the load")
     void toleratesUnknownEnums() throws Exception {

@@ -9,10 +9,27 @@ way. This replaces the point-in-time `PROJECT_REVIEW.md` that lived on the
 
 ### Protocol coverage
 
+- **A recorder with ONVIF switched off is never recognised as a recorder.**
+  Found on 2026-10-09 against a Hikvision NVR and six cameras (192.168.1.200 to
+  .206), none of which answered ONVIF. The scan types a device as a recorder
+  only from ONVIF: its video-source count or its model name. Without ONVIF the
+  NVR is typed as a camera, so `iterateNvrChannels` never runs and only its
+  first channel would be reported, even with the right password. Two signals
+  are available without ONVIF and were seen on that NVR: it answers RTSP "/"
+  with 404 while the cameras challenge it, and it listens on 9010 and 9020,
+  which the cameras do not. The most dependable test is probably behavioural:
+  once signed in, try channel 2's path, and treat the device as a recorder if
+  it serves video. Needs the site's password to verify.
 - **Recorder channel walking is untested against real hardware.** The code and
-  its unit tests exist, but no NVR or DVR has been on the test network. Put one
-  on the LAN and confirm the channel patterns, the stop-after-consecutive-misses
-  rule and the per-channel roles.
+  its unit tests exist, but has not yet run against a recorder, for the reason
+  above. Confirm the channel patterns, the stop-after-consecutive-misses rule
+  and the per-channel roles once the item above is done.
+- **ONVIF attempts still count towards an account lockout.** RTSP path probing
+  now stops at the first refusal, one failed login per password per device.
+  ONVIF is still tried once per password per service address before RTSP, so
+  with ONVIF enabled a wrong password costs up to two or three failures per
+  device. Hikvision keeps a separate ONVIF user list, so it may not share the
+  lockout counter; unverified.
 - **No IPv6.** `NetworkUtils` and `TargetParser` are IPv4 only. Cameras on
   IPv6-only segments cannot be scanned.
 - **Vendor SDK protocols are still not spoken.** 37777 (Dahua) and 34567

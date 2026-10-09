@@ -255,10 +255,10 @@ public final class ScanCoordinator {
             }
         }
 
-        boolean rtspChallenged = false;
+        PathAccess rtsp = PathAccess.NONE;
         if (device.getRtspStreams().isEmpty() && !device.getOpenRtspPorts().isEmpty()) {
             logger.info("No ONVIF stream URLs for {}; probing RTSP paths", device.getIpAddress());
-            rtspChallenged = discoverStreamsByPath(device, credentials);
+            rtsp = discoverStreamsByPath(device, credentials);
         }
 
         if (device.isNvrDvr() && device.getUsername() != null) {
@@ -270,7 +270,27 @@ public final class ScanCoordinator {
 
         checkAnonymousAccess(device);
         recordClockFinding(device);
-        finalizeStatus(device, onvifAuthenticated, rtspChallenged);
+        finalizeStatus(device, new Access(!credentials.isEmpty(), onvifAuthenticated,
+                rtsp.challenged(), rtsp.credentialAccepted()));
+    }
+
+    /** What RTSP path probing established about signing in. */
+    private record PathAccess(boolean challenged, boolean credentialAccepted) {
+        static final PathAccess NONE = new PathAccess(false, false);
+    }
+
+    /**
+     * What the probing established about signing in to a device, kept apart so
+     * the final diagnosis rests on what was observed rather than on what was
+     * merely not disproved.
+     *
+     * @param credentialsOffered any credential was entered for this scan
+     * @param onvifAuthenticated ONVIF took one of them
+     * @param challenged         RTSP asked for a password on some path
+     * @param credentialAccepted RTSP took one of them, even if no path then served video
+     */
+    record Access(boolean credentialsOffered, boolean onvifAuthenticated,
+                  boolean challenged, boolean credentialAccepted) {
     }
 
     /**
@@ -305,19 +325,32 @@ public final class ScanCoordinator {
     }
 
     /**
-     * Probe RTSP paths with each credential.
-     *
-     * @return true when an RTSP server asked for credentials, which separates a
-     *         wrong password from an unknown stream path
+     * Probe RTSP paths with each credential, and learn along the way whether
+     * the device wants a password and whether any of ours was taken. That is
+     * what separates a wrong password from an unknown stream path.
      */
-    private boolean discoverStreamsByPath(Device device, List<Credential> credentials) {
-        for (Credential credential : credentials) {
-            List<RTSPStream> streams = rtspService.discoverStreams(
-                    device, credential.getUsername(), credential.getPassword());
+    private PathAccess discoverStreamsByPath(Device device, List<Credential> credentials) {
+        boolean challenged = false;
+        boolean accepted = false;
+        // With nothing entered, the paths are still tried once without a
+        // password. Looping over an empty list skipped probing altogether, so a
+        // camera serving video to anyone, the most serious thing a survey can
+        // find, went unreported on exactly the scan most likely to meet one.
+        List<Credential> attempts = credentials.isEmpty() ? java.util.Collections.singletonList(null) : credentials;
+        for (Credential credential : attempts) {
+            String username = credential == null ? null : credential.getUsername();
+            String password = credential == null ? null : credential.getPassword();
+            RtspService.PathDiscovery result = rtspService.discoverPaths(device, username, password);
+            challenged |= result.authRequired();
+            accepted |= result.credentialAccepted();
+            List<RTSPStream> streams = result.streams();
             if (!streams.isEmpty()) {
-                if (device.getUsername() == null) {
-                    device.setUsername(credential.getUsername());
-                    device.setPassword(credential.getPassword());
+                // Recorded only when the device actually took it. A stream that
+                // played without asking needed no password, and the report
+                // should not name one as the credential that worked.
+                if (device.getUsername() == null && result.credentialAccepted()) {
+                    device.setUsername(username);
+                    device.setPassword(password);
                 }
                 for (RTSPStream stream : streams) {
                     device.addStream(stream);
@@ -325,17 +358,15 @@ public final class ScanCoordinator {
                         device.setDeviceName(stream.getSdpSessionName());
                     }
                 }
-                return false;
+                return new PathAccess(challenged, accepted);
             }
         }
-        for (int port : device.getOpenRtspPorts()) {
-            RtspService.ProbeResult probe = rtspService.probe(
-                    RtspClient.url(device.getIpAddress(), port, "/"), null, null);
-            if (probe.authRequired()) {
-                return true;
-            }
+        if (!challenged) {
+            // Either no password was entered, or the paths tried never asked for
+            // one. Check without sending one whether the device would.
+            challenged = rtspService.requiresAuthentication(device);
         }
-        return false;
+        return new PathAccess(challenged, accepted);
     }
 
     /** Record whether the video is readable with no credentials at all. */
@@ -370,7 +401,7 @@ public final class ScanCoordinator {
     }
 
     /** Set the final row status and, when there are no streams, say why. */
-    static void finalizeStatus(Device device, boolean onvifAuthenticated, boolean rtspChallenged) {
+    static void finalizeStatus(Device device, Access access) {
         if (!device.getRtspStreams().isEmpty()) {
             device.setStatus(Device.DeviceStatus.COMPLETED);
             device.setAuthFailed(false);
@@ -379,27 +410,44 @@ public final class ScanCoordinator {
             return;
         }
 
-        boolean videoDevice = onvifAuthenticated
+        boolean videoDevice = access.onvifAuthenticated()
                 || !device.getOpenOnvifPorts().isEmpty()
                 || !device.getOpenRtspPorts().isEmpty();
+        boolean passwordAccepted = access.onvifAuthenticated() || access.credentialAccepted();
+        boolean needsPassword = access.challenged()
+                || (!access.onvifAuthenticated() && !device.getOpenOnvifPorts().isEmpty());
 
         device.setStatus(Device.DeviceStatus.AUTH_FAILED);
         if (!videoDevice) {
             device.setAuthFailed(false);
             device.setType(Device.DeviceType.UNKNOWN);
             device.setErrorMessage("Not a camera or recorder");
-        } else if (rtspChallenged || (!onvifAuthenticated && !device.getOpenOnvifPorts().isEmpty())) {
+        } else if (passwordAccepted) {
+            // The only branch that may say a password worked, because here
+            // something actually took one.
+            device.setAuthFailed(false);
+            device.setErrorMessage("No stream path matched");
+            device.addFinding(new Finding(Finding.Severity.INFO, "Access", "Stream address unknown",
+                    "A password was accepted, but none of the known stream paths returned video.",
+                    "Add this model's stream path under Settings, Stream Paths."));
+        } else if (needsPassword && !access.credentialsOffered()) {
+            device.setAuthFailed(true);
+            device.setErrorMessage("Needs a password; none was entered");
+            device.addFinding(new Finding(Finding.Severity.INFO, "Access", "Sign-in details needed",
+                    "The device asks for a username and password, and none were entered for this scan.",
+                    "Add the site's credentials and scan again, or retry this device from its context menu."));
+        } else if (needsPassword) {
             device.setAuthFailed(true);
             device.setErrorMessage("No credential was accepted");
             device.addFinding(new Finding(Finding.Severity.INFO, "Access", "Could not sign in",
-                    "The device rejected every credential supplied.",
+                    "The device refused every credential entered for this scan.",
                     "Add the correct credentials and retry this device from its context menu."));
         } else {
             device.setAuthFailed(false);
             device.setErrorMessage("No stream path matched");
             device.addFinding(new Finding(Finding.Severity.INFO, "Access", "Stream address unknown",
-                    "Credentials were accepted but no known RTSP path returned video.",
-                    "Add this model's stream path under Settings, RTSP paths."));
+                    "The device answers on RTSP, but none of the known stream paths returned video.",
+                    "Add this model's stream path under Settings, Stream Paths."));
         }
 
         // A device reachable only over its maker's own protocol is worth

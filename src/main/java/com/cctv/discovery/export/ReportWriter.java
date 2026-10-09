@@ -66,7 +66,7 @@ public final class ReportWriter {
     private static String csvRow(Device device, RTSPStream stream, boolean includeCredentials) {
         List<String> values = new ArrayList<>(CSV_HEADERS.size());
         values.add(device.getIpAddress());
-        values.add(device.getStatus().label());
+        values.add(device.statusLabel());
         values.add(device.getDeviceType());
         values.add(device.getDeviceName());
         values.add(device.getManufacturer());
@@ -178,6 +178,7 @@ public final class ReportWriter {
         sb.append("      \"clockDriftSeconds\": ")
                 .append(device.getTimeDifferenceSeconds() == null ? "null" : device.getTimeDifferenceSeconds())
                 .append(",\n");
+        sb.append("      \"signInFailed\": ").append(device.isAuthFailed()).append(",\n");
         sb.append("      \"anonymousRtsp\": ")
                 .append(device.getRtspAnonymousAccess() == null ? "null" : device.getRtspAnonymousAccess())
                 .append(",\n");

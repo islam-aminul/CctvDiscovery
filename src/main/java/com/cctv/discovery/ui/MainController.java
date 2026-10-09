@@ -618,7 +618,7 @@ public class MainController {
         table.setPlaceholder(new Label("Choose a network and start a scan."));
 
         table.getColumns().add(textColumn("Address", 130, Device::getIpAddress));
-        table.getColumns().add(textColumn("Status", 105, d -> d.getStatus().label()));
+        table.getColumns().add(textColumn("Status", 105, Device::statusLabel));
         table.getColumns().add(textColumn("Type", 110, Device::getDeviceType));
         table.getColumns().add(textColumn("Name", 150, Device::getDeviceName));
         table.getColumns().add(textColumn("Make", 110, Device::getManufacturer));
@@ -1078,13 +1078,10 @@ public class MainController {
         boolean anySuccess = devices.stream()
                 .anyMatch(d -> !d.getRtspStreams().isEmpty());
 
-        if (anySuccess) {
-            // Green if any devices have streams
-            btnExport.getStyleClass().add("button-success");
-        } else {
-            // Amber if all devices failed
-            btnExport.getStyleClass().add("button-secondary");
-        }
+        // Replace rather than add: each scan used to append another class, so
+        // after one scan with video and one without, the button carried both.
+        btnExport.getStyleClass().removeAll("button-success", "button-secondary");
+        btnExport.getStyleClass().add(anySuccess ? "button-success" : "button-secondary");
     }
 
     /**

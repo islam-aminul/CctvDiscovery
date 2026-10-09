@@ -13,6 +13,23 @@ public class Device {
 
     public enum OnvifAuthMethod {DIGEST, WS_SECURITY, BASIC, NONE}
 
+    /**
+     * The status as an operator should read it, in the table and the reports.
+     *
+     * <p>AUTH_FAILED covers three different situations, and labelling all three
+     * "Failed" put a site's router in an audit report as a failed device. The
+     * row colour already told them apart; the words now agree with it.
+     */
+    public String statusLabel() {
+        if (status != DeviceStatus.AUTH_FAILED) {
+            return status.label();
+        }
+        if (authFailed) {
+            return "Sign-in needed";
+        }
+        return deviceType == DeviceType.UNKNOWN ? "Not a camera" : "No video";
+    }
+
     public enum DeviceStatus {
         PENDING("Pending"),
         SCANNING("Scanning"),

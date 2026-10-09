@@ -290,7 +290,7 @@ public final class ExcelExporter {
         row = counted(sheet, styles, row, "Devices with a working stream", withStreams);
         row = counted(sheet, styles, row, "Streams discovered", streams);
         row = counted(sheet, styles, row, "Streams outside the rules", nonCompliant);
-        row = counted(sheet, styles, row, "Devices that rejected every credential", failed);
+        row = counted(sheet, styles, row, "Devices that need sign-in details", failed);
         row = counted(sheet, styles, row, "Streams readable without a password", anonymous);
         row++;
 
@@ -374,7 +374,7 @@ public final class ExcelExporter {
             Row row = sheet.createRow(rowNum++);
             int col = 0;
             cell(row, col++, device.getIpAddress(), styles.text);
-            cell(row, col++, device.getStatus().label(), styles.text);
+            cell(row, col++, device.statusLabel(), styles.text);
             cell(row, col++, device.getDeviceType(), styles.text);
             cell(row, col++, device.getDeviceName(), styles.text);
             cell(row, col++, device.getManufacturer(), styles.text);
