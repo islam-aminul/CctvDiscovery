@@ -371,13 +371,6 @@ public final class AppConfig {
         return getProperty("export.default.directory");
     }
 
-    public boolean isExportEncryptionDefault() {
-        return getBoolean("export.encrypt", true);
-    }
-
-    public boolean isExportIncludeCredentialsDefault() {
-        return getBoolean("export.include.credentials", true);
-    }
 
     // MAC resolution
     public boolean isMacResolutionEnabled() {

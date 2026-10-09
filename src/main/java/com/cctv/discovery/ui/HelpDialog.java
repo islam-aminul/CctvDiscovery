@@ -57,8 +57,8 @@ public final class HelpDialog {
                 step("4. Run the scan",
                         "Devices appear as they are found. Stop keeps whatever has been found so far."),
                 step("5. Report",
-                        "Export to Excel. You choose whether to include camera passwords and whether "
-                                + "to encrypt the file."),
+                        "Export to Excel. Enter the site ID; each stream's address includes the "
+                                + "camera's username and password, ready to open in a player."),
                 note("Row colours: green finished, amber working, red no credential accepted, "
                         + "grey not a camera, blue found but not yet checked. Select a row to see its "
                         + "streams and issues; right-click for more."));
