@@ -70,4 +70,24 @@ class MacLookupServiceTest {
         String other = service.lookupOrganization("8C:1F:64:00:00:01");
         assertNotNull(other);
     }
+
+    /**
+     * "Prama Hikvision India" contains "Hikvision", and with the Hikvision alias
+     * listed first every Prama camera was labelled Hikvision; the third block,
+     * "Prama India", matched no alias at all.
+     */
+    @Test
+    @org.junit.jupiter.api.DisplayName("All three of Prama's address blocks are labelled Prama")
+    void labelsPrama() {
+        assertEquals("Prama", service.lookupManufacturer("24:B1:05:00:00:01"));
+        assertEquals("Prama", service.lookupManufacturer("BC:29:78:00:00:01"));
+        assertEquals("Prama", service.lookupManufacturer("E4:28:A4:00:00:01"));
+        assertEquals("Hikvision", service.lookupManufacturer("EC:C8:9C:45:66:E5"), "Hikvision itself is unchanged");
+    }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName("Pramac, a generator maker, is not labelled Prama")
+    void pramacIsNotPrama() {
+        assertEquals("Pramac", service.lookupManufacturer("8C:1F:64:05:E0:01"));
+    }
 }

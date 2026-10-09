@@ -1,10 +1,14 @@
 # Maps IEEE registry organisation names to the brand names installers use.
 # Format: <case-insensitive substring of the IEEE organisation>|<brand>
 # First match wins, so list more specific entries first.
+# Prama before Hikvision: "Prama Hikvision India" contains "Hikvision", and
+# with Hikvision listed first every Prama camera was labelled Hikvision.
+# Never a bare "Prama": the registry also holds Pramac GmbH, a generator maker.
+Prama Hikvision|Prama
+Prama India|Prama
 Hangzhou Hikvision|Hikvision
 Hikvision|Hikvision
 EZVIZ|EZVIZ (Hikvision)
-Prama Hikvision|Prama Hikvision
 Zhejiang Dahua|Dahua
 Dahua|Dahua
 Aditya Infotech|CP Plus

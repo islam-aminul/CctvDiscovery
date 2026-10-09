@@ -5,6 +5,7 @@ import com.cctv.discovery.model.Device;
 import com.cctv.discovery.model.RTSPStream;
 import com.cctv.discovery.util.AuthUtils;
 import com.cctv.discovery.util.NetworkUtils;
+import com.cctv.discovery.util.TargetParser;
 import com.cctv.discovery.util.XmlUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,6 +31,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -116,11 +118,37 @@ public final class OnvifService {
      * plus a wired camera VLAN), where a probe on the default route alone
      * reaches nothing.
      */
-    public List<Device> discoverDevices() {
-        List<java.net.NetworkInterface> interfaces = NetworkUtils.getMulticastInterfaces();
-        if (interfaces.isEmpty()) {
-            logger.info("No multicast-capable interfaces; skipping WS-Discovery");
-            return List.of();
+    /**
+     * What WS-Discovery found inside the chosen network, and the addresses of
+     * anything that answered from outside it.
+     */
+    public record Discovery(List<Device> devices, List<String> leftOut) {
+        public static final Discovery NONE = new Discovery(List.of(), List.of());
+    }
+
+    /**
+     * Ask the chosen network's cameras to announce themselves.
+     *
+     * <p>Only answers from inside {@code targets} are kept. Every answer used to
+     * be kept, identified and sent the operator's credentials, so a survey of
+     * one range reported, and tried passwords against, devices on any network
+     * the computer was attached to. The probe is also sent only on adapters
+     * whose subnet overlaps the targets, from the address on that subnet.
+     */
+    public Discovery discoverDevices(TargetParser.Targets targets) {
+        if (targets == null || targets.isEmpty()) {
+            return Discovery.NONE;
+        }
+        Map<java.net.NetworkInterface, InetAddress> adapters = new LinkedHashMap<>();
+        for (java.net.NetworkInterface ni : NetworkUtils.getMulticastInterfaces()) {
+            InetAddress address = NetworkUtils.addressServing(ni, targets);
+            if (address != null) {
+                adapters.put(ni, address);
+            }
+        }
+        if (adapters.isEmpty()) {
+            logger.info("No adapter on this computer is on the chosen network; skipping WS-Discovery");
+            return Discovery.NONE;
         }
 
         Map<String, Device> byKey = new ConcurrentHashMap<>();
@@ -130,12 +158,10 @@ public final class OnvifService {
                 StructuredTaskScope.Joiner.<Void>awaitAll(),
                 cfg -> cfg.withName("ws-discovery").withTimeout(window.plusMillis(500)))) {
 
-            for (java.net.NetworkInterface ni : interfaces) {
-                scope.fork(() -> {
-                    probeInterface(ni, window, byKey);
-                    return null;
-                });
-            }
+            adapters.forEach((ni, address) -> scope.fork(() -> {
+                probeInterface(ni, address, window, byKey);
+                return null;
+            }));
             scope.join();
         } catch (StructuredTaskScope.TimeoutException e) {
             logger.debug("WS-Discovery window elapsed");
@@ -143,22 +169,36 @@ public final class OnvifService {
             Thread.currentThread().interrupt();
         }
 
-        List<Device> devices = new ArrayList<>(byKey.values());
-        logger.info("WS-Discovery found {} device(s) on {} interface(s)", devices.size(), interfaces.size());
-        return devices;
+        Discovery discovery = keepWithin(byKey.values(), targets);
+        logger.info("WS-Discovery found {} device(s) on the chosen network over {} adapter(s)",
+                discovery.devices().size(), adapters.size());
+        if (!discovery.leftOut().isEmpty()) {
+            logger.info("Left out {} device(s) announcing from outside the chosen network: {}",
+                    discovery.leftOut().size(), discovery.leftOut());
+        }
+        return discovery;
     }
 
-    private void probeInterface(java.net.NetworkInterface ni, Duration window, Map<String, Device> byKey) {
+    /** Split what answered into the devices inside the targets and the addresses outside. */
+    static Discovery keepWithin(java.util.Collection<Device> answered, TargetParser.Targets targets) {
+        List<Device> inside = new ArrayList<>();
+        List<String> outside = new ArrayList<>();
+        for (Device device : answered) {
+            if (targets.contains(device.getIpAddress())) {
+                inside.add(device);
+            } else {
+                outside.add(device.getIpAddress());
+            }
+        }
+        return new Discovery(inside, outside);
+    }
+
+    private void probeInterface(java.net.NetworkInterface ni, InetAddress bindAddress, Duration window,
+                                Map<String, Device> byKey) {
         // Binding to the interface's own address makes the OS send the multicast
         // out of that interface, which a socket on the wildcard address would
-        // send only over the default route.
-        InetAddress bindAddress = ni.getInterfaceAddresses().stream()
-                .map(java.net.InterfaceAddress::getAddress)
-                .filter(a -> a instanceof java.net.Inet4Address && !a.isLinkLocalAddress())
-                .findFirst().orElse(null);
-        if (bindAddress == null) {
-            return;
-        }
+        // send only over the default route. The address is the one on the
+        // chosen network, for an adapter that has more than one.
 
         try (DatagramSocket socket = new DatagramSocket(new InetSocketAddress(bindAddress, 0))) {
             socket.setSoTimeout(250);

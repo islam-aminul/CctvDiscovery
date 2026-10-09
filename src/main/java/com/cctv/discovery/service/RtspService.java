@@ -142,6 +142,8 @@ public final class RtspService {
 
     private static final Map<String, String[]> MANUFACTURER_PATHS = new LinkedHashMap<>();
     private static final Map<String, NvrChannelPattern> NVR_PATTERNS = new HashMap<>();
+    /** Brand, as upper-case words, to the template family whose firmware it ships. */
+    private static final Map<String, String> FAMILY_BRANDS = new LinkedHashMap<>();
 
     /** Paths that worked before, kept between runs and tried first. */
     private final RtspPathCache pathCache;
@@ -215,6 +217,14 @@ public final class RtspService {
                         paths[i] = paths[i].trim();
                     }
                     MANUFACTURER_PATHS.put(normalizeKey(name), paths);
+                } else if (key.startsWith("family.") && key.endsWith(".brands")) {
+                    String family = normalizeKey(key.substring("family.".length(), key.length() - ".brands".length()));
+                    for (String brand : value.split(",")) {
+                        String words = words(brand);
+                        if (!words.isBlank()) {
+                            FAMILY_BRANDS.put(words, family);
+                        }
+                    }
                 } else if (key.startsWith("nvr.")) {
                     String[] parts = key.split("\\.");
                     if (parts.length == 3) {
@@ -253,6 +263,41 @@ public final class RtspService {
         }
     }
 
+    /**
+     * The template family a manufacturer's devices answer like, or null.
+     *
+     * <p>Template lookup was by exact name, so a brand that ships another
+     * maker's firmware got none of that maker's paths. Prama runs Hikvision
+     * firmware; a Prama camera reporting "PRAMA", or a MAC in Prama's
+     * E4:28:A4 block, was never offered /Streaming/Channels/101. Matching is
+     * on whole words, so Pramac GmbH, a generator maker in the same registry,
+     * is not taken for Prama.
+     */
+    public static String firmwareFamily(String manufacturer) {
+        if (manufacturer == null || manufacturer.isBlank()) {
+            return null;
+        }
+        String padded = " " + words(manufacturer) + " ";
+        for (Map.Entry<String, String> brand : FAMILY_BRANDS.entrySet()) {
+            if (padded.contains(" " + brand.getKey() + " ")) {
+                return brand.getValue();
+            }
+        }
+        // The family's own name as a word: "Hangzhou Hikvision Digital
+        // Technology", which ONVIF reports and no template is keyed by.
+        for (String family : MANUFACTURER_PATHS.keySet()) {
+            if (!"GENERIC".equals(family) && padded.contains(" " + family.replace('_', ' ') + " ")) {
+                return family;
+            }
+        }
+        return null;
+    }
+
+    /** Upper-case words separated by single spaces, punctuation dropped. */
+    private static String words(String text) {
+        return text.toUpperCase(Locale.ROOT).replaceAll("[^A-Z0-9]+", " ").trim();
+    }
+
     private static String normalizeKey(String name) {
         return name.trim().toUpperCase(Locale.ROOT).replace(' ', '_').replace('-', '_');
     }
@@ -264,6 +309,10 @@ public final class RtspService {
             NvrChannelPattern exact = NVR_PATTERNS.get(key);
             if (exact != null) {
                 return exact;
+            }
+            String family = firmwareFamily(manufacturer);
+            if (family != null && NVR_PATTERNS.containsKey(family)) {
+                return NVR_PATTERNS.get(family);
             }
             for (Map.Entry<String, NvrChannelPattern> entry : NVR_PATTERNS.entrySet()) {
                 if (key.contains(entry.getKey()) || entry.getKey().contains(key)) {
@@ -726,6 +775,10 @@ public final class RtspService {
         if (manufacturer != null && !manufacturer.isBlank()
                 && !MacLookupService.UNKNOWN.equalsIgnoreCase(manufacturer)) {
             String[] vendorPaths = MANUFACTURER_PATHS.get(normalizeKey(manufacturer));
+            if (vendorPaths == null) {
+                String family = firmwareFamily(manufacturer);
+                vendorPaths = family == null ? null : MANUFACTURER_PATHS.get(family);
+            }
             if (vendorPaths != null) {
                 paths.addAll(List.of(vendorPaths));
             }

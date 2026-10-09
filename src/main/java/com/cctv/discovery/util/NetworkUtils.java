@@ -81,6 +81,41 @@ public final class NetworkUtils {
     }
 
     /** Local IPv4 interfaces as {@link NetworkInterface}s (for multicast send). */
+    /**
+     * The address on this interface whose subnet overlaps the targets, or null
+     * when the interface is on none of them.
+     *
+     * <p>Used to send WS-Discovery only where the chosen network is. Probing
+     * every adapter also reached Hyper-V and WSL switches and, on 2026-10-09,
+     * a second site's network on a cable plugged in alongside the Wi-Fi.
+     */
+    public static Inet4Address addressServing(NetworkInterface ni, TargetParser.Targets targets) {
+        for (InterfaceAddress ia : ni.getInterfaceAddresses()) {
+            if (ia.getAddress() instanceof Inet4Address address && !address.isLinkLocalAddress()
+                    && subnetOverlaps(address.getHostAddress(), ia.getNetworkPrefixLength(), targets)) {
+                return address;
+            }
+        }
+        return null;
+    }
+
+    /** Whether the subnet of {@code address}/{@code prefixLength} overlaps any target. */
+    public static boolean subnetOverlaps(String address, int prefixLength, TargetParser.Targets targets) {
+        if (!isValidIP(address) || prefixLength < 0 || prefixLength > 32) {
+            return false;
+        }
+        long ip = ipToLong(address);
+        long mask = prefixLength == 0 ? 0L : (0xFFFFFFFFL << (32 - prefixLength)) & 0xFFFFFFFFL;
+        long first = ip & mask;
+        long last = first | (~mask & 0xFFFFFFFFL);
+        for (TargetParser.Interval interval : targets.intervals()) {
+            if (interval.start() <= last && interval.end() >= first) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     public static List<NetworkInterface> getMulticastInterfaces() {
         List<NetworkInterface> result = new ArrayList<>();
         try {

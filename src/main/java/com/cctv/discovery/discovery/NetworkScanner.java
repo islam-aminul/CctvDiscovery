@@ -70,15 +70,16 @@ public final class NetworkScanner implements AutoCloseable {
     // -------------------------------------------------------------- Discovery
 
     /** ONVIF devices announcing themselves by multicast. */
-    public List<Device> performWsDiscovery() {
+    /** Cameras on the chosen network that announce themselves, ONVIF WS-Discovery. */
+    public OnvifService.Discovery performWsDiscovery(TargetParser.Targets targets) {
         if (!config.isWsDiscoveryEnabled()) {
-            return List.of();
+            return OnvifService.Discovery.NONE;
         }
-        List<Device> devices = onvifService.discoverDevices();
-        for (Device device : devices) {
+        OnvifService.Discovery discovery = onvifService.discoverDevices(targets);
+        for (Device device : discovery.devices()) {
             resolveIdentity(device);
         }
-        return devices;
+        return discovery;
     }
 
     /** Scan a list of addresses. */

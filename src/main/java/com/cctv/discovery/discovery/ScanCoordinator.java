@@ -5,6 +5,7 @@ import com.cctv.discovery.model.Credential;
 import com.cctv.discovery.model.Device;
 import com.cctv.discovery.model.Finding;
 import com.cctv.discovery.model.RTSPStream;
+import com.cctv.discovery.service.IsapiService;
 import com.cctv.discovery.service.OnvifService;
 import com.cctv.discovery.service.RtspService;
 import com.cctv.discovery.util.RtspClient;
@@ -14,6 +15,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.StructuredTaskScope;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -60,6 +62,7 @@ public final class ScanCoordinator {
     private final RtspService rtspService;
     private final StreamAnalyzer streamAnalyzer;
     private final AppConfig config;
+    private final IsapiService isapi = new IsapiService();
 
     private volatile boolean cancelled;
 
@@ -128,10 +131,20 @@ public final class ScanCoordinator {
         long started = System.currentTimeMillis();
 
         listener.onProgress(0.02, "Listening for cameras that announce themselves...");
-        List<Device> announced = networkScanner.performWsDiscovery();
+        OnvifService.Discovery discovery = networkScanner.performWsDiscovery(targets);
+        List<Device> announced = discovery.devices();
         if (!announced.isEmpty()) {
             listener.onDevicesFound(announced);
-            listener.onProgress(0.08, "Found " + announced.size() + " device(s) by announcement.");
+        }
+        if (!announced.isEmpty() || !discovery.leftOut().isEmpty()) {
+            String message = "Found " + announced.size() + " device(s) by announcement.";
+            if (!discovery.leftOut().isEmpty()) {
+                // Said rather than done silently, so a camera outside the range
+                // is a choice the operator can see, not one that vanished.
+                message += " Left out " + discovery.leftOut().size()
+                        + " outside the chosen network.";
+            }
+            listener.onProgress(0.08, message);
         }
         if (cancelled) {
             finish(listener, started);
@@ -261,13 +274,30 @@ public final class ScanCoordinator {
             rtsp = discoverStreamsByPath(device, credentials);
         }
 
+        // Without ONVIF a Hikvision-family device says nothing about itself over
+        // RTSP; its web API does. Only once RTSP has accepted the password, so
+        // no login is spent on a password the device has refused.
+        boolean recorderByModel = false;
+        if (device.getUsername() != null && device.getModel() == null
+                && "HIKVISION".equals(RtspService.firmwareFamily(device.getManufacturer()))) {
+            Optional<IsapiService.DeviceInfo> info = isapi.deviceInfo(device.getIpAddress(),
+                    device.getOpenHttpPorts(), device.getUsername(), device.getPassword());
+            if (info.isPresent()) {
+                applyDeviceInfo(device, info.get());
+                recorderByModel = info.get().isRecorder();
+            }
+        }
+
         // Without ONVIF a recorder looks like a camera that happens to answer on
         // channel 1. Ask it for channel 2: a recorder serves one, a camera
-        // refuses. Only once the password is known, so the walk below can run
-        // with it, and only for devices not already typed.
-        if (!device.isNvrDvr() && device.getUsername() != null && !device.getRtspStreams().isEmpty()
-                && rtspService.servesSecondChannel(device, device.getUsername(), device.getPassword())) {
-            logger.info("{} serves a second channel; treating it as a recorder", device.getIpAddress());
+        // refuses. A recorder model from ISAPI settles it without asking. Only
+        // once the password is known, so the walk below can run with it, and
+        // only for devices not already typed.
+        if (!device.isNvrDvr() && device.getUsername() != null
+                && (recorderByModel || (!device.getRtspStreams().isEmpty()
+                    && rtspService.servesSecondChannel(device, device.getUsername(), device.getPassword())))) {
+            logger.info("{} is a recorder ({}); walking its channels", device.getIpAddress(),
+                    recorderByModel ? "model " + device.getModel() : "it serves a second channel");
             device.setType(Device.DeviceType.RECORDER);
             // The walk finds channel 1 again, labelled by channel, so the
             // streams path probing found are dropped rather than doubled.
@@ -285,6 +315,26 @@ public final class ScanCoordinator {
         recordClockFinding(device);
         finalizeStatus(device, new Access(!credentials.isEmpty(), onvifAuthenticated,
                 rtsp.challenged(), rtsp.credentialAccepted()));
+    }
+
+    /** Fill in what ISAPI knows and ONVIF did not say. */
+    private void applyDeviceInfo(Device device, IsapiService.DeviceInfo info) {
+        if (device.getModel() == null) {
+            device.setModel(info.model());
+        }
+        if (device.getSerialNumber() == null) {
+            device.setSerialNumber(info.serialNumber());
+        }
+        if (device.getFirmwareVersion() == null) {
+            device.setFirmwareVersion(info.firmwareVersion());
+        }
+        if (device.getDeviceName() == null && isDeviceName(info.deviceName())) {
+            device.setDeviceName(info.deviceName());
+        }
+        if (device.getMacAddress() == null && info.macAddress() != null) {
+            networkScanner.applyMac(device, info.macAddress());
+        }
+        logger.info("{} is a {} on firmware {}", device.getIpAddress(), info.model(), info.firmwareVersion());
     }
 
     /** What RTSP path probing established about signing in. */
@@ -390,7 +440,9 @@ public final class ScanCoordinator {
      */
     private static final java.util.regex.Pattern GENERIC_SESSION_NAME = java.util.regex.Pattern.compile(
             "(?i)\\s*(media presentation|hik media server.*|session streamed by.*|live555.*|streamed by.*"
-                    + "|rtsp (session|server).*|unnamed|no ?name|stream|session|-)\\s*");
+                    + "|rtsp (session|server).*|unnamed|no ?name|stream|session|-"
+                    // Factory names from ISAPI, as on the site's cameras and recorder.
+                    + "|ip ?camera|network video recorder|embedded net dvr|ipc|nvr|dvr|camera ?0*1)\\s*");
 
     static boolean isDeviceName(String sessionName) {
         return sessionName != null && !sessionName.isBlank()

@@ -208,6 +208,23 @@ class ScanAccessTest {
     }
 
     @Test
+    @DisplayName("A Prama camera with ONVIF off is found on Hikvision's paths")
+    void pramaCameraUsesHikvisionPaths() throws Exception {
+        server = new FakeRtspServer(FakeRtspServer.Style.CAMERA, "admin", "right",
+                Set.of("/Streaming/Channels/101", "/Streaming/Channels/102"));
+        Device device = new Device("127.0.0.1");
+        device.setManufacturer("Prama");
+        device.getOpenRtspPorts().add(server.port());
+
+        scanner.identify(device, List.of(new Credential("admin", "right")), QUIET);
+
+        assertEquals(Device.DeviceStatus.COMPLETED, device.getStatus(),
+                "requests: " + server.requestLog());
+        assertTrue(device.getRtspStreams().stream()
+                .anyMatch(s -> s.getRtspUrl().endsWith("/Streaming/Channels/101")));
+    }
+
+    @Test
     @DisplayName("Video readable with no password is found, and flagged")
     void openDeviceWithVideoIsFlagged() throws Exception {
         Device device = identify(FakeRtspServer.Style.OPEN, Set.of(STREAM));
