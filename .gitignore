@@ -1,0 +1,98 @@
+# ===========================================
+# CCTV Discovery Project - .gitignore
+# ===========================================
+
+# ---------------------
+# Build Output
+# ---------------------
+target/
+dist/
+build/
+out/
+
+# ---------------------
+# IDE Files
+# ---------------------
+# IntelliJ IDEA
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Eclipse
+.project
+.classpath
+.settings/
+bin/
+
+# NetBeans
+nbproject/
+nbbuild/
+nbdist/
+.nb-gradle/
+
+# VS Code (keep settings folder if checked in)
+# .vscode/
+
+# ---------------------
+# Maven
+# ---------------------
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+buildNumber.properties
+.mvn/timing.properties
+.mvn/wrapper/maven-wrapper.jar
+
+# ---------------------
+# Java
+# ---------------------
+*.class
+*.log
+*.jar
+*.war
+*.ear
+*.nar
+hs_err_pid*
+replay_pid*
+
+# ---------------------
+# OS Generated Files
+# ---------------------
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# ---------------------
+# JRE/JDK Bundled
+# ---------------------
+jre8/
+jre/
+jdk/
+
+# ---------------------
+# Application Generated
+# ---------------------
+*.jks
+*.pfx
+*.p12
+*.keystore
+logs/
+*.xlsx
+exports/
+
+# ---------------------
+# Sensitive Files
+# ---------------------
+*.pem
+*.key
+credentials.properties
+secrets.properties

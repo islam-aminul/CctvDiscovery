@@ -1,0 +1,13 @@
+# Pictures the user manual uses; HelpDialog unpacks each one listed here.
+credentials-dialog.png
+export-dialog.png
+help-dialog.png
+main-window.png
+network-advanced.png
+network-simple.png
+scan-progress.png
+scan-results.png
+settings-ports.png
+settings-stream-paths.png
+settings-verification.png
+verification-dialog.png

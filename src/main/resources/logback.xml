@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <!--
+      Logs go beside the settings and the path cache, in the one per-user folder
+      AppPaths describes, so the application also works when it is installed
+      somewhere the user cannot write. Asking the class rather than repeating
+      its rules here keeps a single definition of that folder.
+      Override with -Dcctv.log.dir=<path>, or move everything with
+      -Dcctv.data.dir=<path>.
+    -->
+    <define name="LOG_DIR" class="com.cctv.discovery.config.LogDirectoryDefiner"/>
+
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} %-5level %logger{28} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_DIR}/cctv-discovery.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_DIR}/cctv-discovery.%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
+            <maxFileSize>10MB</maxFileSize>
+            <maxHistory>30</maxHistory>
+            <totalSizeCap>200MB</totalSizeCap>
+        </rollingPolicy>
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- FFmpeg native output is verbose and goes to the file only. -->
+    <logger name="org.bytedeco.javacv.FFmpegLogCallback" level="WARN" additivity="false">
+        <appender-ref ref="FILE"/>
+    </logger>
+    <logger name="org.bytedeco" level="WARN"/>
+    <logger name="org.apache.poi" level="WARN"/>
+    <logger name="oshi" level="WARN"/>
+
+    <!--
+      Protocol traces are logged at DEBUG and TRACE. They include SOAP bodies,
+      so raise these only for troubleshooting; the code redacts Security
+      elements and Authorization headers before they are written.
+    -->
+    <logger name="com.cctv.discovery.util.RtspClient" level="INFO"/>
+    <logger name="com.cctv.discovery.service.OnvifService" level="INFO"/>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="FILE"/>
+    </root>
+</configuration>

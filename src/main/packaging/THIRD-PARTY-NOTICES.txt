@@ -1,0 +1,66 @@
+CCTV Discovery ${project.version} - third-party software
+=========================================================
+
+CCTV Discovery itself is Copyright 2026 Aminul Islam, licensed under the
+Apache License, Version 2.0 (LICENSE). The Windows package also contains the
+software below, each under its own licence. Licence texts are in the
+licenses folder; licenses/bundled holds the LICENSE and NOTICE files shipped
+inside each library's own jar, unchanged.
+
+Where a component is offered under a choice of licences, the one this
+package relies on is listed first.
+
+
+Java runtime (runtime folder)
+  Eclipse Temurin ${java.release}, built from OpenJDK by the Eclipse Adoptium project.
+  GPL 2.0 with the Classpath Exception. Notices: runtime/legal.
+  Source: https://github.com/adoptium/jdk25u
+
+JavaFX ${javafx.version} (inside CctvDiscovery.jar)
+  GPL 2.0 with the Classpath Exception: licenses/GPL-2.0-with-Classpath-Exception.txt
+  Source: https://github.com/openjdk/jfx
+
+FFmpeg 8.1.2 (inside CctvDiscovery.jar, the avcodec, avformat, avutil,
+avfilter, avdevice, swscale and swresample libraries)
+  LGPL 3.0 or later: licenses/LGPL-3.0.txt, which builds on licenses/GPL-3.0.txt.
+  Built by the bytedeco javacpp-presets project, without GPL or non-free parts.
+  The libraries are unmodified and are loaded at run time from separate files,
+  so they can be replaced with a compatible build.
+  FFmpeg source: https://ffmpeg.org/releases/ffmpeg-8.1.2.tar.xz
+  Build scripts: https://github.com/bytedeco/javacpp-presets/tree/${javacv.version}/ffmpeg
+
+winpthreads (libwinpthread-1.dll, shipped with FFmpeg)
+  MIT-style, Copyright (c) 2011 mingw-w64 project: licenses/winpthreads-COPYING.txt
+  Source: https://github.com/mingw-w64/mingw-w64
+
+JavaCV and JavaCPP ${javacv.version}
+  Apache License 2.0 (also offered under GPL 2.0 or later with the Classpath Exception).
+  Source: https://github.com/bytedeco/javacv , https://github.com/bytedeco/javacpp
+
+Apache POI ${poi.version}, Apache XMLBeans, Apache Commons (Codec, IO, Collections,
+Compress, Lang, Math), Apache Log4j API, SparseBitSet
+  Apache License 2.0: LICENSE. Their NOTICE files: licenses/bundled.
+
+Java Native Access (JNA)
+  Apache License 2.0 (also offered under LGPL 2.1 or later).
+
+OSHI ${oshi.version}
+  MIT: licenses/OSHI-MIT.txt
+  Source: https://github.com/oshi/oshi
+
+SLF4J ${slf4j.version}
+  MIT: licenses/bundled (slf4j-api)
+
+Logback ${logback.version}
+  Eclipse Public License 2.0 (also offered under LGPL 2.1): licenses/EPL-2.0.txt
+  Source: https://github.com/qos-ch/logback
+
+curvesapi 1.08 (used by Apache POI)
+  BSD 3-Clause, Copyright (c) 2005, Graph Builder: licenses/curvesapi-BSD-3-Clause.txt
+  Source: https://github.com/virtuald/curvesapi
+
+Launch4j (the CctvDiscovery.exe launcher stub)
+  MIT: licenses/Launch4j-MIT.txt
+
+IEEE MAC address registry (vendor names, inside CctvDiscovery.jar)
+  The public MA-L, MA-M and MA-S listings published at https://standards-oui.ieee.org/

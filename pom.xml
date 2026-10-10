@@ -1,0 +1,599 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.cctv</groupId>
+    <artifactId>cctv-discovery</artifactId>
+    <version>2.0.0</version>
+    <name>CCTV Discovery</name>
+    <description>CCTV discovery, stream analysis and host audit tool (Java 25).</description>
+    <inceptionYear>2026</inceptionYear>
+    <url>https://github.com/islam-aminul/CctvDiscovery</url>
+    <organization>
+        <name>Aminul Islam</name>
+        <url>https://github.com/islam-aminul</url>
+    </organization>
+    <licenses>
+        <license>
+            <name>Apache-2.0</name>
+            <url>https://www.apache.org/licenses/LICENSE-2.0</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+
+    <prerequisites>
+        <maven>3.9.0</maven>
+    </prerequisites>
+
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <java.release>25</java.release>
+        <maven.compiler.release>${java.release}</maven.compiler.release>
+
+        <!-- Runtime flags shared by tests, the launcher and the bundled runtime.
+             StructuredTaskScope is a preview API in Java 25 (JEP 505). -->
+        <app.jvm.args>--enable-preview --enable-native-access=ALL-UNNAMED</app.jvm.args>
+
+        <!-- Library versions -->
+        <javafx.version>27</javafx.version>
+        <javacv.version>1.5.14</javacv.version>
+        <ffmpeg.version>8.1.2-${javacv.version}</ffmpeg.version>
+        <oshi.version>7.6.1</oshi.version>
+        <poi.version>5.5.1</poi.version>
+        <slf4j.version>2.0.20</slf4j.version>
+        <logback.version>1.6.3</logback.version>
+        <junit.version>6.1.3</junit.version>
+
+        <!-- Packaging -->
+        <app.filename>CctvDiscovery</app.filename>
+        <!-- JDK whose jlink builds the bundled runtime. Must match the target
+             platform (Windows x64 for the .exe). Defaults to the build JDK. -->
+        <runtime.jdk>${java.home}</runtime.jdk>
+        <runtime.modules>java.base,java.desktop,java.logging,java.management,java.naming,java.net.http,java.prefs,java.scripting,java.sql,java.xml,java.xml.crypto,jdk.charsets,jdk.crypto.cryptoki,jdk.localedata,jdk.unsupported,jdk.zipfs</runtime.modules>
+
+        <!-- Code signing is optional: pass -Dsign.keystore=... -Dsign.storepass=...
+             (or set the env vars) to sign with a real certificate. The launcher
+             and the self-extracting archive go through the same script, so they
+             always carry the same signature. -->
+        <sign.keystore>${env.CCTV_SIGN_KEYSTORE}</sign.keystore>
+        <sign.storepass>${env.CCTV_SIGN_STOREPASS}</sign.storepass>
+        <skip.signing>true</skip.signing>
+
+        <!-- Self-extracting archive. Built with IExpress, which ships with
+             Windows, so it is only produced on a Windows build. -->
+        <sfx.filename>${app.filename}-${project.version}-sfx</sfx.filename>
+        <skip.sfx>true</skip.sfx>
+    </properties>
+
+    <dependencies>
+        <!-- JavaFX (platform classifier selected by profile) -->
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-controls</artifactId>
+            <version>${javafx.version}</version>
+            <classifier>${javafx.platform}</classifier>
+        </dependency>
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-graphics</artifactId>
+            <version>${javafx.version}</version>
+            <classifier>${javafx.platform}</classifier>
+        </dependency>
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-base</artifactId>
+            <version>${javafx.version}</version>
+            <classifier>${javafx.platform}</classifier>
+        </dependency>
+
+        <!-- JavaCV: only the FFmpeg preset is used, so the other presets are excluded -->
+        <dependency>
+            <groupId>org.bytedeco</groupId>
+            <artifactId>javacv</artifactId>
+            <version>${javacv.version}</version>
+            <exclusions>
+                <exclusion><groupId>org.bytedeco</groupId><artifactId>opencv</artifactId></exclusion>
+                <exclusion><groupId>org.bytedeco</groupId><artifactId>openblas</artifactId></exclusion>
+                <exclusion><groupId>org.bytedeco</groupId><artifactId>flycapture</artifactId></exclusion>
+                <exclusion><groupId>org.bytedeco</groupId><artifactId>libdc1394</artifactId></exclusion>
+                <exclusion><groupId>org.bytedeco</groupId><artifactId>libfreenect</artifactId></exclusion>
+                <exclusion><groupId>org.bytedeco</groupId><artifactId>libfreenect2</artifactId></exclusion>
+                <exclusion><groupId>org.bytedeco</groupId><artifactId>librealsense</artifactId></exclusion>
+                <exclusion><groupId>org.bytedeco</groupId><artifactId>librealsense2</artifactId></exclusion>
+                <exclusion><groupId>org.bytedeco</groupId><artifactId>videoinput</artifactId></exclusion>
+                <exclusion><groupId>org.bytedeco</groupId><artifactId>artoolkitplus</artifactId></exclusion>
+                <exclusion><groupId>org.bytedeco</groupId><artifactId>leptonica</artifactId></exclusion>
+                <exclusion><groupId>org.bytedeco</groupId><artifactId>tesseract</artifactId></exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>org.bytedeco</groupId>
+            <artifactId>ffmpeg</artifactId>
+            <version>${ffmpeg.version}</version>
+            <classifier>${javacpp.platform}</classifier>
+        </dependency>
+        <dependency>
+            <groupId>org.bytedeco</groupId>
+            <artifactId>javacpp</artifactId>
+            <version>${javacv.version}</version>
+            <classifier>${javacpp.platform}</classifier>
+        </dependency>
+
+        <!-- Host audit -->
+        <dependency>
+            <groupId>com.github.oshi</groupId>
+            <artifactId>oshi-core</artifactId>
+            <version>${oshi.version}</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.slf4j</groupId>
+                    <artifactId>slf4j-api</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+
+        <!-- Excel export (including agile encryption) -->
+        <dependency>
+            <groupId>org.apache.poi</groupId>
+            <artifactId>poi-ooxml</artifactId>
+            <version>${poi.version}</version>
+        </dependency>
+
+        <!-- Hashing/Base64 for the existing authentication helpers -->
+        <dependency>
+            <groupId>commons-codec</groupId>
+            <artifactId>commons-codec</artifactId>
+            <version>1.22.1</version>
+        </dependency>
+
+        <!-- Logging -->
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+            <version>${slf4j.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>ch.qos.logback</groupId>
+            <artifactId>logback-classic</artifactId>
+            <version>${logback.version}</version>
+        </dependency>
+
+        <!-- Tests -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>${junit.version}</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <profiles>
+        <profile>
+            <id>windows-x64</id>
+            <activation>
+                <os>
+                    <family>windows</family>
+                </os>
+            </activation>
+            <properties>
+                <javacpp.platform>windows-x86_64</javacpp.platform>
+                <javafx.platform>win</javafx.platform>
+                <skip.sfx>false</skip.sfx>
+            </properties>
+        </profile>
+        <profile>
+            <id>linux-x64</id>
+            <activation>
+                <os>
+                    <family>unix</family>
+                    <name>Linux</name>
+                    <arch>amd64</arch>
+                </os>
+            </activation>
+            <properties>
+                <javacpp.platform>linux-x86_64</javacpp.platform>
+                <javafx.platform>linux</javafx.platform>
+            </properties>
+        </profile>
+        <profile>
+            <id>linux-arm64</id>
+            <activation>
+                <os>
+                    <family>unix</family>
+                    <name>Linux</name>
+                    <arch>aarch64</arch>
+                </os>
+            </activation>
+            <properties>
+                <javacpp.platform>linux-arm64</javacpp.platform>
+                <javafx.platform>linux-aarch64</javafx.platform>
+            </properties>
+        </profile>
+        <profile>
+            <id>mac-arm64</id>
+            <activation>
+                <os>
+                    <family>mac</family>
+                    <arch>aarch64</arch>
+                </os>
+            </activation>
+            <properties>
+                <javacpp.platform>macosx-arm64</javacpp.platform>
+                <javafx.platform>mac-aarch64</javafx.platform>
+            </properties>
+        </profile>
+        <profile>
+            <id>mac-x64</id>
+            <activation>
+                <os>
+                    <family>mac</family>
+                    <arch>x86_64</arch>
+                </os>
+            </activation>
+            <properties>
+                <javacpp.platform>macosx-x86_64</javacpp.platform>
+                <javafx.platform>mac</javafx.platform>
+            </properties>
+        </profile>
+        <!-- Enables signing when a keystore is supplied -->
+        <profile>
+            <id>sign</id>
+            <activation>
+                <property>
+                    <name>sign.keystore</name>
+                </property>
+            </activation>
+            <properties>
+                <skip.signing>false</skip.signing>
+            </properties>
+        </profile>
+    </profiles>
+
+    <build>
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+                <filtering>true</filtering>
+                <includes>
+                    <include>application.properties</include>
+                </includes>
+            </resource>
+            <resource>
+                <directory>src/main/resources</directory>
+                <filtering>false</filtering>
+                <excludes>
+                    <exclude>application.properties</exclude>
+                </excludes>
+            </resource>
+        </resources>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.16.0</version>
+                <configuration>
+                    <release>${java.release}</release>
+                    <compilerArgs>
+                        <arg>--enable-preview</arg>
+                        <arg>-Xlint:all,-preview,-serial,-processing</arg>
+                    </compilerArgs>
+                </configuration>
+            </plugin>
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>3.6.0</version>
+                <configuration>
+                    <argLine>${app.jvm.args}</argLine>
+                </configuration>
+            </plugin>
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-resources-plugin</artifactId>
+                <version>3.5.0</version>
+                <configuration>
+                    <useDefaultDelimiters>false</useDefaultDelimiters>
+                    <delimiters>
+                        <delimiter>@</delimiter>
+                    </delimiters>
+                    <!-- Binary data must not be filtered -->
+                    <nonFilteredFileExtensions>
+                        <nonFilteredFileExtension>gz</nonFilteredFileExtension>
+                        <nonFilteredFileExtension>png</nonFilteredFileExtension>
+                        <nonFilteredFileExtension>ico</nonFilteredFileExtension>
+                    </nonFilteredFileExtensions>
+                </configuration>
+            </plugin>
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <version>3.5.1</version>
+            </plugin>
+
+            <!-- Fat JAR -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <version>3.6.2</version>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>shade</goal>
+                        </goals>
+                        <configuration>
+                            <createDependencyReducedPom>false</createDependencyReducedPom>
+                            <transformers>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                                    <mainClass>com.cctv.discovery.Main</mainClass>
+                                    <manifestEntries>
+                                        <Enable-Native-Access>ALL-UNNAMED</Enable-Native-Access>
+                                        <Implementation-Version>${project.version}</Implementation-Version>
+                                    </manifestEntries>
+                                </transformer>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
+                            </transformers>
+                            <filters>
+                                <filter>
+                                    <artifact>*:*</artifact>
+                                    <excludes>
+                                        <exclude>META-INF/*.SF</exclude>
+                                        <exclude>META-INF/*.DSA</exclude>
+                                        <exclude>META-INF/*.RSA</exclude>
+                                        <exclude>META-INF/maven/**</exclude>
+                                        <exclude>META-INF/LICENSE*</exclude>
+                                        <exclude>META-INF/NOTICE*</exclude>
+                                        <exclude>META-INF/DEPENDENCIES</exclude>
+                                        <exclude>META-INF/MANIFEST.MF</exclude>
+                                        <exclude>module-info.class</exclude>
+                                        <exclude>META-INF/versions/*/module-info.class</exclude>
+                                        <exclude>META-INF/native-image/**</exclude>
+                                    </excludes>
+                                </filter>
+                            </filters>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- Bundled runtime (jlink) and dist layout -->
+            <!-- The LICENSE and NOTICE files inside each dependency jar. The fat
+                 jar cannot hold them (they share names), so they are kept beside
+                 it, one folder per artifact. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <version>3.7.0</version>
+                <executions>
+                    <execution>
+                        <id>unpack-licences</id>
+                        <phase>prepare-package</phase>
+                        <goals>
+                            <goal>unpack-dependencies</goal>
+                        </goals>
+                        <configuration>
+                            <includeScope>runtime</includeScope>
+                            <includes>META-INF/LICENSE*,META-INF/NOTICE*</includes>
+                            <useSubDirectoryPerArtifact>true</useSubDirectoryPerArtifact>
+                            <stripClassifier>true</stripClassifier>
+                            <outputDirectory>${project.build.directory}/dist/licenses/bundled</outputDirectory>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-antrun-plugin</artifactId>
+                <version>3.2.0</version>
+                <executions>
+                    <execution>
+                        <id>jlink-runtime</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>run</goal>
+                        </goals>
+                        <configuration>
+                            <target>
+                                <delete dir="${project.build.directory}/dist/runtime" quiet="true"/>
+                                <exec executable="${runtime.jdk}/bin/jlink" failonerror="true">
+                                    <arg value="--add-modules"/>
+                                    <arg value="${runtime.modules}"/>
+                                    <arg value="--include-locales=en"/>
+                                    <arg value="--strip-debug"/>
+                                    <arg value="--no-header-files"/>
+                                    <arg value="--no-man-pages"/>
+                                    <arg value="--output"/>
+                                    <arg value="${project.build.directory}/dist/runtime"/>
+                                </exec>
+                                <copy file="${project.build.directory}/${project.artifactId}-${project.version}.jar"
+                                      tofile="${project.build.directory}/dist/${app.filename}.jar"/>
+                                <copy file="README.md" todir="${project.build.directory}/dist"/>
+                                <!-- This project's licence, then everything bundled with it:
+                                     the texts the dependencies' own licences require to travel
+                                     with the binaries. The jars' own LICENSE and NOTICE files
+                                     are unpacked beside them by the unpack-licences step. -->
+                                <copy file="LICENSE" todir="${project.build.directory}/dist"/>
+                                <copy file="NOTICE" todir="${project.build.directory}/dist"/>
+                                <copy file="src/main/packaging/THIRD-PARTY-NOTICES.txt"
+                                      todir="${project.build.directory}/dist">
+                                    <filterchain><expandproperties/></filterchain>
+                                </copy>
+                                <copy todir="${project.build.directory}/dist/licenses">
+                                    <fileset dir="src/main/packaging/licenses"/>
+                                </copy>
+                            </target>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- Windows launcher -->
+            <plugin>
+                <groupId>com.akathist.maven.plugins.launch4j</groupId>
+                <artifactId>launch4j-maven-plugin</artifactId>
+                <version>2.7.0</version>
+                <executions>
+                    <execution>
+                        <id>l4j-gui</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>launch4j</goal>
+                        </goals>
+                        <configuration>
+                            <headerType>gui</headerType>
+                            <outfile>${project.build.directory}/dist/${app.filename}.exe</outfile>
+                            <jar>${app.filename}.jar</jar>
+                            <dontWrapJar>true</dontWrapJar>
+                            <!-- Run from the launcher's own folder. The class path
+                                 below is relative, so without this the executable
+                                 starts a JVM that cannot find the jar and dies
+                                 silently whenever the caller's working directory
+                                 is somewhere else: a shortcut with a different
+                                 "Start in", a terminal, or the self-extracting
+                                 archive, which starts it from its unpack folder. -->
+                            <chdir>.</chdir>
+                            <icon>src/main/resources/icon.ico</icon>
+                            <errTitle>CCTV Discovery</errTitle>
+                            <classPath>
+                                <mainClass>com.cctv.discovery.Main</mainClass>
+                                <addDependencies>false</addDependencies>
+                            </classPath>
+                            <jre>
+                                <path>runtime</path>
+                                <requiresJdk>false</requiresJdk>
+                                <requires64Bit>true</requires64Bit>
+                                <minVersion>${java.release}</minVersion>
+                                <opts>
+                                    <opt>--enable-preview</opt>
+                                    <opt>--enable-native-access=ALL-UNNAMED</opt>
+                                    <opt>-Dfile.encoding=UTF-8</opt>
+                                </opts>
+                            </jre>
+                            <versionInfo>
+                                <fileVersion>${project.version}.0</fileVersion>
+                                <txtFileVersion>${project.version}</txtFileVersion>
+                                <fileDescription>CCTV Discovery &amp; Audit Tool</fileDescription>
+                                <copyright>Apache License 2.0, see NOTICE</copyright>
+                                <productVersion>${project.version}.0</productVersion>
+                                <txtProductVersion>${project.version}</txtProductVersion>
+                                <productName>CCTV Discovery</productName>
+                                <!-- Set rather than left to default to the POM's organisation:
+                                     Windows shows it in the file's properties, and no person's
+                                     or company's name is shown to the user. -->
+                                <companyName>CCTV Discovery</companyName>
+                                <internalName>CctvDiscovery</internalName>
+                                <originalFilename>${app.filename}.exe</originalFilename>
+                            </versionInfo>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- Optional Authenticode signing, then the self-extracting archive.
+                 Order matters: the launcher is signed before it is packed, and
+                 the archive is signed after it is built, because Authenticode
+                 covers the cabinet the archive carries. -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>3.6.4</version>
+                <executions>
+                    <execution>
+                        <id>sign-exe</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>exec</goal>
+                        </goals>
+                        <configuration>
+                            <skip>${skip.signing}</skip>
+                            <executable>powershell.exe</executable>
+                            <arguments>
+                                <argument>-NoProfile</argument>
+                                <argument>-ExecutionPolicy</argument>
+                                <argument>Bypass</argument>
+                                <argument>-File</argument>
+                                <argument>${project.basedir}/scripts/Invoke-CodeSign.ps1</argument>
+                                <argument>-Path</argument>
+                                <argument>${project.build.directory}/dist/${app.filename}.exe</argument>
+                                <argument>-Keystore</argument>
+                                <argument>${sign.keystore}</argument>
+                                <argument>-Password</argument>
+                                <argument>${sign.storepass}</argument>
+                            </arguments>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>build-sfx</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>exec</goal>
+                        </goals>
+                        <configuration>
+                            <skip>${skip.sfx}</skip>
+                            <executable>powershell.exe</executable>
+                            <arguments>
+                                <argument>-NoProfile</argument>
+                                <argument>-ExecutionPolicy</argument>
+                                <argument>Bypass</argument>
+                                <argument>-File</argument>
+                                <argument>${project.basedir}/scripts/New-SfxPackage.ps1</argument>
+                                <argument>-DistDir</argument>
+                                <argument>${project.build.directory}/dist</argument>
+                                <argument>-OutFile</argument>
+                                <argument>${project.build.directory}/${sfx.filename}.exe</argument>
+                                <argument>-WorkDir</argument>
+                                <argument>${project.build.directory}/sfx</argument>
+                                <argument>-BootstrapTemplate</argument>
+                                <argument>${project.basedir}/src/main/packaging/sfx-bootstrap.cmd</argument>
+                                <argument>-AppName</argument>
+                                <argument>${app.filename}</argument>
+                                <argument>-AppVersion</argument>
+                                <argument>${project.version}</argument>
+                                <argument>-AppExe</argument>
+                                <argument>${app.filename}.exe</argument>
+                                <argument>-FriendlyName</argument>
+                                <argument>${project.name}</argument>
+                                <argument>-PayloadPlatform</argument>
+                                <argument>${javacpp.platform}</argument>
+                                <argument>-SignKeystore</argument>
+                                <argument>${sign.keystore}</argument>
+                                <argument>-SignPassword</argument>
+                                <argument>${sign.storepass}</argument>
+                                <argument>-SkipSigning</argument>
+                                <argument>${skip.signing}</argument>
+                            </arguments>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- Distribution ZIP -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-assembly-plugin</artifactId>
+                <version>3.8.0</version>
+                <configuration>
+                    <descriptors>
+                        <descriptor>src/assembly/dist.xml</descriptor>
+                    </descriptors>
+                    <finalName>${app.filename}-${project.version}</finalName>
+                    <appendAssemblyId>false</appendAssemblyId>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>make-assembly</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>single</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>

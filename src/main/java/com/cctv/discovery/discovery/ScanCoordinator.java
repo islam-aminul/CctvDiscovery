@@ -1,0 +1,585 @@
+package com.cctv.discovery.discovery;
+
+import com.cctv.discovery.config.AppConfig;
+import com.cctv.discovery.model.Credential;
+import com.cctv.discovery.model.Device;
+import com.cctv.discovery.model.Finding;
+import com.cctv.discovery.model.RTSPStream;
+import com.cctv.discovery.service.IsapiService;
+import com.cctv.discovery.service.OnvifService;
+import com.cctv.discovery.service.RtspService;
+import com.cctv.discovery.util.RtspClient;
+import com.cctv.discovery.util.TargetParser;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.StructuredTaskScope;
+import java.util.concurrent.atomic.AtomicInteger;
+
+/**
+ * Runs a survey: announce, scan, identify, measure.
+ *
+ * <p>This used to live in {@code MainController}, tangled with the window it
+ * was reporting to. Nothing here touches JavaFX, so the decisions it makes —
+ * which devices count as cameras, when a missing stream means a rejected
+ * password rather than an unknown address, what to raise a finding about — can
+ * be tested directly instead of only through a running application.
+ *
+ * <p>Progress is reported through {@link Listener}. Every call arrives on a
+ * background thread, so an implementation that touches the user interface has
+ * to hop to the right thread itself; that is the caller's business, not this
+ * class's.
+ */
+public final class ScanCoordinator {
+
+    private static final Logger logger = LoggerFactory.getLogger(ScanCoordinator.class);
+
+    /** What a caller hears while a scan runs. All of it off the main thread. */
+    public interface Listener {
+
+        /** @param fraction 0 to 1; {@code message} is shown to the operator */
+        void onProgress(double fraction, String message);
+
+        /** Devices that have just appeared and are not in the list yet. */
+        void onDevicesFound(List<Device> devices);
+
+        /** The complete list, replacing whatever was shown before. */
+        void onDeviceList(List<Device> devices);
+
+        /** One device's details have changed. */
+        void onDeviceChanged(Device device);
+
+        /** The scan has stopped, either because it finished or because it was cancelled. */
+        void onFinished(long seconds, boolean cancelled);
+    }
+
+    private final NetworkScanner networkScanner;
+    private final OnvifService onvifService;
+    private final RtspService rtspService;
+    private final StreamAnalyzer streamAnalyzer;
+    private final AppConfig config;
+    private final IsapiService isapi = new IsapiService();
+
+    private volatile boolean cancelled;
+
+    public ScanCoordinator(NetworkScanner networkScanner, OnvifService onvifService,
+                           RtspService rtspService, StreamAnalyzer streamAnalyzer, AppConfig config) {
+        this.networkScanner = networkScanner;
+        this.onvifService = onvifService;
+        this.rtspService = rtspService;
+        this.streamAnalyzer = streamAnalyzer;
+        this.config = config;
+    }
+
+    /** Ask every running stage to stop. Whatever has been found so far is kept. */
+    public void cancel() {
+        cancelled = true;
+        networkScanner.cancel();
+        rtspService.shutdown();
+        streamAnalyzer.cancel();
+        logger.info("Scan cancelled by the user");
+    }
+
+    public boolean isCancelled() {
+        return cancelled;
+    }
+
+    /** Release the thread pools the services hold. */
+    public void shutdown() {
+        rtspService.shutdown();
+        networkScanner.shutdown();
+        streamAnalyzer.shutdown();
+    }
+
+    /** Apply the operator's choice of how thoroughly to confirm each stream. */
+    public void configureValidation(String method) {
+        try {
+            RtspService.RtspValidationMethod validation = switch (method == null ? "" : method) {
+                case "SDP_ONLY" -> RtspService.RtspValidationMethod.SDP_ONLY;
+                case "RTP_PACKET" -> RtspService.RtspValidationMethod.RTP_PACKET;
+                default -> RtspService.RtspValidationMethod.FRAME_CAPTURE;
+            };
+            int customTimeout = config.getRtspValidationTimeout();
+
+            RtspService.RtspDiscoveryConfig discoveryConfig = new RtspService.RtspDiscoveryConfig();
+            discoveryConfig.setValidationMethod(validation);
+            discoveryConfig.setCustomTimeout(customTimeout);
+            RtspService.setDiscoveryConfig(discoveryConfig);
+
+            logger.info("RTSP validation configured: method={}, timeout={}ms (0=default)",
+                    validation, customTimeout);
+        } catch (Exception e) {
+            logger.error("Error configuring RTSP validation, using defaults", e);
+        }
+    }
+
+    /**
+     * Run a whole survey. Blocks until it is done or cancelled, so call it from
+     * a background thread.
+     *
+     * <p>Devices appear as they are found and identification runs several at a
+     * time, rather than collecting everything first and then working through
+     * the list one at a time.
+     */
+    public void run(TargetParser.Targets targets, List<Credential> credentials, Listener listener) {
+        cancelled = false;
+        rtspService.reset();
+        long started = System.currentTimeMillis();
+
+        listener.onProgress(0.02, config.isWsDiscoveryEnabled()
+                ? "Listening for cameras that announce themselves..."
+                : "Announcement listening is off in Settings; scanning addresses only.");
+        OnvifService.Discovery discovery = networkScanner.performWsDiscovery(targets);
+        List<Device> announced = discovery.devices();
+        if (!announced.isEmpty()) {
+            listener.onDevicesFound(announced);
+        }
+        if (!announced.isEmpty() || !discovery.leftOut().isEmpty()) {
+            String message = "Found " + announced.size() + " device(s) by announcement.";
+            if (!discovery.leftOut().isEmpty()) {
+                // Said rather than done silently, so a camera outside the range
+                // is a choice the operator can see, not one that vanished.
+                message += " Left out " + discovery.leftOut().size()
+                        + " outside the chosen network.";
+            }
+            listener.onProgress(0.08, message);
+        }
+        if (cancelled) {
+            finish(listener, started);
+            return;
+        }
+
+        List<Device> scanned = List.of();
+        if (!targets.isEmpty()) {
+            long total = targets.count();
+            listener.onProgress(0.1, "Scanning " + total + " address(es)...");
+            scanned = networkScanner.performPortScan(targets, (current, count) -> {
+                if (current % 16 == 0 || current == count) {
+                    listener.onProgress(0.1 + 0.35 * current / count,
+                            "Scanning address " + current + " of " + count);
+                }
+            });
+        }
+
+        List<Device> all = networkScanner.mergeDeviceLists(announced, scanned);
+        listener.onDeviceList(all);
+
+        if (all.isEmpty() || cancelled) {
+            finish(listener, started);
+            return;
+        }
+
+        identifyDevices(all, credentials, listener);
+        if (!cancelled) {
+            measureStreams(all, listener);
+        }
+        finish(listener, started);
+    }
+
+    private void finish(Listener listener, long started) {
+        // Keep what this run learned about stream paths for the next survey.
+        rtspService.saveLearnedPaths();
+        listener.onFinished((System.currentTimeMillis() - started) / 1000, cancelled);
+    }
+
+    /** Identify devices in parallel, bounded by the configured fan-out. */
+    private void identifyDevices(List<Device> all, List<Credential> credentials, Listener listener) {
+        AtomicInteger done = new AtomicInteger();
+        Semaphore permits = new Semaphore(config.getDeviceParallelism());
+
+        try (var scope = StructuredTaskScope.open(
+                StructuredTaskScope.Joiner.<Void>awaitAll(),
+                cfg -> cfg.withName("identify"))) {
+            for (Device device : all) {
+                scope.fork(() -> {
+                    if (cancelled) {
+                        return null;
+                    }
+                    permits.acquire();
+                    try {
+                        identify(device, credentials, listener);
+                    } catch (Exception e) {
+                        logger.warn("Could not identify {}: {}", device.getIpAddress(), e.toString());
+                        device.setStatus(Device.DeviceStatus.ERROR);
+                        device.setErrorMessage(String.valueOf(e.getMessage()));
+                    } finally {
+                        permits.release();
+                    }
+                    int count = done.incrementAndGet();
+                    listener.onProgress(0.45 + 0.35 * count / all.size(),
+                            "Identified " + count + " of " + all.size() + " devices");
+                    listener.onDeviceChanged(device);
+                    return null;
+                });
+            }
+            scope.join();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    /** Measure the streams of every device that has any. */
+    private void measureStreams(List<Device> all, Listener listener) {
+        List<Device> withStreams = all.stream().filter(d -> !d.getRtspStreams().isEmpty()).toList();
+        if (withStreams.isEmpty()) {
+            return;
+        }
+        int index = 0;
+        for (Device device : withStreams) {
+            if (cancelled) {
+                return;
+            }
+            device.setStatus(Device.DeviceStatus.ANALYZING);
+            listener.onDeviceChanged(device);
+            streamAnalyzer.analyzeDevice(device);
+            device.setStatus(device.getRtspStreams().isEmpty()
+                    ? Device.DeviceStatus.AUTH_FAILED : Device.DeviceStatus.COMPLETED);
+            index++;
+            listener.onProgress(0.8 + 0.2 * index / withStreams.size(),
+                    "Measured " + index + " of " + withStreams.size() + " devices");
+            listener.onDeviceChanged(device);
+        }
+    }
+
+    /**
+     * Identify one device and collect its streams: ONVIF first, because it
+     * publishes the real stream URLs, then RTSP path probing only when ONVIF
+     * gave us nothing.
+     */
+    public void identify(Device device, List<Credential> credentials, Listener listener) {
+        logger.info("Identifying {}", device.getIpAddress());
+        device.setStatus(Device.DeviceStatus.AUTHENTICATING);
+        listener.onDeviceChanged(device);
+
+        boolean onvifAuthenticated = authenticateOnvif(device, credentials);
+        boolean onvifOpen = onvifAuthenticated && credentials.isEmpty();
+        if (onvifOpen) {
+            device.setOnvifAuthMethod(Device.OnvifAuthMethod.NONE);
+            device.addFinding(new Finding(Finding.Severity.MEDIUM, "Security",
+                    "Device details readable without a password",
+                    "ONVIF answered GetDeviceInformation with no credentials supplied, so anyone on the "
+                            + "network can read its model, firmware and stream addresses.",
+                    "Turn on ONVIF authentication on the device, or turn ONVIF off if nothing uses it."));
+        }
+
+        if (onvifAuthenticated) {
+            int sources = onvifService.getVideoSourceCount(device);
+            device.setVideoSourceCount(sources);
+            onvifService.getHostname(device);
+            device.setType(onvifService.classifyType(device, sources));
+            if (device.getMacAddress() == null) {
+                onvifService.getMacAddress(device).ifPresent(mac -> networkScanner.applyMac(device, mac));
+            }
+            for (RTSPStream stream : onvifService.getStreamUris(device)) {
+                device.addStream(stream);
+            }
+        }
+
+        PathAccess rtsp = PathAccess.NONE;
+        if (device.getRtspStreams().isEmpty() && !device.getOpenRtspPorts().isEmpty()) {
+            logger.info("No ONVIF stream URLs for {}; probing RTSP paths", device.getIpAddress());
+            rtsp = discoverStreamsByPath(device, credentials);
+        }
+
+        // Without ONVIF a Hikvision-family device says nothing about itself over
+        // RTSP; its web API does. Only once RTSP has accepted the password, so
+        // no login is spent on a password the device has refused.
+        boolean recorderByModel = false;
+        if (device.getUsername() != null && device.getModel() == null
+                && "HIKVISION".equals(RtspService.firmwareFamily(device.getManufacturer()))) {
+            Optional<IsapiService.DeviceInfo> info = isapi.deviceInfo(device.getIpAddress(),
+                    device.getOpenHttpPorts(), device.getUsername(), device.getPassword());
+            if (info.isPresent()) {
+                applyDeviceInfo(device, info.get());
+                recorderByModel = info.get().isRecorder();
+            }
+        }
+
+        // Without ONVIF a recorder looks like a camera that happens to answer on
+        // channel 1. Ask it for channel 2: a recorder serves one, a camera
+        // refuses. A recorder model from ISAPI settles it without asking. Only
+        // once the password is known, so the walk below can run with it, and
+        // only for devices not already typed.
+        if (!device.isNvrDvr() && device.getUsername() != null
+                && (recorderByModel || (!device.getRtspStreams().isEmpty()
+                    && rtspService.servesSecondChannel(device, device.getUsername(), device.getPassword())))) {
+            logger.info("{} is a recorder ({}); walking its channels", device.getIpAddress(),
+                    recorderByModel ? "model " + device.getModel() : "it serves a second channel");
+            device.setType(Device.DeviceType.RECORDER);
+            // The walk finds channel 1 again, labelled by channel, so the
+            // streams path probing found are dropped rather than doubled.
+            device.getRtspStreams().clear();
+        }
+
+        if (device.isNvrDvr() && device.getUsername() != null) {
+            for (RTSPStream stream : rtspService.iterateNvrChannels(
+                    device, device.getUsername(), device.getPassword(), config.getNvrMaxChannels())) {
+                device.addStream(stream);
+            }
+        }
+
+        checkAnonymousAccess(device);
+        recordClockFinding(device);
+        finalizeStatus(device, new Access(!credentials.isEmpty(), onvifAuthenticated,
+                rtsp.challenged(), rtsp.credentialAccepted()));
+    }
+
+    /** Fill in what ISAPI knows and ONVIF did not say. */
+    private void applyDeviceInfo(Device device, IsapiService.DeviceInfo info) {
+        if (device.getModel() == null) {
+            device.setModel(info.model());
+        }
+        if (device.getSerialNumber() == null) {
+            device.setSerialNumber(info.serialNumber());
+        }
+        if (device.getFirmwareVersion() == null) {
+            device.setFirmwareVersion(info.firmwareVersion());
+        }
+        if (device.getDeviceName() == null && isDeviceName(info.deviceName())) {
+            device.setDeviceName(info.deviceName());
+        }
+        if (device.getMacAddress() == null && info.macAddress() != null) {
+            networkScanner.applyMac(device, info.macAddress());
+        }
+        logger.info("{} is a {} on firmware {}", device.getIpAddress(), info.model(), info.firmwareVersion());
+    }
+
+    /** What RTSP path probing established about signing in. */
+    private record PathAccess(boolean challenged, boolean credentialAccepted) {
+        static final PathAccess NONE = new PathAccess(false, false);
+    }
+
+    /**
+     * What the probing established about signing in to a device, kept apart so
+     * the final diagnosis rests on what was observed rather than on what was
+     * merely not disproved.
+     *
+     * @param credentialsOffered any credential was entered for this scan
+     * @param onvifAuthenticated ONVIF took one of them
+     * @param challenged         RTSP asked for a password on some path
+     * @param credentialAccepted RTSP took one of them, even if no path then served video
+     */
+    record Access(boolean credentialsOffered, boolean onvifAuthenticated,
+                  boolean challenged, boolean credentialAccepted) {
+    }
+
+    /**
+     * Try each credential against the device's ONVIF service, discovering the
+     * service address first when the port scan has not already found one.
+     */
+    private boolean authenticateOnvif(Device device, List<Credential> credentials) {
+        List<String> serviceUrls = new ArrayList<>();
+        if (device.getOnvifServiceUrl() != null) {
+            serviceUrls.add(device.getOnvifServiceUrl());
+        }
+        for (int port : device.getOpenHttpPorts()) {
+            onvifService.findDeviceService(device.getIpAddress(), port)
+                    .filter(url -> !serviceUrls.contains(url))
+                    .ifPresent(serviceUrls::add);
+        }
+        if (serviceUrls.isEmpty()) {
+            return false;
+        }
+
+        // As with RTSP paths, nothing entered still means one attempt without a
+        // password. Skipping ONVIF altogether left a camera that describes
+        // itself to anyone with no model, firmware or stream addresses.
+        List<Credential> attempts = credentials.isEmpty() ? java.util.Collections.singletonList(null) : credentials;
+        for (String serviceUrl : serviceUrls) {
+            for (Credential credential : attempts) {
+                String username = credential == null ? null : credential.getUsername();
+                String password = credential == null ? null : credential.getPassword();
+                if (onvifService.getDeviceInformation(device, serviceUrl, username, password)) {
+                    if (credential == null) {
+                        logger.info("ONVIF answered on {} without a password", serviceUrl);
+                    } else {
+                        logger.info("ONVIF accepted a credential on {}", serviceUrl);
+                    }
+                    return true;
+                }
+            }
+        }
+        logger.info("No credential accepted by ONVIF on {}", device.getIpAddress());
+        return false;
+    }
+
+    /**
+     * Probe RTSP paths with each credential, and learn along the way whether
+     * the device wants a password and whether any of ours was taken. That is
+     * what separates a wrong password from an unknown stream path.
+     */
+    private PathAccess discoverStreamsByPath(Device device, List<Credential> credentials) {
+        boolean challenged = false;
+        boolean accepted = false;
+        // With nothing entered, the paths are still tried once without a
+        // password. Looping over an empty list skipped probing altogether, so a
+        // camera serving video to anyone, the most serious thing a survey can
+        // find, went unreported on exactly the scan most likely to meet one.
+        List<Credential> attempts = credentials.isEmpty() ? java.util.Collections.singletonList(null) : credentials;
+        for (Credential credential : attempts) {
+            String username = credential == null ? null : credential.getUsername();
+            String password = credential == null ? null : credential.getPassword();
+            RtspService.PathDiscovery result = rtspService.discoverPaths(device, username, password);
+            challenged |= result.authRequired();
+            accepted |= result.credentialAccepted();
+            List<RTSPStream> streams = result.streams();
+            if (!streams.isEmpty()) {
+                // Recorded only when the device actually took it. A stream that
+                // played without asking needed no password, and the report
+                // should not name one as the credential that worked.
+                if (device.getUsername() == null && result.credentialAccepted()) {
+                    device.setUsername(username);
+                    device.setPassword(password);
+                }
+                for (RTSPStream stream : streams) {
+                    device.addStream(stream);
+                    if (device.getDeviceName() == null && isDeviceName(stream.getSdpSessionName())) {
+                        device.setDeviceName(stream.getSdpSessionName());
+                    }
+                }
+                return new PathAccess(challenged, accepted);
+            }
+        }
+        if (!challenged) {
+            // Either no password was entered, or the paths tried never asked for
+            // one. Check without sending one whether the device would.
+            challenged = rtspService.requiresAuthentication(device);
+        }
+        return new PathAccess(challenged, accepted);
+    }
+
+    /**
+     * Stream servers fill the SDP session name with their own boilerplate, so
+     * it names a device only when someone has set it. A Hikvision site gave
+     * "Media Presentation" for all six cameras and "HIK Media Server V3.4.106"
+     * for the recorder, and both went into the report as device names.
+     */
+    private static final java.util.regex.Pattern GENERIC_SESSION_NAME = java.util.regex.Pattern.compile(
+            "(?i)\\s*(media presentation|hik media server.*|session streamed by.*|live555.*|streamed by.*"
+                    + "|rtsp (session|server).*|unnamed|no ?name|stream|session|-"
+                    // Factory names from ISAPI, as on the site's cameras and recorder.
+                    + "|ip ?camera|network video recorder|embedded net dvr|ipc|nvr|dvr|camera ?0*1)\\s*");
+
+    static boolean isDeviceName(String sessionName) {
+        return sessionName != null && !sessionName.isBlank()
+                && !GENERIC_SESSION_NAME.matcher(sessionName).matches();
+    }
+
+    /** Record whether the video is readable with no credentials at all. */
+    private void checkAnonymousAccess(Device device) {
+        if (device.getRtspStreams().isEmpty()) {
+            return;
+        }
+        RTSPStream first = device.getRtspStreams().getFirst();
+        RtspService.ProbeResult probe = rtspService.probe(first.getRtspUrl(), null, null);
+        device.setRtspAnonymousAccess(probe.valid() && probe.anonymous());
+        if (Boolean.TRUE.equals(device.getRtspAnonymousAccess())) {
+            device.addFinding(new Finding(Finding.Severity.HIGH, "Security",
+                    "Video stream readable without a password",
+                    "RTSP DESCRIBE succeeded on " + RtspClient.stripCredentials(first.getRtspUrl())
+                            + " with no credentials supplied.",
+                    "Enable RTSP authentication on the device so the live feed cannot be viewed by anyone "
+                            + "who can reach it on the network."));
+            logger.warn("{} serves RTSP without authentication", device.getIpAddress());
+        }
+    }
+
+    /** Flag a device clock that disagrees with this computer. */
+    void recordClockFinding(Device device) {
+        Long drift = device.getTimeDifferenceSeconds();
+        if (drift == null || Math.abs(drift) <= config.getMaxTimeDriftSeconds()) {
+            return;
+        }
+        device.addFinding(new Finding(Finding.Severity.MEDIUM, "Configuration",
+                "Device clock is out of step",
+                "The device clock differs from this computer by " + drift + " seconds.",
+                "Point the device at an NTP server so recordings carry accurate timestamps."));
+    }
+
+    /** Set the final row status and, when there are no streams, say why. */
+    static void finalizeStatus(Device device, Access access) {
+        if (!device.getRtspStreams().isEmpty()) {
+            device.setStatus(Device.DeviceStatus.COMPLETED);
+            device.setAuthFailed(false);
+            device.setErrorMessage(null);
+            // Video found without ONVIF's help still leaves the model, firmware
+            // and serial blank. On 2026-10-10 a camera serving RTSP to anyone
+            // refused a wrong ONVIF password and was reported complete, with
+            // nothing to say why its details were missing.
+            if (!access.onvifAuthenticated() && device.getOnvifServiceUrl() != null) {
+                device.addFinding(access.credentialsOffered()
+                        ? new Finding(Finding.Severity.INFO, "Access", "ONVIF refused the credentials",
+                                "Video was found, but ONVIF refused every credential entered, so the model, "
+                                        + "firmware and serial number could not be read.",
+                                "Enter the device's ONVIF account and retry it from its context menu. Some "
+                                        + "devices keep ONVIF users separate from the web login.")
+                        : new Finding(Finding.Severity.INFO, "Access", "ONVIF needs a password",
+                                "Video was found, but ONVIF asks for a password and none was entered, so the "
+                                        + "model, firmware and serial number could not be read.",
+                                "Add the device's credentials and retry it from its context menu."));
+            }
+            logger.info("{} completed with {} stream(s)", device.getIpAddress(), device.getRtspStreams().size());
+            return;
+        }
+
+        boolean videoDevice = access.onvifAuthenticated()
+                || !device.getOpenOnvifPorts().isEmpty()
+                || !device.getOpenRtspPorts().isEmpty();
+        // ONVIF answering counts as a password accepted only when one was sent.
+        boolean passwordAccepted = (access.onvifAuthenticated() && access.credentialsOffered())
+                || access.credentialAccepted();
+        boolean needsPassword = access.challenged()
+                || (!access.onvifAuthenticated() && !device.getOpenOnvifPorts().isEmpty());
+
+        device.setStatus(Device.DeviceStatus.AUTH_FAILED);
+        if (!videoDevice) {
+            device.setAuthFailed(false);
+            device.setType(Device.DeviceType.UNKNOWN);
+            device.setErrorMessage("Not a camera or recorder");
+        } else if (passwordAccepted) {
+            // The only branch that may say a password worked, because here
+            // something actually took one.
+            device.setAuthFailed(false);
+            device.setErrorMessage("No stream path matched");
+            device.addFinding(new Finding(Finding.Severity.INFO, "Access", "Stream address unknown",
+                    "A password was accepted, but none of the known stream paths returned video.",
+                    "Add this model's stream path under Settings, Stream Paths."));
+        } else if (needsPassword && !access.credentialsOffered()) {
+            device.setAuthFailed(true);
+            device.setErrorMessage("Needs a password; none was entered");
+            device.addFinding(new Finding(Finding.Severity.INFO, "Access", "Sign-in details needed",
+                    "The device asks for a username and password, and none were entered for this scan.",
+                    "Add the site's credentials and scan again, or retry this device from its context menu."));
+        } else if (needsPassword) {
+            device.setAuthFailed(true);
+            device.setErrorMessage("No credential was accepted");
+            device.addFinding(new Finding(Finding.Severity.INFO, "Access", "Could not sign in",
+                    "The device refused every credential entered for this scan.",
+                    "Add the correct credentials and retry this device from its context menu."));
+        } else {
+            device.setAuthFailed(false);
+            device.setErrorMessage("No stream path matched");
+            device.addFinding(new Finding(Finding.Severity.INFO, "Access", "Stream address unknown",
+                    "The device answers on RTSP, but none of the known stream paths returned video.",
+                    "Add this model's stream path under Settings, Stream Paths."));
+        }
+
+        // A device reachable only over its maker's own protocol is worth
+        // calling out, because no amount of RTSP probing will reach it.
+        for (int port : device.getOpenSpecialPorts()) {
+            String vendor = NetworkScanner.vendorForSdkPort(port);
+            if (vendor != null) {
+                device.addFinding(new Finding(Finding.Severity.INFO, "Access",
+                        "Reachable only over the manufacturer's own protocol",
+                        vendor + " management port " + port + " is open, but no ONVIF or RTSP service answered.",
+                        "Enable ONVIF and RTSP on the device, or record it from " + vendor
+                                + "'s own software; this tool speaks ONVIF and RTSP only."));
+                break;
+            }
+        }
+    }
+}
