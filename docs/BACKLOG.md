@@ -21,6 +21,9 @@ way. This replaces the point-in-time `PROJECT_REVIEW.md` that lived on the
   excluded it, and announcement listening off. All gave the expected result.
   It serves video to anyone while ONVIF wants a password; a camera whose ONVIF
   answers anyone has only met the fake device service.
+- **Sub-stream limits are configured but never checked.** `compliance.sub.max.height`
+  and `compliance.sub.max.kbps` are in the settings file with getters, but no
+  finding reads them, so an oversized sub-stream is not reported.
 - **Excel's library logs to nowhere.** POI logs through Log4j, which finds no
   provider and prints an error line to the console on every export. Adding
   `log4j-to-slf4j` would route it into the application log.
@@ -75,7 +78,7 @@ Kept here so the same ground is not re-reviewed.
 
 | Item | Where it stands |
 |---|---|
-| No unit tests | 181 tests |
+| No unit tests | 184 tests |
 | Excel password derived from a fixed code in the source | The code is gone; each report is protected with its own random password that is never shown |
 | Report claimed protection it did not have | Sheets and workbook structure are locked; checked in Excel 16 on 2026-10-10: edits, new sheets, renames and unprotecting are refused, while selecting, copying and filtering work. Not encrypted: anyone with the file can read it, stream passwords included |
 | JVM-wide TLS verification disabled | Scoped to the ONVIF client only |
@@ -120,3 +123,9 @@ Kept here so the same ground is not re-reviewed.
 | ONVIF never asked when no credentials were entered | Asked once without a password, as RTSP paths already were; an ONVIF service that answers anyone is a finding |
 | A refused ONVIF password went unmentioned when video was still found | A finding says ONVIF refused it, or needs one, so blank model and firmware are explained |
 | JSON gave a site's router the status `AUTH_FAILED` | Carries `statusLabel` ("Not a camera") beside the status a reopened scan reads |
+| The credential list showed each password in full | Masked to its first and last characters |
+| The network dialog preselected a Hyper-V switch over the Wi-Fi | Real adapters are listed before virtual ones |
+| A company name in the window header | No organisation or owner is named anywhere in the interface |
+| The SFX described itself as Microsoft's Internet Explorer | Carries the launcher's version information; publisher and company read "CCTV Discovery" |
+| Help screenshots from v1.1.4, with another product's branding | Retaken from the current window; the manual rewritten to match |
+| Dependency licences stripped from the package | LICENSE, NOTICE, THIRD-PARTY-NOTICES.txt and a licenses folder ship with it |

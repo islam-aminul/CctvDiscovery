@@ -99,6 +99,106 @@ function Assert-NoSedMetacharacters {
     }
 }
 
+function Copy-VersionResource([string] $From, [string] $To) {
+    # The version resource is VS_VERSIONINFO, RT_VERSION (16), id 1. It is
+    # copied as is, and every language of the old one is removed first so the
+    # file does not end up carrying two.
+    if (-not ('PeVersionResource' -as [type])) {
+        Add-Type -TypeDefinition @'
+using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Runtime.InteropServices;
+
+public static class PeVersionResource {
+    const uint AsData = 0x2 | 0x20; // LOAD_LIBRARY_AS_DATAFILE | LOAD_LIBRARY_AS_IMAGE_RESOURCE
+    static readonly IntPtr RtVersion = (IntPtr)16;
+    static readonly IntPtr Id = (IntPtr)1;
+
+    delegate bool EnumLangProc(IntPtr module, IntPtr type, IntPtr name, ushort lang, IntPtr param);
+
+    [DllImport("kernel32", SetLastError = true, CharSet = CharSet.Unicode)]
+    static extern IntPtr LoadLibraryEx(string file, IntPtr reserved, uint flags);
+    [DllImport("kernel32", SetLastError = true)]
+    static extern bool FreeLibrary(IntPtr module);
+    [DllImport("kernel32", SetLastError = true)]
+    static extern IntPtr FindResourceEx(IntPtr module, IntPtr type, IntPtr name, ushort lang);
+    [DllImport("kernel32", SetLastError = true)]
+    static extern IntPtr LoadResource(IntPtr module, IntPtr info);
+    [DllImport("kernel32", SetLastError = true)]
+    static extern IntPtr LockResource(IntPtr data);
+    [DllImport("kernel32", SetLastError = true)]
+    static extern uint SizeofResource(IntPtr module, IntPtr info);
+    [DllImport("kernel32", SetLastError = true)]
+    static extern bool EnumResourceLanguages(IntPtr module, IntPtr type, IntPtr name, EnumLangProc proc, IntPtr param);
+    [DllImport("kernel32", SetLastError = true, CharSet = CharSet.Unicode)]
+    static extern IntPtr BeginUpdateResource(string file, bool deleteExisting);
+    [DllImport("kernel32", SetLastError = true)]
+    static extern bool UpdateResource(IntPtr update, IntPtr type, IntPtr name, ushort lang, byte[] data, uint size);
+    [DllImport("kernel32", SetLastError = true)]
+    static extern bool EndUpdateResource(IntPtr update, bool discard);
+
+    static IntPtr Open(string file) {
+        IntPtr module = LoadLibraryEx(file, IntPtr.Zero, AsData);
+        if (module == IntPtr.Zero) throw new Win32Exception(Marshal.GetLastWin32Error(), "Cannot open " + file);
+        return module;
+    }
+
+    static List<ushort> Languages(IntPtr module) {
+        List<ushort> found = new List<ushort>();
+        EnumLangProc collect = delegate(IntPtr m, IntPtr t, IntPtr n, ushort lang, IntPtr p) { found.Add(lang); return true; };
+        EnumResourceLanguages(module, RtVersion, Id, collect, IntPtr.Zero);
+        GC.KeepAlive(collect);
+        return found;
+    }
+
+    public static void Copy(string from, string to) {
+        byte[] data;
+        ushort lang;
+        IntPtr source = Open(from);
+        try {
+            List<ushort> langs = Languages(source);
+            if (langs.Count == 0) throw new InvalidOperationException(from + " has no version information");
+            lang = langs[0];
+            IntPtr info = FindResourceEx(source, RtVersion, Id, lang);
+            uint size = SizeofResource(source, info);
+            IntPtr bytes = LockResource(LoadResource(source, info));
+            data = new byte[size];
+            Marshal.Copy(bytes, data, 0, (int)size);
+        } finally {
+            FreeLibrary(source);
+        }
+
+        List<ushort> old;
+        IntPtr target = Open(to);
+        try {
+            old = Languages(target);
+        } finally {
+            FreeLibrary(target);
+        }
+
+        IntPtr update = BeginUpdateResource(to, false);
+        if (update == IntPtr.Zero) throw new Win32Exception(Marshal.GetLastWin32Error(), "Cannot update " + to);
+        foreach (ushort l in old) {
+            UpdateResource(update, RtVersion, Id, l, null, 0);
+        }
+        if (!UpdateResource(update, RtVersion, Id, lang, data, (uint)data.Length)) {
+            int error = Marshal.GetLastWin32Error();
+            EndUpdateResource(update, true);
+            throw new Win32Exception(error, "Cannot write version information to " + to);
+        }
+        if (!EndUpdateResource(update, false)) {
+            throw new Win32Exception(Marshal.GetLastWin32Error(), "Cannot save " + to);
+        }
+    }
+}
+'@
+    }
+    [PeVersionResource]::Copy($From, $To)
+    $info = (Get-Item -LiteralPath $To).VersionInfo
+    Write-Host "  version information: $($info.ProductName) $($info.ProductVersion), $($info.LegalCopyright)"
+}
+
 function Format-Size {
     param([long] $Bytes)
     '{0:N1} MB' -f ($Bytes / 1MB)
@@ -251,6 +351,12 @@ if ($process.ExitCode -ne 0) {
 if (-not (Test-Path -LiteralPath $OutFile)) {
     throw "IExpress reported success but produced no file at $OutFile."
 }
+
+# The IExpress stub's own version information says it is Microsoft's Internet
+# Explorer, which is what Windows then shows in the file's properties. The
+# launcher's version information replaces it, so the archive describes itself
+# the way the program does. Before signing, since this rewrites the file.
+Copy-VersionResource -From $launcher -To $OutFile
 
 # Signing comes last: Authenticode covers the whole file, cabinet included, so
 # the archive has to be finished before the certificate goes on. The launcher

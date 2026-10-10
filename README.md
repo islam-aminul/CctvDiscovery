@@ -34,7 +34,14 @@
 *   **Resource Monitoring**: Identifies top resource-consuming processes (CPU, Memory, Disk I/O) that might impact scanning performance.
 
 ### 📊 Reporting
-*   **Excel Export**: comprehensive export of all discovered devices, stream details, and host audit data into a structured `.xlsx` file for documentation and reporting.
+*   **Excel, CSV or JSON**: devices, streams, findings and the host audit. The Excel workbook is locked against editing but can be copied from; it is not encrypted, and stream addresses include the credentials that worked.
+*   **Saved scans**: a JSON report opens back into the window.
+
+## Download
+
+Get `CctvDiscovery-<version>-sfx.exe` from [Releases](https://github.com/islam-aminul/CctvDiscovery/releases)
+and run it. It unpacks to `%LOCALAPPDATA%\Programs\CctvDiscovery\<version>` and starts; nothing else needs
+installing. It is signed with a self-signed certificate, so Windows may warn about an unknown publisher.
 
 ## Technical Requirements
 *   **Operating System**: Windows 10/11 (x64) recommended.
@@ -103,46 +110,16 @@ valid after the certificate expires.
 
 ## Usage Guide
 
-1.  **Launch the Application**: Run the `CctvDiscovery.exe` or the JAR file.
-2.  **Network Configuration**:
-    *   On the left panel, click **Select Network**.
-    *   Choose an interface for auto-detection or enter an IP Range manually.
-3.  **Credentials (Optional)**:
-    *   If your cameras are password-protected, click **Set Credentials**.
-    *   Add common Username/Password combinations (e.g., `admin/12345`). The tool will cycle through these when attempting to connect to found RTSP streams.
-4.  **Before You Scan**:
-    *   Click **Set Verification Method** to choose how video streams are validated (e.g., "Frame Capture" for full analysis).
-5.  **Start Discovery**:
-    *   Click the **Start Discovery** button.
-    *   The progress bar will indicate scanning status. Found devices will appear in the main table.
-6.  **Review Results**:
-    *   Click on any device in the table to view its details.
-    *   Expand the arrow to see individual RTSP streams and their analysis results.
-7.  **Export Data**:
-    *   Click the **Export to Excel** button in the sidebar to save the current session's findings.
+1.  **Where to look**: choose **Choose network...** and pick an adapter, a range, a CIDR block or a list.
+2.  **Sign-in details** (optional): **Add credentials...** for the usernames and passwords used on site.
+    Each is tried in turn; devices that need none are found without any.
+3.  **How thoroughly to check**: Quick Check, Stream Test, or Video Capture (the most reliable).
+4.  **Run the scan**: **Start scan**. Devices appear as they are found; **Stop** keeps what was found.
+    Select a device to see its streams and issues; right-click it to try other credentials or copy its
+    stream addresses.
+5.  **Report**: **Export report...**, enter the location code, then choose Excel, CSV or JSON.
 
-### Where settings are kept
-
-Everything the application writes lives in one per-user folder:
-
-```
-%LOCALAPPDATA%\CctvDiscovery\
-    user-settings.properties    ports, stream paths, verification method, theme
-    rtsp-paths.properties       stream paths that worked, per camera vendor
-    logs\                       rolling log files
-```
-
-The folder comes from the environment, never from where the program is
-installed, so two copies of the executable — one in Program Files, one on a
-memory stick, one unpacked by the self-extracting archive — share one set of
-settings rather than quietly diverging. Settings survive an upgrade or a
-reinstall; deleting the folder resets the application. Settings from versions
-up to 2.0.0, which kept them in the roaming profile, are copied across on first
-run.
-
-Two overrides, for a portable install or an awkward profile:
-`-Dcctv.data.dir=<path>` moves all of it, `-Dcctv.log.dir=<path>` moves only the
-logs. The Settings dialog shows the folder currently in use.
+The full manual is under **Help**, **Open User Manual**.
 
 ## Troubleshooting
 
@@ -154,3 +131,11 @@ logs. The Settings dialog shows the folder currently in use.
     *   Ensure the camera allows RTSP connections (port 554).
 *   **"Missing DLL" errors**:
     *   Ensure the Visual C++ Redistributable is installed (required for some native FFmpeg/OpenCV libraries).
+
+## Licence
+
+Copyright 2026 Aminul Islam. Licensed under the [Apache License 2.0](LICENSE); see [NOTICE](NOTICE).
+
+The Windows packages bundle a Java runtime, JavaFX, FFmpeg (LGPL 3.0) and other libraries under their own
+licences, listed in `THIRD-PARTY-NOTICES.txt` beside the program, with the licence texts in its
+`licenses` folder.

@@ -10,10 +10,18 @@
     <name>CCTV Discovery</name>
     <description>CCTV discovery, stream analysis and host audit tool (Java 25).</description>
     <inceptionYear>2026</inceptionYear>
+    <url>https://github.com/islam-aminul/CctvDiscovery</url>
     <organization>
-        <name>Consultancy Services Ltd.</name>
-        <url>https://consultancyservices.com/</url>
+        <name>Aminul Islam</name>
+        <url>https://github.com/islam-aminul</url>
     </organization>
+    <licenses>
+        <license>
+            <name>Apache-2.0</name>
+            <url>https://www.apache.org/licenses/LICENSE-2.0</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
 
     <prerequisites>
         <maven>3.9.0</maven>
@@ -354,6 +362,30 @@
             </plugin>
 
             <!-- Bundled runtime (jlink) and dist layout -->
+            <!-- The LICENSE and NOTICE files inside each dependency jar. The fat
+                 jar cannot hold them (they share names), so they are kept beside
+                 it, one folder per artifact. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <version>3.7.0</version>
+                <executions>
+                    <execution>
+                        <id>unpack-licences</id>
+                        <phase>prepare-package</phase>
+                        <goals>
+                            <goal>unpack-dependencies</goal>
+                        </goals>
+                        <configuration>
+                            <includeScope>runtime</includeScope>
+                            <includes>META-INF/LICENSE*,META-INF/NOTICE*</includes>
+                            <useSubDirectoryPerArtifact>true</useSubDirectoryPerArtifact>
+                            <stripClassifier>true</stripClassifier>
+                            <outputDirectory>${project.build.directory}/dist/licenses/bundled</outputDirectory>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-antrun-plugin</artifactId>
@@ -381,6 +413,19 @@
                                 <copy file="${project.build.directory}/${project.artifactId}-${project.version}.jar"
                                       tofile="${project.build.directory}/dist/${app.filename}.jar"/>
                                 <copy file="README.md" todir="${project.build.directory}/dist"/>
+                                <!-- This project's licence, then everything bundled with it:
+                                     the texts the dependencies' own licences require to travel
+                                     with the binaries. The jars' own LICENSE and NOTICE files
+                                     are unpacked beside them by the unpack-licences step. -->
+                                <copy file="LICENSE" todir="${project.build.directory}/dist"/>
+                                <copy file="NOTICE" todir="${project.build.directory}/dist"/>
+                                <copy file="src/main/packaging/THIRD-PARTY-NOTICES.txt"
+                                      todir="${project.build.directory}/dist">
+                                    <filterchain><expandproperties/></filterchain>
+                                </copy>
+                                <copy todir="${project.build.directory}/dist/licenses">
+                                    <fileset dir="src/main/packaging/licenses"/>
+                                </copy>
                             </target>
                         </configuration>
                     </execution>
@@ -433,10 +478,14 @@
                                 <fileVersion>${project.version}.0</fileVersion>
                                 <txtFileVersion>${project.version}</txtFileVersion>
                                 <fileDescription>CCTV Discovery &amp; Audit Tool</fileDescription>
-                                <copyright>2026 Consultancy Services Ltd.</copyright>
+                                <copyright>Apache License 2.0, see NOTICE</copyright>
                                 <productVersion>${project.version}.0</productVersion>
                                 <txtProductVersion>${project.version}</txtProductVersion>
                                 <productName>CCTV Discovery</productName>
+                                <!-- Set rather than left to default to the POM's organisation:
+                                     Windows shows it in the file's properties, and no person's
+                                     or company's name is shown to the user. -->
+                                <companyName>CCTV Discovery</companyName>
                                 <internalName>CctvDiscovery</internalName>
                                 <originalFilename>${app.filename}.exe</originalFilename>
                             </versionInfo>
