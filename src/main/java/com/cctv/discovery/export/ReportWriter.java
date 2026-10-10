@@ -160,6 +160,9 @@ public final class ReportWriter {
         sb.append("    {\n");
         field(sb, "ip", device.getIpAddress(), true);
         field(sb, "status", device.getStatus().name(), true);
+        // The name above is what a reopened scan reads; this is what a person
+        // should: "Not a camera" rather than AUTH_FAILED for a site's router.
+        field(sb, "statusLabel", device.statusLabel(), true);
         field(sb, "type", device.getType().name(), true);
         field(sb, "name", device.getDeviceName(), true);
         field(sb, "manufacturer", device.getManufacturer(), true);

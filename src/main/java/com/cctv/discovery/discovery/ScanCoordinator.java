@@ -130,7 +130,9 @@ public final class ScanCoordinator {
         rtspService.reset();
         long started = System.currentTimeMillis();
 
-        listener.onProgress(0.02, "Listening for cameras that announce themselves...");
+        listener.onProgress(0.02, config.isWsDiscoveryEnabled()
+                ? "Listening for cameras that announce themselves..."
+                : "Announcement listening is off in Settings; scanning addresses only.");
         OnvifService.Discovery discovery = networkScanner.performWsDiscovery(targets);
         List<Device> announced = discovery.devices();
         if (!announced.isEmpty()) {
@@ -254,6 +256,15 @@ public final class ScanCoordinator {
         listener.onDeviceChanged(device);
 
         boolean onvifAuthenticated = authenticateOnvif(device, credentials);
+        boolean onvifOpen = onvifAuthenticated && credentials.isEmpty();
+        if (onvifOpen) {
+            device.setOnvifAuthMethod(Device.OnvifAuthMethod.NONE);
+            device.addFinding(new Finding(Finding.Severity.MEDIUM, "Security",
+                    "Device details readable without a password",
+                    "ONVIF answered GetDeviceInformation with no credentials supplied, so anyone on the "
+                            + "network can read its model, firmware and stream addresses.",
+                    "Turn on ONVIF authentication on the device, or turn ONVIF off if nothing uses it."));
+        }
 
         if (onvifAuthenticated) {
             int sources = onvifService.getVideoSourceCount(device);
@@ -374,11 +385,20 @@ public final class ScanCoordinator {
             return false;
         }
 
+        // As with RTSP paths, nothing entered still means one attempt without a
+        // password. Skipping ONVIF altogether left a camera that describes
+        // itself to anyone with no model, firmware or stream addresses.
+        List<Credential> attempts = credentials.isEmpty() ? java.util.Collections.singletonList(null) : credentials;
         for (String serviceUrl : serviceUrls) {
-            for (Credential credential : credentials) {
-                if (onvifService.getDeviceInformation(device, serviceUrl,
-                        credential.getUsername(), credential.getPassword())) {
-                    logger.info("ONVIF accepted a credential on {}", serviceUrl);
+            for (Credential credential : attempts) {
+                String username = credential == null ? null : credential.getUsername();
+                String password = credential == null ? null : credential.getPassword();
+                if (onvifService.getDeviceInformation(device, serviceUrl, username, password)) {
+                    if (credential == null) {
+                        logger.info("ONVIF answered on {} without a password", serviceUrl);
+                    } else {
+                        logger.info("ONVIF accepted a credential on {}", serviceUrl);
+                    }
                     return true;
                 }
             }
@@ -486,6 +506,22 @@ public final class ScanCoordinator {
             device.setStatus(Device.DeviceStatus.COMPLETED);
             device.setAuthFailed(false);
             device.setErrorMessage(null);
+            // Video found without ONVIF's help still leaves the model, firmware
+            // and serial blank. On 2026-10-10 a camera serving RTSP to anyone
+            // refused a wrong ONVIF password and was reported complete, with
+            // nothing to say why its details were missing.
+            if (!access.onvifAuthenticated() && device.getOnvifServiceUrl() != null) {
+                device.addFinding(access.credentialsOffered()
+                        ? new Finding(Finding.Severity.INFO, "Access", "ONVIF refused the credentials",
+                                "Video was found, but ONVIF refused every credential entered, so the model, "
+                                        + "firmware and serial number could not be read.",
+                                "Enter the device's ONVIF account and retry it from its context menu. Some "
+                                        + "devices keep ONVIF users separate from the web login.")
+                        : new Finding(Finding.Severity.INFO, "Access", "ONVIF needs a password",
+                                "Video was found, but ONVIF asks for a password and none was entered, so the "
+                                        + "model, firmware and serial number could not be read.",
+                                "Add the device's credentials and retry it from its context menu."));
+            }
             logger.info("{} completed with {} stream(s)", device.getIpAddress(), device.getRtspStreams().size());
             return;
         }
@@ -493,7 +529,9 @@ public final class ScanCoordinator {
         boolean videoDevice = access.onvifAuthenticated()
                 || !device.getOpenOnvifPorts().isEmpty()
                 || !device.getOpenRtspPorts().isEmpty();
-        boolean passwordAccepted = access.onvifAuthenticated() || access.credentialAccepted();
+        // ONVIF answering counts as a password accepted only when one was sent.
+        boolean passwordAccepted = (access.onvifAuthenticated() && access.credentialsOffered())
+                || access.credentialAccepted();
         boolean needsPassword = access.challenged()
                 || (!access.onvifAuthenticated() && !device.getOpenOnvifPorts().isEmpty());
 

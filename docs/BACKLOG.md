@@ -15,6 +15,15 @@ way. This replaces the point-in-time `PROJECT_REVIEW.md` that lived on the
   its undecodable main streams were reported rather than dropped, and the
   cameras were not mistaken for recorders. Dahua, Uniview and the other
   recorder patterns have still only run against the fake server.
+- **ONVIF tested on one camera.** On 2026-10-10 a CP Plus Wi-Fi camera
+  (192.168.0.113, ONVIF on 8000, RTSP on 5543) was scanned with no password,
+  a wrong one, the right one, a wrong one before the right one, a range that
+  excluded it, and announcement listening off. All gave the expected result.
+  It serves video to anyone while ONVIF wants a password; a camera whose ONVIF
+  answers anyone has only met the fake device service.
+- **Excel's library logs to nowhere.** POI logs through Log4j, which finds no
+  provider and prints an error line to the console on every export. Adding
+  `log4j-to-slf4j` would route it into the application log.
 - **That recorder's relayed video does not decode, in this tool or ffprobe.**
   Every channel describes itself as H.264 (fmtp says Main level 2.0, the SPS
   says level 4.2) and decodes at 44x32 with errors, while the cameras' own
@@ -66,7 +75,7 @@ Kept here so the same ground is not re-reviewed.
 
 | Item | Where it stands |
 |---|---|
-| No unit tests | 175 tests |
+| No unit tests | 181 tests |
 | Excel password derived from a fixed code in the source | The code is gone; each report is protected with its own random password that is never shown |
 | Report claimed protection it did not have | Sheets and workbook structure are locked; checked in Excel 16 on 2026-10-10: edits, new sheets, renames and unprotecting are refused, while selecting, copying and filtering work. Not encrypted: anyone with the file can read it, stream passwords included |
 | JVM-wide TLS verification disabled | Scoped to the ONVIF client only |
@@ -108,3 +117,6 @@ Kept here so the same ground is not re-reviewed.
 | An undecodable stream hung the scan for over an hour | FFmpeg calls run under a deadline |
 | The export asked for a password and whether to include credentials | Asks only for the location code; stream addresses always carry the working credentials |
 | The first port-scan pass missed hosts while the address cache was cold | Each target on a local subnet is sent one datagram, then a 0.4 s pause. With the cache cleared, the first pass on the test site missed 5, 3 and 3 of 7 hosts before and 0 of 7 after, three trials each |
+| ONVIF never asked when no credentials were entered | Asked once without a password, as RTSP paths already were; an ONVIF service that answers anyone is a finding |
+| A refused ONVIF password went unmentioned when video was still found | A finding says ONVIF refused it, or needs one, so blank model and firmware are explained |
+| JSON gave a site's router the status `AUTH_FAILED` | Carries `statusLabel` ("Not a camera") beside the status a reopened scan reads |

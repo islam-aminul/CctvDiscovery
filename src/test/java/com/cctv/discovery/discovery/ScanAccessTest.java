@@ -13,12 +13,18 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import com.sun.net.httpserver.HttpServer;
+
+import java.io.InputStream;
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -232,5 +238,173 @@ class ScanAccessTest {
         assertEquals(Device.DeviceStatus.COMPLETED, device.getStatus());
         assertEquals(Boolean.TRUE, device.getRtspAnonymousAccess());
         assertTrue(hasFinding(device, "Video stream readable without a password"));
+    }
+
+    // ---------------------------------------------------------------- ONVIF --
+
+    private static final String DEVICE_INFO = """
+            <s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope"
+                        xmlns:tds="http://www.onvif.org/ver10/device/wsdl"><s:Body>
+              <tds:GetDeviceInformationResponse>
+                <tds:Manufacturer>CP Plus</tds:Manufacturer><tds:Model>CP-TEST-1</tds:Model>
+                <tds:FirmwareVersion>1.2.3</tds:FirmwareVersion><tds:SerialNumber>SN1</tds:SerialNumber>
+                <tds:HardwareId>HW1</tds:HardwareId>
+              </tds:GetDeviceInformationResponse></s:Body></s:Envelope>""";
+
+    /**
+     * A device service that answers GetDeviceInformation, either to anyone or
+     * only to a request carrying a WS-Security header. Every other request
+     * gets a 400, which the scan treats as the device not offering it.
+     */
+    private static HttpServer onvifDevice(boolean open) throws Exception {
+        HttpServer http = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        http.createContext("/onvif/device_service", exchange -> {
+            String body;
+            try (InputStream in = exchange.getRequestBody()) {
+                body = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+            }
+            boolean signed = body.contains("UsernameToken");
+            int status;
+            byte[] reply = new byte[0];
+            if (!body.contains("GetDeviceInformation")) {
+                status = 400;
+            } else if (open || signed) {
+                status = 200;
+                reply = DEVICE_INFO.getBytes(StandardCharsets.UTF_8);
+            } else {
+                status = 401;
+            }
+            exchange.getResponseHeaders().set("Content-Type", "application/soap+xml");
+            exchange.sendResponseHeaders(status, reply.length == 0 ? -1 : reply.length);
+            if (reply.length > 0) {
+                exchange.getResponseBody().write(reply);
+            }
+            exchange.close();
+        });
+        http.start();
+        return http;
+    }
+
+    private Device onvifOnly(HttpServer http) {
+        int port = http.getAddress().getPort();
+        Device device = new Device("127.0.0.1");
+        device.setOnvifServiceUrl("http://127.0.0.1:" + port + "/onvif/device_service");
+        device.getOpenOnvifPorts().add(port);
+        return device;
+    }
+
+    @Test
+    @DisplayName("With no credentials entered, ONVIF is still asked once, and an open one is flagged")
+    void openOnvifIsAskedWithoutCredentials() throws Exception {
+        HttpServer http = onvifDevice(true);
+        try {
+            Device device = onvifOnly(http);
+            scanner.identify(device, List.of(), QUIET);
+
+            assertEquals("CP-TEST-1", device.getModel());
+            assertEquals("1.2.3", device.getFirmwareVersion());
+            assertEquals(Device.OnvifAuthMethod.NONE, device.getOnvifAuthMethod());
+            assertTrue(hasFinding(device, "Device details readable without a password"));
+            assertFalse(hasFinding(device, "Sign-in details needed"));
+            assertFalse(device.isAuthFailed(), "nothing asked for a password");
+            assertNull(device.getUsername(), "no credential worked, because none was sent");
+        } finally {
+            http.stop(0);
+        }
+    }
+
+    @Test
+    @DisplayName("ONVIF that wants a password, with none entered, asks for sign-in details")
+    void lockedOnvifWithoutCredentials() throws Exception {
+        HttpServer http = onvifDevice(false);
+        try {
+            Device device = onvifOnly(http);
+            scanner.identify(device, List.of(), QUIET);
+
+            assertNull(device.getModel());
+            assertTrue(device.isAuthFailed());
+            assertTrue(hasFinding(device, "Sign-in details needed"));
+            assertFalse(hasFinding(device, "Device details readable without a password"));
+        } finally {
+            http.stop(0);
+        }
+    }
+
+    @Test
+    @DisplayName("ONVIF that takes the entered password is not reported as open")
+    void lockedOnvifWithPassword() throws Exception {
+        HttpServer http = onvifDevice(false);
+        try {
+            Device device = onvifOnly(http);
+            scanner.identify(device, List.of(new Credential("admin", "right")), QUIET);
+
+            assertEquals("CP-TEST-1", device.getModel());
+            assertFalse(hasFinding(device, "Device details readable without a password"));
+            assertEquals(Device.OnvifAuthMethod.WS_SECURITY, device.getOnvifAuthMethod());
+        } finally {
+            http.stop(0);
+        }
+    }
+
+    /** Video open to anyone over RTSP, while ONVIF wants a password. */
+    private Device openVideoLockedOnvif(HttpServer http, Credential... credentials) throws Exception {
+        server = new FakeRtspServer(FakeRtspServer.Style.OPEN, "admin", "right", Set.of(STREAM));
+        Device device = onvifOnly(http);
+        device.setManufacturer("Hikvision");
+        device.getOpenRtspPorts().add(server.port());
+        scanner.identify(device, List.of(credentials), QUIET);
+        return device;
+    }
+
+    @Test
+    @DisplayName("Video found but ONVIF refused the password: the report says so")
+    void refusedOnvifPasswordIsReported() throws Exception {
+        HttpServer http = onvifDevice(false);
+        try {
+            // The fake takes any signed request, so refuse by sending none:
+            // a wrong password is modelled by a device that refuses them all.
+            http.removeContext("/onvif/device_service");
+            http.createContext("/onvif/device_service", exchange -> {
+                exchange.getRequestBody().readAllBytes();
+                exchange.sendResponseHeaders(401, -1);
+                exchange.close();
+            });
+            Device device = openVideoLockedOnvif(http, new Credential("admin", "wrong"));
+
+            assertEquals(Device.DeviceStatus.COMPLETED, device.getStatus());
+            assertTrue(hasFinding(device, "ONVIF refused the credentials"));
+            assertFalse(hasFinding(device, "ONVIF needs a password"));
+        } finally {
+            http.stop(0);
+        }
+    }
+
+    @Test
+    @DisplayName("Video found but ONVIF wants a password none was entered for: the report says so")
+    void lockedOnvifNoPasswordIsReported() throws Exception {
+        HttpServer http = onvifDevice(false);
+        try {
+            Device device = openVideoLockedOnvif(http);
+
+            assertEquals(Device.DeviceStatus.COMPLETED, device.getStatus());
+            assertTrue(hasFinding(device, "ONVIF needs a password"));
+            assertFalse(hasFinding(device, "ONVIF refused the credentials"));
+        } finally {
+            http.stop(0);
+        }
+    }
+
+    @Test
+    @DisplayName("ONVIF that took the password adds no access finding")
+    void acceptedOnvifAddsNoAccessFinding() throws Exception {
+        HttpServer http = onvifDevice(false);
+        try {
+            Device device = openVideoLockedOnvif(http, new Credential("admin", "right"));
+
+            assertFalse(hasFinding(device, "ONVIF refused the credentials"));
+            assertFalse(hasFinding(device, "ONVIF needs a password"));
+        } finally {
+            http.stop(0);
+        }
     }
 }
