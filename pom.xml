@@ -65,6 +65,10 @@
              Windows, so it is only produced on a Windows build. -->
         <sfx.filename>${app.filename}-${project.version}-sfx</sfx.filename>
         <skip.sfx>true</skip.sfx>
+        <!-- OS and processor the packages are built for, in the zip names so the
+             downloads for different platforms cannot be mistaken for each other.
+             Set by each platform profile. -->
+        <dist.platform>unknown</dist.platform>
     </properties>
 
     <dependencies>
@@ -179,6 +183,7 @@
             </activation>
             <properties>
                 <javacpp.platform>windows-x86_64</javacpp.platform>
+                <dist.platform>windows-amd64</dist.platform>
                 <javafx.platform>win</javafx.platform>
                 <skip.sfx>false</skip.sfx>
             </properties>
@@ -194,6 +199,7 @@
             </activation>
             <properties>
                 <javacpp.platform>linux-x86_64</javacpp.platform>
+                <dist.platform>linux-amd64</dist.platform>
                 <javafx.platform>linux</javafx.platform>
             </properties>
         </profile>
@@ -208,6 +214,7 @@
             </activation>
             <properties>
                 <javacpp.platform>linux-arm64</javacpp.platform>
+                <dist.platform>linux-arm64</dist.platform>
                 <javafx.platform>linux-aarch64</javafx.platform>
             </properties>
         </profile>
@@ -221,6 +228,7 @@
             </activation>
             <properties>
                 <javacpp.platform>macosx-arm64</javacpp.platform>
+                <dist.platform>macos-arm64</dist.platform>
                 <javafx.platform>mac-aarch64</javafx.platform>
             </properties>
         </profile>
@@ -234,6 +242,7 @@
             </activation>
             <properties>
                 <javacpp.platform>macosx-x86_64</javacpp.platform>
+                <dist.platform>macos-amd64</dist.platform>
                 <javafx.platform>mac</javafx.platform>
             </properties>
         </profile>
@@ -581,7 +590,7 @@
                     <descriptors>
                         <descriptor>src/assembly/dist.xml</descriptor>
                     </descriptors>
-                    <finalName>${app.filename}-${project.version}</finalName>
+                    <finalName>${app.filename}-${project.version}-${dist.platform}</finalName>
                     <appendAssemblyId>false</appendAssemblyId>
                 </configuration>
                 <executions>
@@ -591,6 +600,23 @@
                         <goals>
                             <goal>single</goal>
                         </goals>
+                    </execution>
+                    <!-- Windows only, like the self-extracting archive: the script
+                         and the runtime inside it are for Windows. -->
+                    <execution>
+                        <id>make-portable</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>single</goal>
+                        </goals>
+                        <configuration>
+                            <skipAssembly>${skip.sfx}</skipAssembly>
+                            <descriptors>
+                                <descriptor>src/assembly/portable.xml</descriptor>
+                            </descriptors>
+                            <finalName>${app.filename}-${project.version}-portable-${dist.platform}</finalName>
+                            <appendAssemblyId>false</appendAssemblyId>
+                        </configuration>
                     </execution>
                 </executions>
             </plugin>

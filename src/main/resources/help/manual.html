@@ -335,8 +335,19 @@
             Windows may say the publisher is unknown. The package is signed, but with a certificate Windows does
             not trust by default. Choose <em>More info</em>, then <em>Run anyway</em>.
         </div>
-        <h3>2.2 The zip</h3>
-        <p>Unzip <code>CctvDiscovery-&lt;version&gt;.zip</code> anywhere and run <code>CctvDiscovery.exe</code>.</p>
+        <h3>2.2 Where programs from downloads may not run</h3>
+        <p>On managed computers the package above may be blocked. Use
+            <code>CctvDiscovery-&lt;version&gt;-portable-windows-amd64.zip</code> instead:</p>
+        <ol>
+            <li>If the zip came from the internet, right-click it, choose <em>Properties</em>, tick
+                <em>Unblock</em> and choose <em>OK</em>.</li>
+            <li>Extract the whole zip to a folder you can write to, keeping its folders.</li>
+            <li>Run <code>CctvDiscovery.cmd</code>. If nothing appears, run <code>CctvDiscovery.cmd console</code>
+                from a command prompt to see why.</li>
+        </ol>
+        <p>The script starts the Java runtime bundled in the zip, which is signed by its publisher; no program
+            of this project runs. If a policy blocks every program outside Program Files, ask whoever manages
+            the computer for an exception.</p>
         <h3>2.3 Where it keeps things</h3>
         <p>Settings, remembered stream paths and logs are kept in <code>%LOCALAPPDATA%\CctvDiscovery</code>,
             whichever copy of the program is running. Usernames and passwords are never saved; they last for the
