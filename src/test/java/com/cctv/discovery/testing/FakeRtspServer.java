@@ -60,6 +60,7 @@ public final class FakeRtspServer implements AutoCloseable {
     private final AtomicInteger acceptedLogins = new AtomicInteger();
     private final List<String> requestLog = Collections.synchronizedList(new ArrayList<>());
     private final Thread acceptor;
+    private final AtomicInteger connectionsToDrop = new AtomicInteger();
 
     /**
      * @param streamPaths the paths that serve video once signed in; anything
@@ -72,6 +73,14 @@ public final class FakeRtspServer implements AutoCloseable {
         this.streamPaths = Set.copyOf(streamPaths);
         this.socket = new ServerSocket(0, 50, InetAddress.getLoopbackAddress());
         this.acceptor = Thread.ofVirtual().name("fake-rtsp").start(this::acceptLoop);
+    }
+
+    /**
+     * Close the next {@code count} connections without answering, the way a
+     * busy recorder's stream server did for one scan on 2026-10-09.
+     */
+    public void dropNextConnections(int count) {
+        connectionsToDrop.set(count);
     }
 
     public int port() {
@@ -98,6 +107,10 @@ public final class FakeRtspServer implements AutoCloseable {
         while (!socket.isClosed()) {
             try {
                 Socket client = socket.accept();
+                if (connectionsToDrop.getAndUpdate(n -> Math.max(0, n - 1)) > 0) {
+                    client.close();
+                    continue;
+                }
                 Thread.ofVirtual().start(() -> serve(client));
             } catch (IOException e) {
                 return;

@@ -15,14 +15,14 @@ way. This replaces the point-in-time `PROJECT_REVIEW.md` that lived on the
   its undecodable main streams were reported rather than dropped, and the
   cameras were not mistaken for recorders. Dahua, Uniview and the other
   recorder patterns have still only run against the fake server.
-- **A host whose RTSP port is busy is written off as "not a camera".** The
-  second port-scan pass retries only hosts that answered on no port. On
-  2026-10-09 the NVR at 192.168.1.200 answered on 80 and 8000 but not 554 for
-  one scan, so it was ruled "Not a camera or recorder", and answered RTSP
-  normally seconds later. Retrying the RTSP ports of hosts that answered on
-  other ports would cover it cheaply. ISAPI could also identify such a device
-  from port 80 alone, but before RTSP has accepted the password it would spend
-  a login attempt per credential; decide that trade-off first.
+- **The first port-scan pass can miss everything after the computer has been
+  idle.** On 2026-10-10, after an idle night on Wi-Fi, all seven devices on the
+  test site answered only on the second pass; the first found nothing. Most
+  likely the first connections went out while Windows was still resolving each
+  host's hardware address. The second pass covers ranges up to 4096 addresses
+  but is skipped above that, where a scan in this state could find nothing.
+  Worth either warming the address cache before scanning or keeping some form
+  of second pass for large ranges.
 - **That recorder's relayed video does not decode, in this tool or ffprobe.**
   Every channel describes itself as H.264 (fmtp says Main level 2.0, the SPS
   says level 4.2) and decodes at 44x32 with errors, while the cameras' own

@@ -138,6 +138,7 @@ public final class NetworkScanner implements AutoCloseable {
         }
 
         retryUnanswered(targets, total, found, httpPorts, rtspPorts, otherPorts);
+        retryRtspPorts(found, rtspPorts);
 
         List<Device> devices = new ArrayList<>(found.values());
         devices.sort((a, b) -> Long.compare(
@@ -184,6 +185,49 @@ public final class NetworkScanner implements AutoCloseable {
                     if (device != null) {
                         found.put(ip, device);
                         logger.info("Host {} answered only on the second pass", ip);
+                    }
+                    return null;
+                });
+            }
+            scope.join();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    /**
+     * Give the RTSP ports one more chance on hosts that answered on other
+     * ports but not on any RTSP port.
+     *
+     * <p>The retry above covers hosts where nothing answered, not hosts where
+     * only the stream server was busy. On 2026-10-09 the NVR at 192.168.1.200
+     * answered on 80 and 8000 but not 554 for one scan, was ruled "Not a camera
+     * or recorder", and answered RTSP normally seconds later. Only hosts already
+     * found are retried, and only their RTSP ports, so this costs little; no
+     * credentials are sent.
+     */
+    private void retryRtspPorts(Map<String, Device> found, int[] rtspPorts) {
+        if (stopped() || rtspPorts.length == 0) {
+            return;
+        }
+        int connectTimeout = config.getSocketConnectTimeout();
+        try (var scope = StructuredTaskScope.open(StructuredTaskScope.Joiner.<Void>awaitAll(),
+                cfg -> cfg.withName("rtsp-retry"))) {
+            for (Device device : found.values()) {
+                if (!device.getOpenRtspPorts().isEmpty()) {
+                    continue;
+                }
+                scope.fork(() -> {
+                    for (int port : rtspPorts) {
+                        if (stopped()) {
+                            return null;
+                        }
+                        String ip = device.getIpAddress();
+                        if (NetworkUtils.isPortOpen(ip, port, connectTimeout) && rtspService.isRtspServer(ip, port)) {
+                            device.getOpenSpecialPorts().remove(Integer.valueOf(port));
+                            device.getOpenRtspPorts().add(port);
+                            logger.info("Host {} answered RTSP on {} only on the second attempt", ip, port);
+                        }
                     }
                     return null;
                 });
