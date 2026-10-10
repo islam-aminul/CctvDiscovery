@@ -31,9 +31,10 @@ import java.util.Locale;
  * Writing a survey out and reading one back in.
  *
  * <p>Separate from the window because none of it is about the window: it asks
- * for the site ID, picks a file, and hands the work to the exporters.
+ * for the location code, picks a file, and hands the work to the exporters.
  *
- * <p>The site ID is the only question. Stream addresses always carry the
+ * <p>The location code is the only question: the code of the test centre,
+ * premises, site or LAN being surveyed. Stream addresses always carry the
  * credentials that worked, because a report whose addresses cannot be opened is
  * of no use to the installer it is written for, and the file is not encrypted.
  * The file type is picked in the save dialog, Excel first; JSON stays available
@@ -88,7 +89,7 @@ public final class ReportExchange {
         this.excelExporter = excelExporter;
     }
 
-    /** Ask for the site ID, pick a file, write it. Reports the outcome itself. */
+    /** Ask for the location code, pick a file, write it. Reports the outcome itself. */
     public void export(List<Device> devices, HostAuditData hostAuditData) {
         String siteId = promptForSiteId();
         if (siteId == null) {
@@ -200,7 +201,7 @@ public final class ReportExchange {
         return configured.isDirectory() ? configured : new File(System.getProperty("user.home"));
     }
 
-    /** A site ID can hold anything the operator typed; a file name cannot. */
+    /** A location code can hold anything the operator typed; a file name cannot. */
     static String safeFileName(String text) {
         String cleaned = text.replaceAll("[\\\\/:*?\"<>|]", "-").trim();
         return cleaned.isEmpty() ? "site" : cleaned;
@@ -209,17 +210,20 @@ public final class ReportExchange {
     /** The one question a report needs answered. Null when cancelled. */
     private String promptForSiteId() {
         Dialog<String> dialog = Modals.dialog("Export Report", "Export report",
-                "Identifies the site on the summary sheet and in the file name.");
+                "The code of the test centre, premises, site or LAN surveyed. "
+                        + "It goes on the summary sheet and in the file name.");
 
         TextField tfSite = new TextField();
-        tfSite.setPromptText("For example BLR-WH-02");
-        tfSite.setPrefColumnCount(24);
-        tfSite.setTooltip(Modals.tip("Identifies the site in the report and in the file name."));
+        tfSite.setPromptText("Test centre, premises, site or LAN, e.g. BLR-WH-02");
+        tfSite.setPrefColumnCount(30);
+        tfSite.setTooltip(Modals.tip("""
+                The code that identifies where this survey was done: a test centre, \
+                premises, site or LAN. It goes on the summary sheet and in the file name."""));
 
         GridPane grid = new GridPane();
         grid.setHgap(10);
         grid.setVgap(8);
-        grid.add(new Label("Site ID"), 0, 0);
+        grid.add(new Label("Location code"), 0, 0);
         grid.add(tfSite, 1, 0);
         dialog.getDialogPane().setContent(Modals.content(grid));
 

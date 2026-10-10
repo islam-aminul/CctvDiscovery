@@ -580,7 +580,7 @@ public class MainController {
         btnOpen.setTooltip(Modals.tip(
                 "Load a scan previously exported as JSON, to review it or compare it with what is on site now."));
         btnExport.setTooltip(Modals.tip(
-                "Write the findings to an Excel workbook, or CSV or JSON. Asks only for the site ID; "
+                "Write the findings to an Excel workbook, or CSV or JSON. Asks only for the location code; "
                         + "stream addresses include each camera's username and password."));
 
         vbox.getChildren().addAll(lblTitle, btnExport, btnOpen);

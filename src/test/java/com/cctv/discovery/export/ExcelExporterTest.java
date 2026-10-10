@@ -95,6 +95,31 @@ class ExcelExporterTest {
         }
     }
 
+    /**
+     * The report must read as it was surveyed. Checked in Excel 16 itself on
+     * 2026-10-10: typing, clearing, adding or renaming a sheet and unprotecting
+     * were all refused, while selecting, copying and filtering worked.
+     */
+    @Test
+    @DisplayName("Every sheet is locked against editing but left selectable, copyable and filterable")
+    void protectsAgainstEditing() throws Exception {
+        File file = tempDir.resolve("protected.xlsx").toFile();
+        new ExcelExporter().export(sampleDevices(), null,
+                new ExcelExporter.ReportOptions("TEST-CENTRE-01", null, null, true, null), file);
+
+        try (InputStream in = Files.newInputStream(file.toPath()); XSSFWorkbook workbook = new XSSFWorkbook(in)) {
+            assertTrue(workbook.isStructureLocked(), "sheets must not be added, removed or renamed");
+            for (Sheet sheet : workbook) {
+                org.apache.poi.xssf.usermodel.XSSFSheet xssf = (org.apache.poi.xssf.usermodel.XSSFSheet) sheet;
+                assertTrue(xssf.getProtect(), sheet.getSheetName() + " is not protected");
+                assertFalse(xssf.isSelectLockedCellsLocked(),
+                        sheet.getSheetName() + ": cells must stay selectable, or they cannot be copied");
+                assertFalse(xssf.isAutoFilterLocked(), sheet.getSheetName() + ": filters must keep working");
+                assertFalse(xssf.validateSheetPassword(""), "an empty password must not unprotect it");
+            }
+        }
+    }
+
     @Test
     @DisplayName("An encrypted workbook opens with the password and not without it")
     void encryptsWorkbook() throws Exception {

@@ -38,15 +38,24 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Base64;
+import java.security.SecureRandom;
+import org.apache.poi.xssf.usermodel.XSSFSheet;
+import org.apache.poi.poifs.crypt.HashAlgorithm;
 
 /**
  * Writes the audit workbook.
  *
  * <p>Five sheets: a summary, one row per device, one row per stream, the audit
- * findings and the host report. When a password is supplied the whole workbook
- * is encrypted (OOXML agile encryption, AES). The previous version applied only
- * sheet protection, which does not encrypt anything: the file could be renamed
- * to .zip and every cell read, including camera passwords.
+ * findings and the host report.
+ *
+ * <p>Every sheet is protected against editing and the workbook's structure is
+ * locked, so the report reads as it was surveyed; cells can still be selected,
+ * copied and filtered. The protection password is random and never kept, so no
+ * one can lift it. Protection is not encryption: the file can be opened and
+ * read by anyone who has it. When a password is supplied the workbook is also
+ * encrypted (OOXML agile encryption, AES), though the export dialog no longer
+ * offers that.
  */
 public final class ExcelExporter {
 
@@ -208,6 +217,7 @@ public final class ExcelExporter {
             if (hostAudit != null) {
                 writeHostSheet(workbook, styles, hostAudit);
             }
+            protect(workbook);
 
             if (options.encrypted()) {
                 writeEncrypted(workbook, options.password(), outputFile);
@@ -260,7 +270,7 @@ public final class ExcelExporter {
         row++;
 
         row = section(sheet, styles, row, "Report");
-        row = labelled(sheet, styles, row, "Site ID", options.siteId());
+        row = labelled(sheet, styles, row, "Location code", options.siteId());
         if (options.premiseName() != null && !options.premiseName().isBlank()) {
             row = labelled(sheet, styles, row, "Premise", options.premiseName());
         }
@@ -631,6 +641,35 @@ public final class ExcelExporter {
         for (int i = 0; i < titles.size(); i++) {
             cell(row, i, titles.get(i), styles.columnHeader);
         }
+    }
+
+    /**
+     * Lock every sheet against editing, and the workbook against adding,
+     * removing or renaming sheets, while leaving cells selectable, so they can
+     * be copied, and the column filters usable.
+     *
+     * <p>The password is random and discarded. A fixed one would be in this
+     * source for anyone to read, and the point is that the report cannot be
+     * changed after the survey.
+     */
+    static void protect(XSSFWorkbook workbook) {
+        String password = randomPassword();
+        for (Sheet sheet : workbook) {
+            XSSFSheet xssf = (XSSFSheet) sheet;
+            xssf.setSheetPassword(password, HashAlgorithm.sha512);
+            xssf.enableLocking();
+            xssf.lockSelectLockedCells(false);
+            xssf.lockSelectUnlockedCells(false);
+            xssf.lockAutoFilter(false);
+        }
+        workbook.setWorkbookPassword(password, HashAlgorithm.sha512);
+        workbook.lockStructure();
+    }
+
+    private static String randomPassword() {
+        byte[] bytes = new byte[24];
+        new SecureRandom().nextBytes(bytes);
+        return Base64.getEncoder().encodeToString(bytes);
     }
 
     /** Freeze the header and add a filter so long reports stay usable. */
