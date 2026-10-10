@@ -43,6 +43,20 @@ Get `CctvDiscovery-<version>-sfx.exe` from [Releases](https://github.com/islam-a
 and run it. It unpacks to `%LOCALAPPDATA%\Programs\CctvDiscovery\<version>` and starts; nothing else needs
 installing. It is signed with a self-signed certificate, so Windows may warn about an unknown publisher.
 
+### Where programs from downloads may not run
+
+On managed computers (a corporate Windows SOE, AppLocker or similar) the `.exe` may be blocked. Use
+`CctvDiscovery-<version>-portable-windows-amd64.zip` instead:
+
+1.  If the zip came from the internet, right-click it, **Properties**, tick **Unblock**, **OK**.
+2.  Extract the whole zip to a folder you can write to, keeping its folders.
+3.  Run `CctvDiscovery.cmd`. If nothing appears, run `CctvDiscovery.cmd console` from a command prompt to
+    see why.
+
+The script starts the bundled Java runtime (`runtime\bin\javaw.exe`, signed by Eclipse Adoptium) directly;
+no program of this project runs. A policy that blocks every executable outside Program Files, signed or
+not, will still block the runtime; that needs an exception from whoever manages the computer.
+
 ## Technical Requirements
 *   **Operating System**: Windows 10/11 (x64) recommended.
 *   **Java Runtime**: None. A trimmed Java 25 runtime is bundled with the distribution.
@@ -67,8 +81,10 @@ mvn clean package
 This will produce:
 1.  A shaded "fat" JAR in the `target/` directory.
 2.  A Windows executable (`.exe`) in `target/dist/`, next to the bundled runtime (via Launch4j and jlink).
-3.  A distribution ZIP, `target/CctvDiscovery-<version>.zip`.
+3.  A distribution ZIP, `target/CctvDiscovery-<version>-<os>-<arch>.zip`, for example `windows-amd64`.
 4.  A self-extracting archive, `target/CctvDiscovery-<version>-sfx.exe`.
+5.  A portable ZIP, `target/CctvDiscovery-<version>-portable-windows-amd64.zip`: the runtime, the jar and
+    `CctvDiscovery.cmd`, without `CctvDiscovery.exe`.
 
 #### The self-extracting archive
 
