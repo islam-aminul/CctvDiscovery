@@ -6,4 +6,4 @@ Licensed under the Apache License, Version 2.0 (see LICENSE).
 The Windows packages (the self-extracting .exe and the .zip) also contain
 third-party software under its own licences: a Java runtime, JavaFX, FFmpeg
 and the libraries listed in THIRD-PARTY-NOTICES.txt. Their licence texts are
-in the licenses folder beside it.
+in the licenses folder of the package.
