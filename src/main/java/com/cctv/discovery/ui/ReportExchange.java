@@ -210,15 +210,13 @@ public final class ReportExchange {
     /** The one question a report needs answered. Null when cancelled. */
     private String promptForSiteId() {
         Dialog<String> dialog = Modals.dialog("Export Report", "Export report",
-                "The code of the test centre, premises, site or LAN surveyed. "
-                        + "It goes on the summary sheet and in the file name.");
+                "The code of the test centre, premises, site or LAN surveyed.");
 
         TextField tfSite = new TextField();
         tfSite.setPromptText("Test centre, premises, site or LAN, e.g. BLR-WH-02");
         tfSite.setPrefColumnCount(30);
-        tfSite.setTooltip(Modals.tip("""
-                The code that identifies where this survey was done: a test centre, \
-                premises, site or LAN. It goes on the summary sheet and in the file name."""));
+        tfSite.setTooltip(Modals.tip(
+                "The code that identifies where this survey was done: a test centre, premises, site or LAN."));
 
         GridPane grid = new GridPane();
         grid.setHgap(10);
