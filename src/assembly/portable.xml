@@ -11,13 +11,30 @@
     </formats>
     <includeBaseDirectory>true</includeBaseDirectory>
     <baseDirectory>CctvDiscovery-${project.version}</baseDirectory>
+    <!-- Only the script at the top, so it is the obvious thing to run:
+           CctvDiscovery.cmd
+           app\        the jar, LICENSE, NOTICE, README.md, THIRD-PARTY-NOTICES.txt
+           licenses\   licence texts
+           runtime\    the Java runtime -->
     <fileSets>
         <fileSet>
             <directory>${project.build.directory}/dist</directory>
-            <outputDirectory>/</outputDirectory>
-            <excludes>
-                <exclude>*.exe</exclude>
-            </excludes>
+            <outputDirectory>app</outputDirectory>
+            <includes>
+                <include>*.jar</include>
+                <include>LICENSE</include>
+                <include>NOTICE</include>
+                <include>README.md</include>
+                <include>THIRD-PARTY-NOTICES.txt</include>
+            </includes>
+        </fileSet>
+        <fileSet>
+            <directory>${project.build.directory}/dist/licenses</directory>
+            <outputDirectory>licenses</outputDirectory>
+        </fileSet>
+        <fileSet>
+            <directory>${project.build.directory}/dist/runtime</directory>
+            <outputDirectory>runtime</outputDirectory>
         </fileSet>
     </fileSets>
     <files>
