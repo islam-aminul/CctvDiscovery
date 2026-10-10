@@ -54,9 +54,11 @@ way. This replaces the point-in-time `PROJECT_REVIEW.md` that lived on the
 
 ### Engineering
 
-- **`MainController` is about 2,400 lines.** It builds the window, runs the
-  scan and drives the export. Splitting the scan orchestration into its own
-  class would make both testable without JavaFX.
+- **`MainController` is still the largest class, at about 1,350 lines.** The
+  scan, network selection, export and help were split out on 2026-09-24
+  (`ScanCoordinator`, `NetworkSelection`, `ReportExchange`, `HelpDialog`); what
+  remains is window layout, the results tables and the credential dialog.
+  Splitting further is optional.
 - **Protocol behaviour still needs hardware to verify.** The measurement maths
   is now pinned by a fixture, but DESCRIBE, SETUP and interleaved RTP are still
   only exercised against the one camera on the bench. A recorded RTSP server
