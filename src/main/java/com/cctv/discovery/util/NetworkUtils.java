@@ -99,15 +99,66 @@ public final class NetworkUtils {
         return null;
     }
 
-    /** Whether the subnet of {@code address}/{@code prefixLength} overlaps any target. */
-    public static boolean subnetOverlaps(String address, int prefixLength, TargetParser.Targets targets) {
+    /**
+     * The IPv4 subnets this computer is directly attached to, as
+     * {@code {first, last}} address pairs. Addresses on these are reached
+     * through an address lookup; anything else goes via a router.
+     */
+    public static List<long[]> localSubnets() {
+        List<long[]> subnets = new ArrayList<>();
+        try {
+            for (NetworkInterface ni : Collections.list(NetworkInterface.getNetworkInterfaces())) {
+                if (ni.isLoopback() || !ni.isUp()) {
+                    continue;
+                }
+                for (InterfaceAddress ia : ni.getInterfaceAddresses()) {
+                    if (ia.getAddress() instanceof Inet4Address address && !address.isLinkLocalAddress()) {
+                        long[] range = subnetRange(address.getHostAddress(), ia.getNetworkPrefixLength());
+                        if (range != null) {
+                            subnets.add(range);
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            logger.debug("Could not list local subnets: {}", e.getMessage());
+        }
+        return subnets;
+    }
+
+    /** {@code {first, last}} of the subnet holding {@code address}/{@code prefixLength}, or null. */
+    public static long[] subnetRange(String address, int prefixLength) {
         if (!isValidIP(address) || prefixLength < 0 || prefixLength > 32) {
-            return false;
+            return null;
         }
         long ip = ipToLong(address);
         long mask = prefixLength == 0 ? 0L : (0xFFFFFFFFL << (32 - prefixLength)) & 0xFFFFFFFFL;
         long first = ip & mask;
-        long last = first | (~mask & 0xFFFFFFFFL);
+        return new long[]{first, first | (~mask & 0xFFFFFFFFL)};
+    }
+
+    /** Whether {@code ip} falls inside one of {@code subnets}. */
+    public static boolean onSubnet(String ip, List<long[]> subnets) {
+        if (!isValidIP(ip)) {
+            return false;
+        }
+        long value = ipToLong(ip);
+        for (long[] subnet : subnets) {
+            if (value >= subnet[0] && value <= subnet[1]) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Whether the subnet of {@code address}/{@code prefixLength} overlaps any target. */
+    public static boolean subnetOverlaps(String address, int prefixLength, TargetParser.Targets targets) {
+        long[] range = subnetRange(address, prefixLength);
+        if (range == null) {
+            return false;
+        }
+        long first = range[0];
+        long last = range[1];
         for (TargetParser.Interval interval : targets.intervals()) {
             if (interval.start() <= last && interval.end() >= first) {
                 return true;

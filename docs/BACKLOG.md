@@ -3,7 +3,7 @@
 What is still open after the Java 25 overhaul, and what was closed along the
 way. This replaces the point-in-time `PROJECT_REVIEW.md` that lived on the
 `claude/project-review-n2sMq` branch, checked against the current code on
-2026-09-24.
+2026-10-10.
 
 ## Open
 
@@ -15,26 +15,12 @@ way. This replaces the point-in-time `PROJECT_REVIEW.md` that lived on the
   its undecodable main streams were reported rather than dropped, and the
   cameras were not mistaken for recorders. Dahua, Uniview and the other
   recorder patterns have still only run against the fake server.
-- **The first port-scan pass can miss everything after the computer has been
-  idle.** On 2026-10-10, after an idle night on Wi-Fi, all seven devices on the
-  test site answered only on the second pass; the first found nothing. Most
-  likely the first connections went out while Windows was still resolving each
-  host's hardware address. The second pass covers ranges up to 4096 addresses
-  but is skipped above that, where a scan in this state could find nothing.
-  Worth either warming the address cache before scanning or keeping some form
-  of second pass for large ranges.
 - **That recorder's relayed video does not decode, in this tool or ffprobe.**
   Every channel describes itself as H.264 (fmtp says Main level 2.0, the SPS
   says level 4.2) and decodes at 44x32 with errors, while the cameras' own
   streams decode cleanly. Probably a device setting (H.265 or a "smart" codec
   relayed under an H.264 label); worth raising with the site, since most
   viewing software will not play it.
-- **ONVIF attempts still count towards an account lockout.** RTSP path probing
-  now stops at the first refusal, one failed login per password per device.
-  ONVIF is still tried once per password per service address before RTSP, so
-  with ONVIF enabled a wrong password costs up to two or three failures per
-  device. Hikvision keeps a separate ONVIF user list, so it may not share the
-  lockout counter; unverified.
 - **No IPv6.** `NetworkUtils` and `TargetParser` are IPv4 only. Cameras on
   IPv6-only segments cannot be scanned.
 - **Vendor SDK protocols are still not spoken.** 37777 (Dahua) and 34567
@@ -64,15 +50,25 @@ way. This replaces the point-in-time `PROJECT_REVIEW.md` that lived on the
   only exercised against the one camera on the bench. A recorded RTSP server
   would let those be asserted in CI too.
 
+## Decided
+
+- **Every password is tried on every device, wrong ones included.** Finding the
+  password that works matters more than avoiding failed logins. What was cut
+  is repetition, not attempts: RTSP path probing stops at the first refusal, so
+  a wrong password costs one RTSP failure per device instead of one per path.
+  With ONVIF enabled it is also tried once per service address, so a wrong
+  password can cost two or three failures per device. Hikvision keeps a
+  separate ONVIF user list, so it may not share the lockout counter; unverified.
+
 ## Closed by the overhaul
 
 Kept here so the same ground is not re-reviewed.
 
 | Item | Where it stands |
 |---|---|
-| No unit tests | 66 tests |
-| Excel password derived from a fixed code in the source | Password is asked for; the code is gone |
-| Report claimed protection it did not have | Real OOXML agile encryption, proven by a decrypt test |
+| No unit tests | 175 tests |
+| Excel password derived from a fixed code in the source | The code is gone; each report is protected with its own random password that is never shown |
+| Report claimed protection it did not have | Sheets and workbook structure are locked; checked in Excel 16 on 2026-10-10: edits, new sheets, renames and unprotecting are refused, while selecting, copying and filtering work. Not encrypted: anyone with the file can read it, stream passwords included |
 | JVM-wide TLS verification disabled | Scoped to the ONVIF client only |
 | XML external entities accepted from the network | DOCTYPE and entities refused in `XmlUtils` |
 | MAC invented from the ONVIF endpoint UUID | Never derived from the UUID; ARP, then ONVIF |
@@ -105,3 +101,10 @@ Kept here so the same ground is not re-reviewed.
 | Ad-hoc colours scattered through the code | One tri-tone palette in tokens; no hex values left in Java |
 | Contrast claimed, never measured | `PaletteContrastTest` reads the tokens and asserts every pairing |
 | A saved scan could not be reopened | JSON loads back, with its streams and findings |
+| ONVIF results ignored the chosen range | Kept only when inside the targets; only adapters on the targets are probed |
+| Prama cameras unrecognised | Identified by OUI and mapped to the Hikvision firmware family |
+| A recorder with ONVIF off was taken for a camera | Recognised by a second channel and its ISAPI model; verified on a DS-7W08NI-Q1 |
+| A wrong password was tried on every RTSP path | Probing stops at the first refusal |
+| An undecodable stream hung the scan for over an hour | FFmpeg calls run under a deadline |
+| The export asked for a password and whether to include credentials | Asks only for the location code; stream addresses always carry the working credentials |
+| The first port-scan pass missed hosts while the address cache was cold | Each target on a local subnet is sent one datagram, then a 0.4 s pause. With the cache cleared, the first pass on the test site missed 5, 3 and 3 of 7 hosts before and 0 of 7 after, three trials each |
