@@ -155,16 +155,12 @@ public class MainController {
         // Header Panel - Full width spanning entire application
         AppConfig config = AppConfig.getInstance();
 
-        // Organization name in regular font above the tool name
-        Label orgLabel = new Label(config.getAppOrganization());
-        orgLabel.getStyleClass().add("header-organisation");
-
-        // Tool name in bold title style
+        // The tool's name only: no organisation or owner is shown anywhere in
+        // the interface.
         Label title = new Label(config.getAppName());
         title.getStyleClass().add("header-title");
 
-        // Stack org name above tool name
-        VBox titleBlock = new VBox(0, orgLabel, title);
+        VBox titleBlock = new VBox(0, title);
         titleBlock.setAlignment(Pos.CENTER_LEFT);
 
         Button btnSettings = new Button("Settings");

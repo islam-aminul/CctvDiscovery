@@ -37,4 +37,19 @@ class NetworkUtilsTest {
         assertFalse(NetworkUtils.onSubnet("garbage", subnets));
         assertFalse(NetworkUtils.onSubnet("192.168.1.200", List.of()));
     }
+
+    @Test
+    void virtualAdaptersAreRecognised() {
+        assertTrue(NetworkUtils.isVirtualAdapter("eth5", "Hyper-V Virtual Ethernet Adapter"));
+        assertTrue(NetworkUtils.isVirtualAdapter("eth6", "vEthernet (WSL (Hyper-V firewall))"));
+        assertTrue(NetworkUtils.isVirtualAdapter("eth2", "VMware Virtual Ethernet Adapter for VMnet8"));
+        assertTrue(NetworkUtils.isVirtualAdapter("eth3", "VirtualBox Host-Only Ethernet Adapter"));
+        assertTrue(NetworkUtils.isVirtualAdapter("net9", "TAP-Windows Adapter V9"));
+        assertTrue(NetworkUtils.isVirtualAdapter("wsl", "WSL"));
+        assertTrue(NetworkUtils.isVirtualAdapter("tap0", "tap device"));
+        assertFalse(NetworkUtils.isVirtualAdapter("eth7", "Laptop desktop Wi-Fi"));
+        assertFalse(NetworkUtils.isVirtualAdapter("wlan1", "Qualcomm FastConnect 6900 Wi-Fi 6E Dual Band Simultaneous (DBS) WiFiCx Network Adapter"));
+        assertFalse(NetworkUtils.isVirtualAdapter("eth0", "Realtek PCIe GbE Family Controller"));
+        assertFalse(NetworkUtils.isVirtualAdapter("eth1", "Intel(R) Ethernet Connection (7) I219-V"));
+    }
 }

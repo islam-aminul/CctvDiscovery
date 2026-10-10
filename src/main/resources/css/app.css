@@ -124,11 +124,6 @@
     -fx-text-fill: -paper-0;
 }
 
-.app-header .header-organisation {
-    -fx-font-size: 11px;
-    -fx-text-fill: -sage-300;
-}
-
 /* Teal is the signal tone, so the primary header action carries it. */
 .app-header .header-button {
     -fx-background-color: -teal-600;

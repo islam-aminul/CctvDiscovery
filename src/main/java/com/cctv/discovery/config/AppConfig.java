@@ -243,9 +243,6 @@ public final class AppConfig {
         return getProperty("app.version");
     }
 
-    public String getAppOrganization() {
-        return getProperty("app.organization");
-    }
 
     // Discovery
     public boolean isWsDiscoveryEnabled() {

@@ -42,10 +42,14 @@ public class Credential implements Serializable {
                 .toString();
     }
 
+    /**
+     * How the credential list shows it. Masked, because the list is on screen
+     * for the whole session and ends up in screenshots; the first and last
+     * characters are enough to tell two passwords for one user apart.
+     */
     public String toDisplayString() {
-        return new StringBuilder()
-                .append(username).append(" : ").append(password)
-                .toString();
+        String shown = password == null || password.isEmpty() ? "(no password)" : maskPassword(password);
+        return username + " : " + shown;
     }
 
     private String maskPassword(String pwd) {

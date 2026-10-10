@@ -36,10 +36,6 @@
     -fx-border-color: #2E3260;
 }
 
-.app-header .header-organisation {
-    -fx-text-fill: -sage-400;
-}
-
 .app-header .header-button {
     -fx-background-color: -teal-700;
 }

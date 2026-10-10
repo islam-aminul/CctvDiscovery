@@ -77,7 +77,22 @@ public final class NetworkUtils {
         } catch (Exception e) {
             logger.error("Error enumerating network interfaces", e);
         }
+        // Real adapters first, so the one picked by default is the one the
+        // cameras are on. On 2026-10-10 the Hyper-V switch came first and was
+        // preselected over the Wi-Fi the site's camera was on.
+        result.sort(java.util.Comparator.comparing(li -> isVirtualAdapter(li.name(), li.displayName())));
         return result;
+    }
+
+    private static final Pattern VIRTUAL_ADAPTER = Pattern.compile(
+            "hyper-v|vethernet|virtual|vmware|virtualbox|vbox|\\bwsl\\b|docker|\\btap\\b|tap-windows|wintun|wireguard"
+                    + "|tunnel|loopback|bluetooth|npcap",
+            Pattern.CASE_INSENSITIVE);
+
+    /** An adapter for virtual machines, containers, VPNs or the like rather than a site network. */
+    public static boolean isVirtualAdapter(String name, String displayName) {
+        return VIRTUAL_ADAPTER.matcher((name == null ? "" : name) + " " + (displayName == null ? "" : displayName))
+                .find();
     }
 
     /** Local IPv4 interfaces as {@link NetworkInterface}s (for multicast send). */
